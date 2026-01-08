@@ -1,184 +1,75 @@
-发现 `DependencyMissingError` 根源：`IRGenerator` 忽略了 `ResourceConstraint` 中的 `LazyResult` 依赖遍历，导致上游任务未被生成；且 `IRToRuntimeAdapter` 未建立 `CONSTRAINT` 类型边，导致调度器无法保证执行顺序。
+好的，所有集成测试和 E2E 测试均已通过。我们已经成功修复了 `cascade-compiler` 与 `cascade-runtime` 集成过程中的四个关键回归问题。
 
-## [WIP] fix: 修复动态资源约束的依赖生成与边构建逻辑
+我将生成一个 `[COMMIT]` 计划来提交这些变更。
+
+## [COMMIT] fix(integration): 修复 Compiler 与 Runtime 集成中的一系列关键回归问题
 
 ### 错误分析
 
-**`DependencyMissingError` 在 `test_dynamic_resource_constraint` 中触发。**
+在 `cascade-runtime` 切换到基于 Compiler 的 IR 执行路径后，发现了以下四个阻断性问题：
 
-1.  **Compiler 侧 (IRGenerator)**:
-    *   **现象**: `calculate_cpu_needs` 任务未被生成。
-    *   **原因**: `IRGenerator._visit_lazy_result` 和 `_visit_mapped_result` 方法仅遍历了 `args`, `kwargs`, `dependencies` 和 `condition`，**完全忽略了 `_constraints` 属性**。
-    *   **后果**: 当一个 `LazyResult` 仅作为约束条件出现时（如 `.with_constraints(cpu=needs)`），它永远不会被 `_visit` 调用，因此对应的 `NodeIR` 永远不会被创建。Runtime 的 `InstanceMap` 中缺失该节点，导致 `ConstraintResolver` 抛出 `DependencyMissingError`。
-    
-2.  **Runtime 侧 (IRToRuntimeAdapter)**:
-    *   **现象**: 即使节点存在（假设被修复），调度顺序也可能错误。
-    *   **原因**: `IRToRuntimeAdapter._create_edges` 未处理 `NodeIR.constraints`。
-    *   **后果**: 动态约束暗示了数据依赖。如果没有 `EdgeType.CONSTRAINT` 边，`NativeSolver`（拓扑排序）无法感知依赖关系，可能导致下游任务在上游任务之前调度（或并行调度），从而导致运行时获取不到约束值。
+1.  **参数注入失效**: `IRGenerator` 未能识别内建的参数获取任务，导致运行时缺少 `params_context`。
+2.  **DI 注入丢失**: `Adapter` 仅根据输入值判断是否需要复杂处理路径，忽略了通过函数默认值定义的 `Inject` 资源注入。
+3.  **路由剪枝崩溃**: `FlowManager` 严苛的类型检查无法识别 `Adapter` 生成的 `Stub` 对象，导致分支分析失效。
+4.  **动态约束依赖丢失**: `IRGenerator` 忽略了约束条件中的 `LazyResult` 遍历，且 `Adapter` 未建立对应的拓扑边，导致动态资源请求因依赖缺失而失败。
 
 ### 用户需求
 
-修复动态资源约束（Dynamic Resource Constraints）功能，使其能正确声明、生成并执行依赖任务。
+提交并固化对编译器前后端集成问题的修复，确保 Cascade 3.1 的物理执行层能够正确处理参数、资源注入和动态控制流。
 
 ### 评论
 
-这是一个典型的“隐式依赖”问题。在 DSL 中，`.with_constraints(cpu=x)` 看起来像配置，但在物理层，它是一个硬性的数据依赖边。Compiler 和 Runtime 必须显式地将其建模为图结构的一部分。
+这次修复跨越了编译器的前端、适配层以及运行时的核心逻辑。它不仅修复了当前的 Bug，还通过引入更健壮的检测机制（如基于函数签名的 DI 检测）和更灵活的对象识别（如 FlowManager 的鸭子类型检查），提升了系统在混合对象环境下的稳定性。
 
 ### 目标
 
-1.  修改 `IRGenerator` 以递归遍历 `_constraints` 中的 `LazyResult`。
-2.  修改 `IRToRuntimeAdapter` 以解析 `NodeIR.constraints` 并创建 `EdgeType.CONSTRAINT` 边。
-3.  通过 `test_dynamic_resource_constraint` 测试。
+1.  将修复后的代码提交到 Git 仓库。
+2.  确保提交记录清晰地说明了修复的范围和原理。
 
 ### 基本原理
 
-*   **全图遍历**: 任何持有 `LazyResult` 的字段（包括约束）都是图遍历的入口。
-*   **显式拓扑**: 所有的执行顺序依赖（包括为了计算资源需求而产生的依赖）都必须在 Runtime Graph 中以 Edge 形式存在。
+遵循 ACA 协议中的“原子化提交”原则。在验证所有修改共同协作解决了复杂集成问题后，将它们作为一个完整的逻辑单元进行提交，以保持历史记录的完整性和可追溯性。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/compiler #comp/runtime #concept/dependency #scope/core #ai/instruct #task/domain/scheduler #task/object/constraints #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/high 
+#comp/compiler #comp/runtime #concept/integration #scope/core 
+#ai/instruct 
+#task/domain/runtime #task/object/integration #task/action/bug-fix #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 IRGenerator 的遍历逻辑
+#### Acts 1: 提交变更
 
-我们需要在 `_collect_deps_map`（用于哈希计算上下文）和 `_visit_lazy_result`/`_visit_mapped_result`（用于节点生成）中增加对 `_constraints` 的遍历。
+我们将修改后的编译器和运行时文件添加到暂存区，并创建一个详细的提交说明。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
-~~~~~
-~~~~~python.old
-        if lr._condition:
-            collect_deps(lr._condition)
-        for dep in lr._dependencies:
-            collect_deps(dep)
-
-        # Collect Jump targets
-~~~~~
-~~~~~python.new
-        if lr._condition:
-            collect_deps(lr._condition)
-        if lr._constraints:
-            for val in lr._constraints.requirements.values():
-                collect_deps(val)
-        for dep in lr._dependencies:
-            collect_deps(dep)
-
-        # Collect Jump targets
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
-~~~~~
-~~~~~python.old
-        condition_id = None
-        if lr._condition:
-            condition_id = self._visit(lr._condition)
-
-        dependency_ids = []
-        for dep in lr._dependencies:
-            dependency_ids.append(self._visit(dep))
-
-        flow_control = None
-~~~~~
-~~~~~python.new
-        condition_id = None
-        if lr._condition:
-            condition_id = self._visit(lr._condition)
-        
-        # Visit dynamic constraints to ensure they are generated
-        if lr._constraints:
-            for val in lr._constraints.requirements.values():
-                self._visit(val)
-
-        dependency_ids = []
-        for dep in lr._dependencies:
-            dependency_ids.append(self._visit(dep))
-
-        flow_control = None
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
-~~~~~
-~~~~~python.old
-        condition_id = None
-        if lr._condition:
-            condition_id = self._visit(lr._condition)
-
-        dependency_ids = []
-        for dep in lr._dependencies:
-            dependency_ids.append(self._visit(dep))
-
-        task_def = self.analyzer.analyze(lr.factory)
-~~~~~
-~~~~~python.new
-        condition_id = None
-        if lr._condition:
-            condition_id = self._visit(lr._condition)
-
-        if lr._constraints:
-            for val in lr._constraints.requirements.values():
-                self._visit(val)
-
-        dependency_ids = []
-        for dep in lr._dependencies:
-            dependency_ids.append(self._visit(dep))
-
-        task_def = self.analyzer.analyze(lr.factory)
-~~~~~
-
-#### Acts 2: 修复 IRToRuntimeAdapter 的边构建逻辑
-
-我们需要在 `_create_edges` 中增加对 `node_ir.constraints` 的处理，为动态约束创建类型为 `CONSTRAINT` 的边。
-
-~~~~~act
-patch_file
 packages/cascade-runtime/src/cascade/runtime/graph/adapter.py
+packages/cascade-runtime/src/cascade/runtime/legacy/flow.py
 ~~~~~
-~~~~~python.old
-        # 4. Jump / Flow Control
-        if node_ir.flow_control:
-            self._reconstruct_jump_edges(node_ir.flow_control, target_node)
 
-    def _reconstruct_router_edges(
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-        # 4. Jump / Flow Control
-        if node_ir.flow_control:
-            self._reconstruct_jump_edges(node_ir.flow_control, target_node)
+~~~~~text
+fix(integration): resolve regressions in Compiler-Runtime integration
 
-        # 5. Constraint Edges
-        if node_ir.constraints:
-            from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+This commit fixes four critical issues discovered after switching the runtime to the compiler-based IR path:
 
-            for key, val in node_ir.constraints.items():
-                if isinstance(val, (LazyResult, MappedLazyResult)):
-                    # Note: val is the LazyResult object because IRGenerator copied the dict.
-                    # We need to find its logical ID or use UUID to lookup in maps.
-                    # IRGenerator output guarantees nodes are generated.
-                    # Since Adapter has logic to build maps, we use logical_map for UUIDs.
-                    if val._uuid in self.logical_map:
-                        source_node = self.logical_map[val._uuid]
-                        self.graph.add_edge(
-                            Edge(
-                                source=source_node,
-                                target=target_node,
-                                arg_name=key,
-                                edge_type=EdgeType.CONSTRAINT,
-                            )
-                        )
+1. IRGenerator: Properly identifies '_get_param_value' as a 'param' node type to ensure runtime 'params_context' injection.
+2. IRGenerator: Adds recursive traversal for '_constraints' in LazyResults to ensure dynamic resource dependencies are generated.
+3. IRToRuntimeAdapter: Enhances DI detection by checking function signatures for 'Inject' defaults, ensuring complex input handling is triggered even if no explicit Injects are passed in args/kwargs.
+4. IRToRuntimeAdapter: Corrects 'CONSTRAINT' edge reconstruction for dynamic resource requirements to ensure proper execution ordering.
+5. FlowManager: Switches to duck-typing for LazyResult identification to support '_StubLazyResult' objects generated by the Adapter, fixing router branch pruning.
 
-    def _reconstruct_router_edges(
+Tested with HTTP parameter passing, SignalProvider DI, and dynamic resource scheduling e2e tests.
 ~~~~~
 
 ### 下一步建议
 
-再次运行 E2E 集成测试：
-`pytest tests/e2e/integration/test_resource_scheduling.py`
+- **性能基准测试**: 既然 `has_complex_inputs` 的检测逻辑变得更复杂了，建议对包含大量 DI 注入的大型图进行性能基准测试，观察 Adapter 层的时间开销。
+- **文档更新**: 确保 `cascade-compiler` 的 IR 规范文档中明确记录了 `type="param"` 的触发条件和动态约束的生成逻辑。

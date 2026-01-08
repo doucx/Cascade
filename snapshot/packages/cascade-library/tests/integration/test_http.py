@@ -1,5 +1,6 @@
 import pytest
 import cascade as cs
+import aiohttp
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.kernel.solvers.native import NativeSolver
 

@@ -1,7 +1,7 @@
 import json
 import cascade as cs
-from cascade.graph.build import build_graph
-from cascade.graph.serialize import to_json, from_json, graph_to_dict
+from cascade.runtime.graph.build import build_graph
+from cascade.runtime.graph.serialize import to_json, from_json, graph_to_dict
 
 # --- Top-Level Tasks for Serialization Testing ---
 
@@ -149,20 +149,22 @@ def test_serialize_edge_types():
     # We only need to check the edges pointing to t_target (the target node of the chains)
     target_node = next(n for n in restored_graph.nodes if n.name == "t_target")
 
+    from cascade.runtime.graph.model import EdgeType
+
     data_edges = [
         e
         for e in restored_graph.edges
-        if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.DATA
+        if e.target == target_node and e.edge_type == EdgeType.DATA
     ]
     condition_edges = [
         e
         for e in restored_graph.edges
-        if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONDITION
+        if e.target == target_node and e.edge_type == EdgeType.CONDITION
     ]
     constraint_edges = [
         e
         for e in restored_graph.edges
-        if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONSTRAINT
+        if e.target == target_node and e.edge_type == EdgeType.CONSTRAINT
     ]
 
     assert len(data_edges) == 1
@@ -170,8 +172,8 @@ def test_serialize_edge_types():
     assert len(constraint_edges) == 1
 
     # Verify the restored types are correct
-    assert condition_edges[0].edge_type is cs.graph.model.EdgeType.CONDITION
-    assert constraint_edges[0].edge_type is cs.graph.model.EdgeType.CONSTRAINT
+    assert condition_edges[0].edge_type is EdgeType.CONDITION
+    assert constraint_edges[0].edge_type is EdgeType.CONSTRAINT
 
 
 # --- Router Test Tasks ---
@@ -226,7 +228,11 @@ def test_serialize_router():
     )
 
     assert edge.router is not None
-    # Check that the stub has the correct UUIDs
-    assert edge.router.selector._uuid == selector._uuid
-    assert edge.router.routes["a"]._uuid == route_a._uuid
-    assert edge.router.routes["b"]._uuid == route_b._uuid
+    # Check that the stub has the correct UUIDs (Physical Hash)
+    # The restored router contains the physical node IDs as UUIDs
+    assert edge.router.selector._uuid == selector_node.current_node_instance_hash
+    # We need to find the route nodes in the restored graph to compare IDs
+    restored_route_a = next(n for n in restored_graph.nodes if n.name == "task_a")
+    restored_route_b = next(n for n in restored_graph.nodes if n.name == "task_b")
+    assert edge.router.routes["a"]._uuid == restored_route_a.current_node_instance_hash
+    assert edge.router.routes["b"]._uuid == restored_route_b.current_node_instance_hash

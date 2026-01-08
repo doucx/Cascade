@@ -16,7 +16,7 @@ from cascade.spec.runtime.interfaces import (
     Connector,
     SubscriptionHandle,
 )
-from cascade.graph.model import Node, Graph
+from cascade.runtime.graph.model import Node, Graph
 from cascade.spec.dsl.constraint import GlobalConstraint
 
 

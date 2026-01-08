@@ -2,11 +2,11 @@ import asyncio
 from contextlib import ExitStack
 from typing import Any, Dict, List, Optional, Callable
 
-from cascade.graph.model import Graph, Node, EdgeType
+from cascade.runtime.graph.model import Graph, Node, EdgeType
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.runtime.graph.adapter import IRToRuntimeAdapter
-from cascade.graph.registry import NodeRegistry
-from cascade.reflection import BlueprintHasher
+from cascade.runtime.graph.registry import NodeRegistry
+from cascade.runtime.graph.hashing import BlueprintHasher
 from cascade.spec.runtime.interfaces import Solver, StateBackend
 from cascade.spec.dsl.jump import Jump
 from cascade.runtime.services.observability.bus import EventBus

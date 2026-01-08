@@ -1,5 +1,5 @@
 import cascade as cs
-from cascade.graph.build import build_graph
+from cascade.runtime.graph.build import build_graph
 
 
 def test_build_linear_graph():

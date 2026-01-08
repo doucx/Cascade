@@ -1,7 +1,7 @@
 from collections import deque
 from typing import Dict, List
 
-from cascade.graph.model import Graph, Node, EdgeType
+from cascade.runtime.graph.model import Graph, Node, EdgeType
 from cascade.spec.runtime.interfaces import Solver, ExecutionPlan
 
 

@@ -1,0 +1,3 @@
+"build_graph": |-
+  Legacy compatibility layer for graph building.
+  Internally uses the Cascade Compiler (IRGenerator) and Runtime Adapter.

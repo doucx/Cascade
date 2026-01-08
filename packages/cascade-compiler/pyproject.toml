@@ -9,7 +9,6 @@ description = "The graph compiler for Cascade 3.0, expanding logic into physical
 requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
-  "cascade-graph",
   "cascade-reflection",
 ]
 
@@ -22,4 +21,3 @@ allow-direct-references = true
 [tool.uv.sources]
 cascade-spec = { workspace = true }
 cascade-common = { workspace = true }
-cascade-graph = { workspace = true }

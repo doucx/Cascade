@@ -1,2 +1,6 @@
+"IRToRuntimeAdapter._is_dependency": |-
+  Check if a value looks like a node reference (Physical ID).
+"IRToRuntimeAdapter._scan_and_create_nested_edges": |-
+  Recursively scan object for Node IDs and create edges.
 "_StubLazyResult": |-
   A minimal stub to satisfy runtime checks for UUID presence.

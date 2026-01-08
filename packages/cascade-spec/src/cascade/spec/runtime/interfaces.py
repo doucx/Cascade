@@ -1,19 +1,30 @@
-from typing import Protocol, List, Any, Dict, Optional, Callable, Awaitable
-from cascade.graph.model import Graph, Node
+from typing import (
+    Protocol,
+    List,
+    Any,
+    Dict,
+    Optional,
+    Callable,
+    Awaitable,
+    TYPE_CHECKING,
+)
+
+if TYPE_CHECKING:
+    from cascade.runtime.graph.model import Graph, Node
 
 # An execution plan is a list of stages, where each stage is a list of nodes
 # that can be executed in parallel.
-ExecutionPlan = List[List[Node]]
+ExecutionPlan = List[List["Node"]]
 
 
 class Solver(Protocol):
-    def resolve(self, graph: Graph) -> ExecutionPlan: ...
+    def resolve(self, graph: "Graph") -> ExecutionPlan: ...
 
 
 class Executor(Protocol):
     async def execute(
         self,
-        node: Node,
+        node: "Node",
         callable_obj: Callable,
         args: List[Any],
         kwargs: Dict[str, Any],

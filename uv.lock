@@ -16,7 +16,6 @@ members = [
     "cascade-compiler",
     "cascade-connector-local",
     "cascade-connector-mqtt",
-    "cascade-graph",
     "cascade-library",
     "cascade-monorepo",
     "cascade-provider-ipfs",
@@ -631,7 +630,6 @@ version = "0.1.0"
 source = { editable = "packages/cascade-application" }
 dependencies = [
     { name = "cascade-common" },
-    { name = "cascade-graph" },
     { name = "cascade-runtime" },
     { name = "cascade-spec" },
 ]
@@ -639,7 +637,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cascade-common", editable = "packages/cascade-common" },
-    { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-runtime", editable = "packages/cascade-runtime" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]
@@ -702,14 +699,12 @@ name = "cascade-compiler"
 version = "0.1.0"
 source = { editable = "packages/cascade-compiler" }
 dependencies = [
-    { name = "cascade-graph" },
     { name = "cascade-reflection" },
     { name = "cascade-spec" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]
@@ -737,21 +732,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "aiomqtt" },
-    { name = "cascade-spec", editable = "packages/cascade-spec" },
-]
-
-[[package]]
-name = "cascade-graph"
-version = "0.1.0"
-source = { editable = "packages/cascade-graph" }
-dependencies = [
-    { name = "cascade-reflection" },
-    { name = "cascade-spec" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]
 
@@ -829,7 +809,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cascade-compiler" },
-    { name = "cascade-graph" },
     { name = "cascade-library" },
     { name = "cascade-runtime" },
     { name = "cascade-sdk" },
@@ -899,7 +878,6 @@ requires-dist = [
     { name = "cascade-compiler", marker = "extra == 'dev'", editable = "packages/cascade-compiler" },
     { name = "cascade-connector-local", marker = "extra == 'dev'", editable = "packages/cascade-connector-local" },
     { name = "cascade-connector-mqtt", marker = "extra == 'dev'", editable = "packages/cascade-connector-mqtt" },
-    { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-library", editable = "packages/cascade-library" },
     { name = "cascade-provider-ipfs", marker = "extra == 'dev'", editable = "packages/cascade-provider-ipfs" },
     { name = "cascade-runtime", editable = "packages/cascade-runtime" },
@@ -965,7 +943,6 @@ source = { editable = "packages/cascade-runtime" }
 dependencies = [
     { name = "cascade-common" },
     { name = "cascade-compiler" },
-    { name = "cascade-graph" },
     { name = "cascade-reflection" },
     { name = "cascade-spec" },
     { name = "cascade-vm" },
@@ -985,7 +962,6 @@ redis = [
 requires-dist = [
     { name = "cascade-common", editable = "packages/cascade-common" },
     { name = "cascade-compiler", editable = "packages/cascade-compiler" },
-    { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
     { name = "cascade-vm", editable = "packages/cascade-vm" },
@@ -1001,7 +977,6 @@ source = { editable = "packages/cascade-sdk" }
 dependencies = [
     { name = "cascade-application" },
     { name = "cascade-common" },
-    { name = "cascade-graph" },
     { name = "cascade-library" },
     { name = "cascade-runtime" },
     { name = "cascade-spec" },
@@ -1011,7 +986,6 @@ dependencies = [
 requires-dist = [
     { name = "cascade-application", editable = "packages/cascade-application" },
     { name = "cascade-common", editable = "packages/cascade-common" },
-    { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-library", editable = "packages/cascade-library" },
     { name = "cascade-runtime", editable = "packages/cascade-runtime" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
@@ -1039,14 +1013,12 @@ name = "cascade-test-utils"
 version = "0.1.0"
 source = { editable = "packages/cascade-test-utils" }
 dependencies = [
-    { name = "cascade-graph" },
     { name = "cascade-runtime" },
     { name = "cascade-spec" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-runtime", editable = "packages/cascade-runtime" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]

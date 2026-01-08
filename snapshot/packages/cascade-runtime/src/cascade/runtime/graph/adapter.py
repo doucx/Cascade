@@ -57,19 +57,17 @@ class IRToRuntimeAdapter:
         instance_map: Dict[str, Node] = {}
         for node_ir in ir.nodes:
             runtime_node = self.node_map[node_ir.current_node_instance_hash]
-            
+
             # 1. Map Physical Hash -> Node (Used by FlowManager/Routers)
             instance_map[node_ir.current_node_instance_hash] = runtime_node
-            
+
             # 2. Map Logical UUID -> Node (Used by External API / Legacy lookups)
             if node_ir.logical_id:
                 instance_map[node_ir.logical_id] = runtime_node
 
         return self.graph, instance_map, executables
 
-    def _create_node(
-        self, node_ir: NodeIR, executables: Dict[str, Callable]
-    ) -> Node:
+    def _create_node(self, node_ir: NodeIR, executables: Dict[str, Callable]) -> Node:
         # Recover policies
         retry_policy = None
         if node_ir.retry_policy:
@@ -84,17 +82,16 @@ class IRToRuntimeAdapter:
         # But we assume the IRGenerator passes it through if attached.
         # Since IRGenerator currently copies attributes, check if it's there.
         # If node_ir.cache_policy is missing from NodeIR definition, we might need to add it or it's in inputs?
-        # NodeIR def has retry_policy but missing explicit cache_policy field? 
+        # NodeIR def has retry_policy but missing explicit cache_policy field?
         # Checking cascade/spec/ir/graph.py... NodeIR definition HAS retry_policy but NO cache_policy field.
         # Wait, let's check if we can pass it via metadata or if we need to extend NodeIR.
         # For this fix, let's assume we can retrieve it if we extended NodeIR or patched IRGenerator.
         # But wait, IRGenerator code:
         # node_ir = NodeIR(..., retry_policy=self._extract_retry_policy(lr))
-        # It ignores cache_policy! 
+        # It ignores cache_policy!
         # We need to fix IRGenerator first to include cache_policy, OR pass it differently.
         # Given we are in the Adapter, let's assume we will fix IRGenerator to pass it.
         # Let's verify NodeIR structure in next step. For now, placeholder.
-        cache_policy = getattr(node_ir, "cache_policy", None)
 
         constraints = None
         if node_ir.constraints:
@@ -111,7 +108,7 @@ class IRToRuntimeAdapter:
         has_complex_inputs = False
         from cascade.spec.dsl.resources import Inject
         import inspect
-        
+
         def check_complexity(obj):
             if isinstance(obj, Inject):
                 return True
@@ -307,7 +304,7 @@ class IRToRuntimeAdapter:
         # Note: Compiler now emits Logical IDs to avoid recursion cycles.
         # We need to resolve these Logical IDs to Runtime Nodes using logical_map or instance_map
         # But wait, self.logical_map maps Logical ID -> Runtime Node.
-        
+
         routes_stubs = {
             k: (_StubLazyResult(v) if v else None) for k, v in flow_control.items()
         }

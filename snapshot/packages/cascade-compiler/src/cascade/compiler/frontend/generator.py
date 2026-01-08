@@ -137,7 +137,7 @@ class IRGenerator:
         condition_id = None
         if lr._condition:
             condition_id = self._visit(lr._condition)
-        
+
         # Visit dynamic constraints to ensure they are generated
         if lr._constraints:
             for val in lr._constraints.requirements.values():

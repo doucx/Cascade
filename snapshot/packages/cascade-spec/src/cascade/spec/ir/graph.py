@@ -65,6 +65,7 @@ class NodeIR:
 
     # Metadata for retry policies, caching, etc.
     retry_policy: Optional[Dict[str, Any]] = None
+    cache_policy: Optional[Any] = None
 
 
 @dataclass(frozen=True)

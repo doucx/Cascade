@@ -144,7 +144,12 @@ class IRGenerator:
             flow_control = {}
             for k, target in lr._jump_selector.routes.items():
                 if target:
-                    flow_control[k] = self._visit(target)
+                    # [Cycle Breaking]
+                    # For flow control, we use the Logical ID (UUID) instead of the Physical ID
+                    # to avoid infinite recursion when a Jump points back to an ancestor or self.
+                    # The Runtime Adapter will use the instance_map to resolve this UUID to the Node.
+                    # We DO NOT call self._visit(target) here.
+                    flow_control[k] = target._uuid
                 else:
                     flow_control[k] = None
 
@@ -178,6 +183,7 @@ class IRGenerator:
             dependencies=dependency_ids,
             flow_control=flow_control,
             retry_policy=self._extract_retry_policy(lr),
+            cache_policy=lr._cache_policy,
         )
 
         # 5. Register

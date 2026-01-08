@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Tuple, Optional, Callable
 
-from cascade.graph.model import Node, Graph, Edge, EdgeType
+from cascade.graph.model import Node, Graph, Edge, EdgeType, ParamNode
 from cascade.spec.dsl.resources import Inject
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.runtime.errors import DependencyMissingError, ResourceNotFoundError
@@ -137,10 +137,10 @@ class ArgumentResolver:
                 pass
 
         # 4. Handle internal param fetching context
-        # [CRITICAL] This logic must always run for Param tasks
-        from cascade.reflection import _get_param_value
-
-        if callable_obj is _get_param_value.func:
+        # [CRITICAL] This logic must always run for Param tasks.
+        # We check the node type explicitly, which is more robust than checking function identity
+        # especially when the executable comes from different import paths or adapters.
+        if isinstance(node, ParamNode):
             kwargs["params_context"] = user_params or {}
 
         return args, kwargs

@@ -3,9 +3,10 @@
     "baseline_yaml_content_hash": "3f0d2bab97cfff23aff0a729c8c6434965b0dbb549d0175b5721a74a90bed995"
   },
   "Machine.__init__": {
-    "baseline_code_signature_text": "def __init__(self, reactor: Reactor, compute_service: LocalComputeService, wakeup_event: asyncio.Event):",
-    "baseline_code_structure_hash": "f9e3683b30a86f2af80d8c381c5b4462ce66363654479c0739dcbf2159569ca4"
+    "baseline_code_signature_text": "def __init__(self, reactor: Reactor, compute_service: LocalComputeService, chronos_service: ChronosService, wakeup_event: asyncio.Event):",
+    "baseline_code_structure_hash": "896c19bda1b243ce1f9f9eeb1ed6df34d1584299dce187c6598d2ac39a86a99e"
   },
+  "Machine.chronos_service": {},
   "Machine.compute_service": {},
   "Machine.ingress_queue": {},
   "Machine.reactor": {},

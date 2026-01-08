@@ -1,0 +1,26 @@
+{
+  "ChronosService": {
+    "baseline_yaml_content_hash": "12bbf525112d6575bda995d23de16db38295fc787358bf610bc0fea242492a45"
+  },
+  "ChronosService.__init__": {
+    "baseline_code_signature_text": "def __init__(self, inbound_queue: asyncio.Queue[DelayRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], wakeup_event: asyncio.Event):",
+    "baseline_code_structure_hash": "1e6a093bc511efea764c1d36ce6f604821cc2abd46a7a06ba6f458710933599c"
+  },
+  "ChronosService._handle_request": {
+    "baseline_code_signature_text": "async def _handle_request(self, request: DelayRequest) -> None:",
+    "baseline_code_structure_hash": "e479c8cc16d10e55737bd359d41d3e73831aad93a879529ac430a5b3cd630320"
+  },
+  "ChronosService._running": {},
+  "ChronosService.inbound_queue": {},
+  "ChronosService.outbound_queue": {},
+  "ChronosService.run": {
+    "baseline_code_signature_text": "async def run(self) -> None:",
+    "baseline_code_structure_hash": "23d60ef0787b87861c8853216071832d8b40d0953517705ad99ad36a1c6a5a4f"
+  },
+  "ChronosService.stop": {
+    "baseline_code_signature_text": "def stop(self) -> None:",
+    "baseline_code_structure_hash": "14864074f7cf807016cfec6298c551a6b22cca02f61c1e24780898d969f58b81"
+  },
+  "ChronosService.wakeup_event": {},
+  "logger": {}
+}

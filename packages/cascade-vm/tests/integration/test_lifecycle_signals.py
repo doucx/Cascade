@@ -11,6 +11,7 @@ from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.vm.services.chronos import ChronosService
 from cascade.runtime.storage import InMemoryObjectStore
 
 # --- DRAIN Test Helpers ---
@@ -63,6 +64,7 @@ def machine_components():
     object_store = InMemoryObjectStore()
     compute_queue = asyncio.Queue()
     ingress_queue = asyncio.Queue()
+    chronos_queue = asyncio.Queue()
     wakeup_event = asyncio.Event()
 
     code_registry = CodeRegistry()
@@ -71,6 +73,7 @@ def machine_components():
     resource_registry = ResourceRegistry()
     resource_registry.register("system.object_store", object_store)
     resource_registry.register("system.compute_queue", compute_queue)
+    resource_registry.register("system.chronos_queue", chronos_queue)
 
     compute_service = LocalComputeService(
         store=object_store,
@@ -80,7 +83,20 @@ def machine_components():
         wakeup_event=wakeup_event,
     )
 
-    return memory, resource_registry, ingress_queue, compute_service, wakeup_event
+    chronos_service = ChronosService(
+        inbound_queue=chronos_queue,
+        outbound_queue=ingress_queue,
+        wakeup_event=wakeup_event,
+    )
+
+    return (
+        memory,
+        resource_registry,
+        ingress_queue,
+        compute_service,
+        chronos_service,
+        wakeup_event,
+    )
 
 
 # --- Tests ---
@@ -93,6 +109,7 @@ async def test_drain_waits_for_active_task(machine_components):
         resource_registry,
         ingress_queue,
         compute_service,
+        chronos_service,
         wakeup_event,
     ) = machine_components
 
@@ -122,7 +139,7 @@ async def test_drain_waits_for_active_task(machine_components):
     func_map = {"F_launch": mock_dispatcher_kernel, "F_drain": drain_trigger_kernel}
 
     reactor = Reactor(graph, memory, func_map, resource_registry, ingress_queue)
-    machine = Machine(reactor, compute_service, wakeup_event)
+    machine = Machine(reactor, compute_service, chronos_service, wakeup_event)
 
     # Inject inputs
     memory.put(d_start, Token(payload=5))  # Use an integer for the slow_worker
@@ -151,6 +168,7 @@ async def test_error_signal_shuts_down_machine(machine_components):
         resource_registry,
         ingress_queue,
         compute_service,
+        chronos_service,
         wakeup_event,
     ) = machine_components
 
@@ -167,7 +185,7 @@ async def test_error_signal_shuts_down_machine(machine_components):
     func_map = {"F_crash": crashing_kernel}
 
     reactor = Reactor(graph, memory, func_map, resource_registry, ingress_queue)
-    machine = Machine(reactor, compute_service, wakeup_event)
+    machine = Machine(reactor, compute_service, chronos_service, wakeup_event)
 
     memory.put(d_err, Token("die"))
 

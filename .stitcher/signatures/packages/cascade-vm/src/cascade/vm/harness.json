@@ -21,6 +21,8 @@
   },
   "EventDrivenRunner._service_task": {},
   "EventDrivenRunner._stop_event": {},
+  "EventDrivenRunner.chronos_queue": {},
+  "EventDrivenRunner.chronos_service": {},
   "EventDrivenRunner.compute_queue": {},
   "EventDrivenRunner.compute_service": {},
   "EventDrivenRunner.event_bus": {},

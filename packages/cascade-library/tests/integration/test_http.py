@@ -5,8 +5,8 @@ from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.kernel.solvers.native import NativeSolver
 
 # Mark all tests in this module to be skipped if dependencies are not installed
-pytest.importorskip("aiohttp") # For the mock server fixture (aiohttp_client)
-pytest.importorskip("httpx")   # For the code under test (cascade-library)
+pytest.importorskip("aiohttp")  # For the mock server fixture (aiohttp_client)
+pytest.importorskip("httpx")  # For the code under test (cascade-library)
 
 
 @pytest.mark.asyncio

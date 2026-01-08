@@ -2,6 +2,7 @@ import asyncio
 import logging
 from cascade.vm.reactor import Reactor
 from cascade.vm.compute.service import LocalComputeService
+from cascade.vm.services.chronos import ChronosService
 
 logger = logging.getLogger(__name__)
 
@@ -11,10 +12,12 @@ class Machine:
         self,
         reactor: Reactor,
         compute_service: LocalComputeService,
+        chronos_service: ChronosService,
         wakeup_event: asyncio.Event,
     ):
         self.reactor = reactor
         self.compute_service = compute_service
+        self.chronos_service = chronos_service
         self.wakeup_event = wakeup_event
         # We can get the queue from the reactor, which is the canonical consumer
         self.ingress_queue = reactor.ingress_queue
@@ -22,8 +25,9 @@ class Machine:
     async def run(self) -> None:
         logger.info("Machine started.")
 
-        # Start the Compute Service
-        service_task = asyncio.create_task(self.compute_service.run())
+        # Start Services
+        compute_task = asyncio.create_task(self.compute_service.run())
+        chronos_task = asyncio.create_task(self.chronos_service.run())
 
         try:
             # Run until explicit shutdown signal
@@ -74,9 +78,11 @@ class Machine:
         finally:
             # Shutdown sequence
             self.compute_service.stop()
-            service_task.cancel()
+            self.chronos_service.stop()
+            compute_task.cancel()
+            chronos_task.cancel()
             try:
-                await service_task
+                await asyncio.gather(compute_task, chronos_task)
             except asyncio.CancelledError:
                 pass
             logger.info("Machine stopped.")

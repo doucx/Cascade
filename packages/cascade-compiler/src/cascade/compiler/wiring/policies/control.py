@@ -3,6 +3,7 @@ from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.wiring.context import WiringContext
 from cascade.compiler.wiring.protocol import WiringPolicy
+from cascade.spec.physical.constants import NodePrefix
 
 
 class ControlFlowWiringPolicy(WiringPolicy):
@@ -51,7 +52,7 @@ class ControlFlowWiringPolicy(WiringPolicy):
         if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
             assert subgraph.stainer is not None
             # Create a dedicated, addressable exit point for this graph root
-            d_egress_id = f"egress.{node_ir.logical_id}"
+            d_egress_id = f"{NodePrefix.EGRESS}.{node_ir.logical_id}"
             d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
             ctx.wire.add_node(d_egress)
 

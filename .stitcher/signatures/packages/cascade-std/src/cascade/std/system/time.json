@@ -1,0 +1,8 @@
+{
+  "logger": {},
+  "standard_sleep": {
+    "baseline_code_signature_text": "def standard_sleep(inputs: Dict[str, Token], node: PhysicsFuncNode, resources: any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "d2d5705b1e0a9ee37372de4051fab2d90777acbafe22429ca7d7b271b51230be",
+    "baseline_yaml_content_hash": "228304a29393efcacc7b44326797476abc79557fef2630a93324479a930c12b6"
+  }
+}

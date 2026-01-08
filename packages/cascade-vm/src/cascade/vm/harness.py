@@ -13,6 +13,8 @@ from cascade.vm.resource_registry import ResourceRegistry
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
 from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.vm.services.chronos import ChronosService
+from cascade.vm.services.contracts import DelayRequest
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.linker import Linker
 from cascade.spec.physical.assembly import Assembly
@@ -52,6 +54,7 @@ class EventDrivenRunner:
 
         # 1. Setup Queues for disconnected execution
         self.compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
+        self.chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
         self.ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
 
         # 2. Setup Services
@@ -73,6 +76,11 @@ class EventDrivenRunner:
             outbound_queue=self.ingress_queue,
             wakeup_event=self.wakeup_event,
         )
+        self.chronos_service = ChronosService(
+            inbound_queue=self.chronos_queue,
+            outbound_queue=self.ingress_queue,
+            wakeup_event=self.wakeup_event,
+        )
 
         # 3. Setup Event Bus & Resource Registry
         self.event_bus = EventBus()
@@ -83,6 +91,7 @@ class EventDrivenRunner:
         self.resource_registry = ResourceRegistry()
         self.resource_registry.register("system.event_bus", self.event_bus)
         self.resource_registry.register("system.compute_queue", self.compute_queue)
+        self.resource_registry.register("system.chronos_queue", self.chronos_queue)
         self.resource_registry.register("system.object_store", self.object_store)
 
         # 4. Setup Reactor
@@ -97,7 +106,9 @@ class EventDrivenRunner:
         # The Machine is now a component managed by the harness
         from cascade.vm.machine import Machine
 
-        self.machine = Machine(self.reactor, self.compute_service, self.wakeup_event)
+        self.machine = Machine(
+            self.reactor, self.compute_service, self.chronos_service, self.wakeup_event
+        )
         self._loop_task: Optional[asyncio.Task] = None
         self._service_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()

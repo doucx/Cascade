@@ -14,6 +14,8 @@ from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.vm.services.chronos import ChronosService
+from cascade.vm.services.contracts import DelayRequest
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.storage import InMemoryObjectStore
 
@@ -154,6 +156,7 @@ async def test_machine_self_terminating_flow():
 
     # Communication Queues & Events
     compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
+    chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
     ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
     wakeup_event = asyncio.Event()
 
@@ -164,6 +167,7 @@ async def test_machine_self_terminating_flow():
     resource_registry = ResourceRegistry()
     resource_registry.register("system.object_store", object_store)
     resource_registry.register("system.compute_queue", compute_queue)
+    resource_registry.register("system.chronos_queue", chronos_queue)
     resource_registry.register("system.event_bus", event_bus)
 
     # Instantiate Core Components
@@ -175,7 +179,12 @@ async def test_machine_self_terminating_flow():
         outbound_queue=ingress_queue,
         wakeup_event=wakeup_event,
     )
-    machine = Machine(reactor, compute_service, wakeup_event)
+    chronos_service = ChronosService(
+        inbound_queue=chronos_queue,
+        outbound_queue=ingress_queue,
+        wakeup_event=wakeup_event,
+    )
+    machine = Machine(reactor, compute_service, chronos_service, wakeup_event)
 
     # 2. Prime the System
     initial_value = 10

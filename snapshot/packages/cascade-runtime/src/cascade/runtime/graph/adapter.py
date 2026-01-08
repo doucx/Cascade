@@ -1,7 +1,7 @@
-from typing import Dict, Any, List, Optional, Tuple, Callable
+from typing import Dict, Any, Optional, Tuple, Callable
 from dataclasses import dataclass
 
-from cascade.spec.ir.graph import GraphIR, NodeIR
+from cascade.spec.ir.graph import NodeIR
 from cascade.compiler.frontend.generator import GenerationResult
 from cascade.graph.model import (
     Graph,
@@ -21,7 +21,6 @@ from cascade.spec.dsl.jump import JumpSelector
 
 @dataclass
 class _StubLazyResult:
-    """A minimal stub to satisfy runtime checks for UUID presence."""
     _uuid: str
 
 
@@ -208,11 +207,9 @@ class IRToRuntimeAdapter:
         # So if we put physical ID in stub._uuid, and ensure instance_map has physical keys, it works.
 
         selector_stub = _StubLazyResult(selector_id)
-        routes_stubs = {
-            k: _StubLazyResult(v) for k, v in routes_def.items() if v
-        }
+        routes_stubs = {k: _StubLazyResult(v) for k, v in routes_def.items() if v}
 
-        router_obj = Router(selector=selector_stub, routes=routes_stubs) # type: ignore
+        router_obj = Router(selector=selector_stub, routes=routes_stubs)  # type: ignore
 
         # 1. Edge from Selector -> Target (carrying Router obj)
         self.graph.add_edge(
@@ -238,9 +235,7 @@ class IRToRuntimeAdapter:
                     )
                 )
 
-    def _reconstruct_jump_edges(
-        self, flow_control: Dict[str, Any], source_node: Node
-    ):
+    def _reconstruct_jump_edges(self, flow_control: Dict[str, Any], source_node: Node):
         # Flow control in IR: {"target_key": "target_node_id"}
         # Runtime expects EdgeType.ITERATIVE_JUMP from Source -> Target
         # carrying a JumpSelector object.
@@ -248,7 +243,7 @@ class IRToRuntimeAdapter:
         routes_stubs = {
             k: (_StubLazyResult(v) if v else None) for k, v in flow_control.items()
         }
-        selector_obj = JumpSelector(routes=routes_stubs) # type: ignore
+        selector_obj = JumpSelector(routes=routes_stubs)  # type: ignore
 
         # Add edges for each potential jump target
         for key, target_id in flow_control.items():

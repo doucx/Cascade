@@ -28,6 +28,7 @@
   },
   "NodeIR.current_node_instance_hash": {},
   "NodeIR.dependencies": {},
+  "NodeIR.flow_control": {},
   "NodeIR.id": {},
   "NodeIR.inputs": {
     "baseline_yaml_content_hash": "d9b42d06d9b428812129bbfab5aa6b464b87fd17fafed13d931ca1894266065f"
@@ -36,9 +37,11 @@
   "NodeIR.name": {
     "baseline_yaml_content_hash": "49db437a8f5fe33f72c68dc722662bb55254e03bccb202358f52050604a6ea74"
   },
+  "NodeIR.retry_policy": {},
   "NodeIR.task": {
     "baseline_yaml_content_hash": "2366d9a3bd686b9d05b1a301e19a8e1c4ec618f4f2513f86aff21cdf7a829abc"
   },
+  "NodeIR.type": {},
   "TaskDef": {
     "baseline_yaml_content_hash": "fd4f7e4eafcb22ebb5e9077a8d0bdbef3e7a09859ce27d39d13761a8d78e31cd"
   },

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, List, Callable
+from typing import Any, Dict, Optional, Callable
 from dataclasses import dataclass, field
 
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
@@ -39,9 +39,7 @@ class IRGenerator:
         # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
         # which corresponds to the post-order traversal (dependencies first),
         # providing a natural topological sort.
-        ir = GraphIR(
-            nodes=list(self.nodes.values()), root_logical_ids=root_logical_ids
-        )
+        ir = GraphIR(nodes=list(self.nodes.values()), root_logical_ids=root_logical_ids)
         return GenerationResult(ir=ir, executables=self.executables)
 
     def _visit(self, obj: Any) -> Any:
@@ -103,12 +101,14 @@ class IRGenerator:
             collect_deps(lr._condition)
         for dep in lr._dependencies:
             collect_deps(dep)
-        
+
         # Collect Jump targets
         # JumpSelector (in lr._jump_selector) contains LazyResults as routes
-        if hasattr(lr, "_jump_selector") and isinstance(lr._jump_selector, JumpSelector):
-             for route in lr._jump_selector.routes.values():
-                 if route:
+        if hasattr(lr, "_jump_selector") and isinstance(
+            lr._jump_selector, JumpSelector
+        ):
+            for route in lr._jump_selector.routes.values():
+                if route:
                     collect_deps(route)
 
         return dep_map
@@ -138,15 +138,15 @@ class IRGenerator:
         dependency_ids = []
         for dep in lr._dependencies:
             dependency_ids.append(self._visit(dep))
-        
+
         flow_control = None
         if lr._jump_selector and isinstance(lr._jump_selector, JumpSelector):
             flow_control = {}
             for k, target in lr._jump_selector.routes.items():
                 if target:
-                     flow_control[k] = self._visit(target)
+                    flow_control[k] = self._visit(target)
                 else:
-                     flow_control[k] = None
+                    flow_control[k] = None
 
         # 2. Analyze Task Definition
         task_def = self.analyzer.analyze(lr.task)
@@ -183,13 +183,13 @@ class IRGenerator:
         # 5. Register
         self.nodes[node_id] = node_ir
         self._visited[lr._uuid] = node_id
-        
+
         # Capture executable
         if hasattr(lr.task, "func"):
-             self.executables[node_id] = lr.task.func
+            self.executables[node_id] = lr.task.func
         else:
-             # Fallback for raw callables
-             self.executables[node_id] = lr.task
+            # Fallback for raw callables
+            self.executables[node_id] = lr.task
 
         return node_id
 
@@ -231,7 +231,7 @@ class IRGenerator:
 
         self.nodes[node_id] = node_ir
         self._visited[lr._uuid] = node_id
-        
+
         # Capture factory
         self.executables[node_id] = lr.factory
 

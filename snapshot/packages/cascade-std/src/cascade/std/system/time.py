@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+from typing import Dict, Any
 
 from cascade.spec.physical.nodes import Token, PhysicsFuncNode
 from cascade.vm.services.contracts import DelayRequest
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def standard_sleep(
-    inputs: Dict[str, Token], node: PhysicsFuncNode, resources: any
+    inputs: Dict[str, Token], node: PhysicsFuncNode, resources: Any
 ) -> Dict[str, Token]:
     try:
         chronos_queue = resources.get("system.chronos_queue")

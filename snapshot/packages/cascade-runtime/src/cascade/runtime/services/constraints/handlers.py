@@ -64,12 +64,12 @@ class PauseConstraintHandler(ConstraintHandler):
 
     def on_constraint_add(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
+    ) -> None:  # pragma: no cover
         pass
 
     def on_constraint_remove(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
+    ) -> None:  # pragma: no cover
         pass
 
     def check_permission(
@@ -85,7 +85,7 @@ class PauseConstraintHandler(ConstraintHandler):
         constraint: GlobalConstraint,
         requirements: Dict[str, Any],
         manager: "ConstraintManager",
-    ) -> None:
+    ) -> None:  # pragma: no cover
         pass
 
 
@@ -105,7 +105,7 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
 
     def on_constraint_remove(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
+    ) -> None:  # pragma: no cover
         # We don't necessarily delete the resource, but we could set capacity to infinite?
         # Or just leave it. If the constraint is gone, tasks won't ask for it anymore.
         # So doing nothing is safe and simpler.
@@ -113,7 +113,7 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
 
     def check_permission(
         self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> bool:
+    ) -> bool:  # pragma: no cover
         # Concurrency is handled via resource acquisition, not boolean permission checks.
         return True
 
@@ -159,7 +159,7 @@ class RateLimitConstraintHandler(ConstraintHandler):
 
     def on_constraint_remove(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
+    ) -> None:  # pragma: no cover
         # Currently RateLimiter doesn't support deleting buckets, which is fine.
         # It just won't be used.
         pass
@@ -186,5 +186,5 @@ class RateLimitConstraintHandler(ConstraintHandler):
         constraint: GlobalConstraint,
         requirements: Dict[str, Any],
         manager: "ConstraintManager",
-    ) -> None:
+    ) -> None:  # pragma: no cover
         pass

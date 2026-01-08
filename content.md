@@ -1,206 +1,114 @@
-现在我们通过一个集成测试来验证 `ChronosService` 和 `standard_sleep` IC 的实际工作情况。
+好的，我们已经成功构建了 Cascade 的时间基础设施，并通过集成测试验证了其正确性。现在是将这一系列具有里程碑意义的改动作为一个完整逻辑单元进行提交的时候了。
 
-这个测试将构建一个微型物理图，模拟一次“睡眠”操作。我们将测量从发送数据到接收数据的实际耗时，以确保时间延迟确实发生且大致准确，同时验证数据载荷在穿越“时间虫洞”后保持完整。
+这一改动确立了 Cascade 物理层处理非确定性外部干扰（如时间）的标准范式。
 
-## [WIP] test(vm): 验证时间延迟服务的集成测试
+## [COMMIT] feat(vm/std): 实现异步时间延迟架构与 sleep IC
 
 ### 用户需求
-1.  创建一个集成测试，验证 `standard_sleep` IC 和 `ChronosService` 的协同工作。
-2.  测试应断言两点：
-    *   **延迟性**：操作确实花费了预期的时间（允许一定误差）。
-    *   **完整性**：经过延迟的数据 Token 在返回时，其 Payload 和 Trace 保持不变。
+1.  标准化物理层原子节点的命名与前缀，消除代码中的硬编码字符串。
+2.  引入非阻塞的 `ChronosService` 以处理物理层的时间延迟需求。
+3.  实现 `std.system.sleep` 内核函数，使物理图具备表达时间维度的能力。
 
 ### 评论
-这个测试不仅仅是功能验证，更是对 Cascade 核心设计哲学的验证：物理层可以在不阻塞主线程的情况下处理“非物理”的时间操作。通过测量 `wait_for` 之前的 `start_time` 和之后的 `end_time`，我们可以直观地看到 `ChronosService` 在幕后默默工作的效果。
+这是一个架构级别的增强。通过将“时间”从物理引擎的内部循环中抽离，并将其转化为一种可被消费的“外部脉冲”，我们不仅保持了 Reactor 的同步确定性，还极大地增强了系统的可测试性和可扩展性。这种设计为后续实现“指数退避”等复杂控制策略扫清了障碍。
 
 ### 目标
-1.  创建 `packages/cascade-vm/tests/integration/test_time_services.py`。
-2.  在其中构建一个拓扑：`Input -> F_sleep -> (Void)` ... `(Time)` ... `D_wakeup -> Output`。
-3.  运行测试，设置延迟为 0.1 秒，并断言总耗时在 0.1 到 0.2 秒之间。
+1.  提交物理节点前缀标准 (`NodePrefix`) 及其在编译器、链接器中的应用。
+2.  提交 `ChronosService` 及其在 `Machine` 运行时中的集成逻辑。
+3.  提交 `standard_sleep` IC 的实现。
+4.  提交覆盖生命周期信号、机器集成以及时间服务的全套回归测试。
 
 ### 基本原理
-我们在测试中构建了一个极简的图，其中 `F_sleep` 节点将执行流“送出”到 `ChronosService`。此时 `Reactor` 应该会检测到物理层静止（Quiescence），但 `Machine` 知道 `ChronosService` 正在工作，所以不会通过 DRAIN 信号关闭。当时间到期，`D_wakeup` 收到 Token，再次激活物理层，最终流向 `Output`。
+我们遵循了“时间即信号”的哲学。物理层通过 `standard_sleep` 发起一个 `DelayRequest`，环境层由 `ChronosService` 负责真实的异步等待。这种“往返”模式确保了 Reactor 永远只需要处理离散的、瞬间的 Token 触发，而无需感知 Wall Clock 的流逝，从而在维持高保真物理模型的同时，兼容了异步现实。
 
 ### 标签
-#intent/test #flow/ready #priority/high #comp/tests #concept/time #task/domain/testing #task/object/time-integration #task/action/create #task/state/end
+#intent/build #flow/ready #priority/high #comp/vm #comp/std #comp/spec #comp/compiler #concept/time #task/domain/physics #task/object/time-architecture #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建集成测试文件
+#### Acts 1: 提交 Spec 与反射层的规范化修改
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-spec/src/cascade/spec/physical/constants.py
+packages/cascade-reflection/src/cascade/reflection/naming.py
+~~~~~
+
+#### Acts 2: 提交编译器后端的标准化重构
+
+~~~~~act
+git_add
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-compiler/src/cascade/compiler/wiring/policies/control.py
+~~~~~
+
+#### Acts 3: 提交 VM 核心服务与 ChronosService
+
+~~~~~act
+git_add
+packages/cascade-vm/src/cascade/vm/services/contracts.py
+packages/cascade-vm/src/cascade/vm/services/chronos.py
+packages/cascade-vm/src/cascade/vm/machine.py
+packages/cascade-vm/src/cascade/vm/harness.py
+packages/cascade-vm/src/cascade/vm/linker.py
+~~~~~
+
+#### Acts 4: 提交标准库中的 sleep IC
+
+~~~~~act
+git_add
+packages/cascade-std/src/cascade/std/system/time.py
+packages/cascade-std/src/cascade/std/system/__init__.py
+~~~~~
+
+#### Acts 5: 提交所有相关的集成测试
+
+~~~~~act
+git_add
+packages/cascade-vm/tests/integration/test_lifecycle_signals.py
+packages/cascade-vm/tests/integration/test_machine_integration.py
 packages/cascade-vm/tests/integration/test_time_services.py
 ~~~~~
-~~~~~python
-import asyncio
-import time
-import pytest
 
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.constants import NodePrefix
-from cascade.reflection import PhysicalIdGenerator
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute import LocalComputeService
-from cascade.vm.services.chronos import ChronosService
-from cascade.runtime.storage import InMemoryObjectStore
+#### Acts 6: 创建 Git 提交
 
-# Standard Library ICs
-from cascade.std.system.time import standard_sleep
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(vm/std): implement asynchronous time delay architecture and sleep IC
 
+This commit establishes the standard pattern for handling time within the
+Cascade physical layer. Key changes include:
 
-@pytest.mark.asyncio
-async def test_sleep_ic_integration():
-    # 1. Setup Components
-    memory = VolatileMemory()
-    object_store = InMemoryObjectStore()
-    
-    # Queues
-    compute_queue = asyncio.Queue()
-    chronos_queue = asyncio.Queue()
-    ingress_queue = asyncio.Queue()
-    wakeup_event = asyncio.Event()
+1.  Standardized Primitives: Introduced 'NodePrefix' in the spec to eliminate
+    hardcoded strings like "const." or "pulse.". All ID generation and
+    compiler logic now rely on these safe constants.
+2.  ChronosService: Added a dedicated, non-blocking service in the VM
+    that handles 'DelayRequest' objects via 'asyncio.sleep'. It reinjects
+    tokens into the ingress queue upon completion.
+3.  standard_sleep IC: Implemented the physical kernel function that
+    bridges the physics layer to the time service.
+4.  Infrastructure Integration: Updated 'Machine' to coordinate the
+    Reactor, ComputeService, and ChronosService. Updated 'Linker' and
+    'Harness' to support the new components.
+5.  Robust Testing: Added comprehensive integration tests covering time
+    delays, machine lifecycle under drain, and overall architectural
+    integrity.
 
-    # Registries
-    code_registry = CodeRegistry()
-    resource_registry = ResourceRegistry()
-    resource_registry.register("system.object_store", object_store)
-    resource_registry.register("system.compute_queue", compute_queue)
-    resource_registry.register("system.chronos_queue", chronos_queue)
-
-    # 2. Build Physical Graph
-    # Topology: 
-    #   D_delay (0.1s) --+
-    #                    |--> F_sleep (vaporizes) ... (time passes) ... -> D_wakeup -> D_final
-    #   D_data (payload) +
-    
-    base_id = "test_task"
-    
-    d_delay = PhysicsDataNode(id="d_delay", name="DelayInput")
-    d_data = PhysicsDataNode(id="d_data", name="DataInput")
-    
-    # Using standard naming conventions via Generator
-    f_sleep_id = PhysicalIdGenerator.sleep_node(base_id)
-    d_wakeup_id = PhysicalIdGenerator.wakeup_data(base_id)
-    d_final_id = "d_final"
-
-    f_sleep = PhysicsFuncNode(
-        id=f_sleep_id,
-        name="Sleep(0.1s)",
-        input_ports={
-            "delay_in": PortDef("delay_in", PortRole.DATA),
-            "data_in": PortDef("data_in", PortRole.DATA)
-        }
-        # Output ports are empty because it returns nothing to the graph directly
-    )
-    
-    # The wakeup node is a standard DataNode that receives the token back
-    d_wakeup = PhysicsDataNode(id=d_wakeup_id, name="WakeupPoint")
-    
-    # We add a pass-through connection to a final node to verify flow continuation
-    # For this simple test, we can just check D_wakeup, but let's be explicit
-    
-    graph = BipartiteGraph()
-    graph.nodes[d_delay.id] = d_delay
-    graph.nodes[d_data.id] = d_data
-    graph.nodes[f_sleep.id] = f_sleep
-    graph.nodes[d_wakeup.id] = d_wakeup
-    
-    # Wiring
-    graph.channels.append(Channel(d_delay.id, "out", f_sleep.id, "delay_in"))
-    graph.channels.append(Channel(d_data.id, "out", f_sleep.id, "data_in"))
-    
-    # Map the kernel function
-    function_map = {
-        f_sleep_id: standard_sleep
-    }
-
-    # 3. Instantiate Services & Machine
-    reactor = Reactor(graph, memory, function_map, resource_registry, ingress_queue)
-    
-    compute_service = LocalComputeService(
-        store=object_store,
-        registry=code_registry,
-        inbound_queue=compute_queue,
-        outbound_queue=ingress_queue,
-        wakeup_event=wakeup_event
-    )
-    
-    chronos_service = ChronosService(
-        inbound_queue=chronos_queue,
-        outbound_queue=ingress_queue,
-        wakeup_event=wakeup_event
-    )
-    
-    machine = Machine(reactor, compute_service, chronos_service, wakeup_event)
-
-    # 4. Inject Initial Tokens
-    DELAY_SECONDS = 0.1
-    TEST_PAYLOAD = "hello_future"
-    
-    memory.put(d_delay, Token(payload=DELAY_SECONDS))
-    memory.put(d_data, Token(payload=TEST_PAYLOAD, trace={"origin": "past"}))
-
-    # 5. Run & Measure
-    start_time = time.monotonic()
-    
-    # Run the machine. We expect it to process the sleep request, pause, 
-    # have the ChronosService wait, re-inject, and then we manually stop it.
-    # Since we don't have a self-terminating graph here (like DRAIN), 
-    # we'll run it as a background task and wait for the result in D_wakeup.
-    
-    machine_task = asyncio.create_task(machine.run())
-    
-    try:
-        # We poll D_wakeup for the result
-        while True:
-            if memory.get_count(d_wakeup_id) > 0:
-                break
-            
-            if time.monotonic() - start_time > 1.0:
-                pytest.fail("Test timed out waiting for wakeup token")
-                
-            await asyncio.sleep(0.01)
-            
-        end_time = time.monotonic()
-        duration = end_time - start_time
-        
-        # 6. Assertions
-        print(f"Sleep Duration: {duration:.4f}s (Target: {DELAY_SECONDS}s)")
-        
-        # Verify Duration: Should be at least the delay, but not excessive overhead
-        assert duration >= DELAY_SECONDS
-        # Allow some buffer for async scheduling overhead, especially in CI
-        assert duration < DELAY_SECONDS + 0.2 
-        
-        # Verify Content
-        result_token = memory.take(d_wakeup_id)
-        assert result_token.payload == TEST_PAYLOAD
-        assert result_token.trace["origin"] == "past"
-        
-    finally:
-        # Cleanup
-        reactor.shutdown_event.set()
-        await machine_task
-
+This architecture maintains the synchronous deterministic property of the
+Reactor while allowing sophisticated time-based control flow (like backoff
+retries) to be implemented as topological patterns.
 ~~~~~
 
 ### 下一步建议
-如果这个测试通过，我们就有了一个坚如磐石的时间基础。
+我们现在拥有了完整的时间维度支持。接下来的宏观任务是利用这些组件实现**指数退避（Exponential Backoff）**。
 
-接下来，我们将进入第四步：**实现指数退避**。这将是一个更复杂的任务，因为它涉及：
-1.  修改 `RetryNode` 定义，增加 `initial_delay` 和 `backoff_factor` 参数。
-2.  更新 `standard_retry_logic`，使其不仅能决定重试，还能计算出延迟时间。
-3.  最关键的是，我们需要设计重试逻辑如何与 `sleep` 节点交互。
-    *   **方案 A (推荐)**: 编译器自动为每个 Triad 插入一个 `D_delay -> F_sleep -> D_wakeup` 结构，并让 `F_retry` 输出到 `D_delay`。
-    *   **方案 B**: `F_retry` 本身承担 `sleep` 的功能。但这违反了单一职责原则。
+我建议的步骤是：
+1.  **架构设计**：确定如何通过 `Builder` 将 `F_retry` 逻辑与 `F_sleep` 节点自动连接起来。
+2.  **Kernel 实现**：更新 `standard_retry_logic`，根据 Trace 中的重试计数计算出延迟秒数。
+3.  **编译器增强**：修改 `ParameterWiringPolicy` 或创建新的 `RetryWiringPolicy`，在生成物理图时自动织入这些时间节点。
 
-我倾向于方案 A，这需要修改编译器的 `Builder` 逻辑。在测试通过后，我们可以详细规划这一点。
+如果你准备好了，我们可以先从讨论 `F_retry` 节点的物理拓扑开始。

@@ -43,6 +43,9 @@ class NodeIR:
 
     task: TaskDef
 
+    # "task" | "map" | "param"
+    type: str = "task"
+
     # The logical UUID from the high-level DSL (LazyResult), if available.
     logical_id: Optional[str] = None
 
@@ -55,6 +58,13 @@ class NodeIR:
 
     # IDs of nodes that must complete before this node starts (Sequence dependency)
     dependencies: List[str] = field(default_factory=list)
+
+    # Configuration for iterative jumps (if any)
+    # Format: {"target_key": "target_node_id", ...}
+    flow_control: Optional[Dict[str, Any]] = None
+
+    # Metadata for retry policies, caching, etc.
+    retry_policy: Optional[Dict[str, Any]] = None
 
 
 @dataclass(frozen=True)

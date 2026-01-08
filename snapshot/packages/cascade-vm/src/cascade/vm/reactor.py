@@ -6,6 +6,7 @@ from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
 from cascade.vm.memory import VolatileMemory
+from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.resource_registry import ResourceRegistry
 
 logger = logging.getLogger(__name__)
@@ -16,14 +17,12 @@ class Reactor:
         self,
         graph: BipartiteGraph,
         memory: VolatileMemory,
-        function_map: Dict[str, Callable],
-        resource_registry: Optional[ResourceRegistry] = None,
+        kernel: PhysicsKernel,
         ingress_queue: Optional[asyncio.Queue] = None,
     ):
         self.graph = graph
         self.memory = memory
-        self.function_map = function_map
-        self.resource_registry = resource_registry or ResourceRegistry()
+        self.kernel = kernel
         self.ingress_queue = ingress_queue
 
         # Lifecycle Signals
@@ -126,19 +125,15 @@ class Reactor:
         for node in nodes_to_fire:
             inputs = inputs_for_fire[node.id]
             try:
-                # 1. Synchronous Execution
-                func = self.function_map.get(node.id)
-                if not func:
-                    raise ValueError(f"No function mapped for node {node.id}")
-
-                results = func(inputs, node, self.resource_registry)
+                # 1. Delegate execution to the kernel
+                results = self.kernel.execute(node, inputs)
 
                 # 2. Immediate Result Handling
                 self._handle_results_immediate(node, results)
 
             except Exception as e:
-                logger.exception(f"Kernel panic at node '{node.id}': {e}")
-                # Upgrade kernel panic to System Error Signal
+                # The kernel already logged the panic. The Reactor's job is to
+                # escalate it to a system-level control signal.
                 self._handle_control_signal(
                     SystemControlToken(command=ControlCommand.ERROR, payload=e)
                 )

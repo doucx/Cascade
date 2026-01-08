@@ -10,7 +10,7 @@ def upgrade(spec: MigrationSpec):
     # 1. Merge Standalone Module into Package
     # ==========================================
     # 将 backend 下零散的 wiring.py 移入 wiring 包中
-    spec.add(Move(base / "backend/wiring.py", base / "wiring/harness.py"))
+    # spec.add(Move(base / "backend/wiring.py", base / "wiring/harness.py"))
 
     # ==========================================
     # 2. Package Relocation

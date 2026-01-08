@@ -4,6 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-migrations/004_restructure_compiler_wiring.py | 26 ++++++++++++++++++++++++++
- 1 file changed, 26 insertions(+)
+migrations/004_restructure_compiler_wiring.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 ```

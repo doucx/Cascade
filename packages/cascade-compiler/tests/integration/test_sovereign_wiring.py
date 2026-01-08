@@ -21,7 +21,8 @@ def test_sovereign_wiring_flow():
     t2 = consumer(t1)
 
     ir_generator = IRGenerator()
-    graph_ir = ir_generator.generate(t2)
+    generation_result = ir_generator.generate(t2)
+    graph_ir = generation_result.ir
 
     # 2. Build Physical Graph
     builder = Builder()

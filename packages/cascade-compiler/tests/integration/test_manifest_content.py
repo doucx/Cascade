@@ -33,8 +33,8 @@ def test_manifest_is_populated_correctly():
     builder = Builder()
     environment = EnvironmentDef(resources=[])
 
-    graph_ir = generator.generate(workflow)
-    artifact = builder.build(graph_ir, environment)
+    generation_result = generator.generate(workflow)
+    artifact = builder.build(generation_result.ir, environment)
     manifest = artifact.manifest
 
     # 3. Assert Entry Points

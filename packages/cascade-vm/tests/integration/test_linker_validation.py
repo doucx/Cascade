@@ -25,8 +25,8 @@ async def test_blind_optimism_without_linker():
     workflow = missing_task()
     ir_generator = IRGenerator()
     builder = Builder()
-    graph_ir = ir_generator.generate(workflow)
-    artifact = builder.build(graph_ir, EnvironmentDef())
+    generation_result = ir_generator.generate(workflow)
+    artifact = builder.build(generation_result.ir, EnvironmentDef())
     assembly = artifact.assembly
 
     # 2. Setup Empty Registry (INTENTIONALLY MISSING CODE)
@@ -69,8 +69,8 @@ async def test_linker_enforces_integrity():
     workflow = missing_task()
     ir_generator = IRGenerator()
     builder = Builder()
-    graph_ir = ir_generator.generate(workflow)
-    artifact = builder.build(graph_ir, EnvironmentDef())
+    generation_result = ir_generator.generate(workflow)
+    artifact = builder.build(generation_result.ir, EnvironmentDef())
     assembly = artifact.assembly
 
     # 2. Setup Empty Registry
@@ -92,8 +92,8 @@ async def test_runner_from_assembly_enforces_linker():
     workflow = missing_task()
     ir_generator = IRGenerator()
     builder = Builder()
-    graph_ir = ir_generator.generate(workflow)
-    artifact = builder.build(graph_ir, EnvironmentDef())
+    generation_result = ir_generator.generate(workflow)
+    artifact = builder.build(generation_result.ir, EnvironmentDef())
     assembly = artifact.assembly
 
     # 2. Setup Empty Registry

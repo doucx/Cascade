@@ -41,7 +41,7 @@ class IRToRuntimeAdapter:
 
         # 1. Create Nodes
         for node_ir in ir.nodes:
-            node = self._create_node(node_ir)
+            node = self._create_node(node_ir, executables)
             self.graph.add_node(node)
             self.node_map[node.current_node_instance_hash] = node
             if node_ir.logical_id:
@@ -67,7 +67,9 @@ class IRToRuntimeAdapter:
 
         return self.graph, instance_map, executables
 
-    def _create_node(self, node_ir: NodeIR) -> Node:
+    def _create_node(
+        self, node_ir: NodeIR, executables: Dict[str, Callable]
+    ) -> Node:
         # Recover policies
         retry_policy = None
         if node_ir.retry_policy:
@@ -108,6 +110,7 @@ class IRToRuntimeAdapter:
         input_bindings = {}
         has_complex_inputs = False
         from cascade.spec.dsl.resources import Inject
+        import inspect
         
         def check_complexity(obj):
             if isinstance(obj, Inject):
@@ -124,6 +127,19 @@ class IRToRuntimeAdapter:
             input_bindings[k] = v
             if not has_complex_inputs and check_complexity(v):
                 has_complex_inputs = True
+
+        # Also check the executable signature for Inject defaults
+        if not has_complex_inputs:
+            executable = executables.get(node_ir.current_node_instance_hash)
+            if executable:
+                try:
+                    sig = inspect.signature(executable)
+                    for param in sig.parameters.values():
+                        if isinstance(param.default, Inject):
+                            has_complex_inputs = True
+                            break
+                except (ValueError, TypeError):
+                    pass
 
         # Determine Node Type
         if node_ir.type == "map":

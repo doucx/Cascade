@@ -43,7 +43,9 @@ class FlowManager:
         self.downstream_demand[target_node_id] += 1
 
     def _get_node_from_instance(self, instance: Any) -> Optional[Node]:
-        if isinstance(instance, (LazyResult, MappedLazyResult)):
+        # We use duck typing here to support _StubLazyResult from the Adapter
+        # as well as real LazyResult objects.
+        if hasattr(instance, "_uuid"):
             return self.instance_map.get(instance._uuid)
         return None
 

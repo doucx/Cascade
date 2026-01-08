@@ -171,11 +171,16 @@ class IRGenerator:
         if lr._constraints:
             constraints = lr._constraints.requirements.copy()
 
+        # Detect Param nodes
+        node_type = "task"
+        if task_def.name == "_get_param_value":
+            node_type = "param"
+
         node_ir = NodeIR(
             current_node_instance_hash=node_id,
             name=task_def.name,
             task=task_def,
-            type="task",
+            type=node_type,
             logical_id=lr._uuid,
             inputs=inputs,
             constraints=constraints,

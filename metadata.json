@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] 针对性分析与修复策略", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767858603.000448, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 Compiler/Runtime 集成中的 Param 识别、DI 注入与路由剪枝问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767858785.5373163, "duration_ms": 0}}

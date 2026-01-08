@@ -6,6 +6,8 @@ from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.resource_registry import ResourceRegistry
 
 
 def simple_increment(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
@@ -64,7 +66,9 @@ async def test_ping_pong_flow(ping_pong_topology):
     graph, d1, f1, d2, function_map = ping_pong_topology
 
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory, function_map)
+    resources = ResourceRegistry()
+    kernel = PhysicsKernel(function_map, resources)
+    reactor = Reactor(graph, memory, kernel)
 
     # 1. Start state
     initial_token = Token(payload=10)

@@ -10,6 +10,7 @@ from cascade.vm.machine import Machine
 from cascade.vm.reactor import Reactor
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.compute import LocalComputeService
 from cascade.vm.services.chronos import ChronosService
@@ -83,7 +84,8 @@ async def test_sleep_ic_integration():
     function_map = {f_sleep_id: standard_sleep}
 
     # 3. Instantiate Services & Machine
-    reactor = Reactor(graph, memory, function_map, resource_registry, ingress_queue)
+    kernel = PhysicsKernel(function_map, resource_registry)
+    reactor = Reactor(graph, memory, kernel, ingress_queue)
 
     compute_service = LocalComputeService(
         store=object_store,

@@ -9,6 +9,7 @@ from cascade.vm.machine import Machine
 from cascade.vm.reactor import Reactor
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.compute import ComputeRequest, LocalComputeService
 from cascade.vm.services.chronos import ChronosService
@@ -138,7 +139,8 @@ async def test_drain_waits_for_active_task(machine_components):
 
     func_map = {"F_launch": mock_dispatcher_kernel, "F_drain": drain_trigger_kernel}
 
-    reactor = Reactor(graph, memory, func_map, resource_registry, ingress_queue)
+    kernel = PhysicsKernel(func_map, resource_registry)
+    reactor = Reactor(graph, memory, kernel, ingress_queue)
     machine = Machine(reactor, compute_service, chronos_service, wakeup_event)
 
     # Inject inputs
@@ -184,7 +186,8 @@ async def test_error_signal_shuts_down_machine(machine_components):
 
     func_map = {"F_crash": crashing_kernel}
 
-    reactor = Reactor(graph, memory, func_map, resource_registry, ingress_queue)
+    kernel = PhysicsKernel(func_map, resource_registry)
+    reactor = Reactor(graph, memory, kernel, ingress_queue)
     machine = Machine(reactor, compute_service, chronos_service, wakeup_event)
 
     memory.put(d_err, Token("die"))

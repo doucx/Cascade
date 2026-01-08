@@ -5,6 +5,8 @@ from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory, MemoryFullError
 from cascade.vm.reactor import Reactor
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.resource_registry import ResourceRegistry
 
 
 def noop_producer(inputs, node, resources):
@@ -47,11 +49,10 @@ async def test_limited_capacity_causes_crash():
     graph.channels.append(Channel(f_p2.id, "out", d_life.id, "in"))
 
     memory = VolatileMemory()
-    reactor = Reactor(
-        graph,
-        memory,
-        {f_p1.id: noop_producer, f_p2.id: noop_producer},
-    )
+    resources = ResourceRegistry()
+    func_map = {f_p1.id: noop_producer, f_p2.id: noop_producer}
+    kernel = PhysicsKernel(func_map, resources)
+    reactor = Reactor(graph, memory, kernel)
     reactor.prime()
 
     # 2. Execution
@@ -111,11 +112,10 @@ async def test_infinite_capacity_handles_concurrency():
     graph.channels.append(Channel(f_p2.id, "out", d_life.id, "in"))
 
     memory = VolatileMemory()
-    reactor = Reactor(
-        graph,
-        memory,
-        {f_p1.id: noop_producer, f_p2.id: noop_producer},
-    )
+    resources = ResourceRegistry()
+    func_map = {f_p1.id: noop_producer, f_p2.id: noop_producer}
+    kernel = PhysicsKernel(func_map, resources)
+    reactor = Reactor(graph, memory, kernel)
     reactor.prime()
 
     # 2. Execution

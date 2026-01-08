@@ -6,6 +6,8 @@ from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.resource_registry import ResourceRegistry
 
 
 def switch_logic(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
@@ -59,7 +61,9 @@ async def test_branching_path_a(branching_topology):
     graph, d_in, d_a, d_b, func_map = branching_topology
 
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory, func_map)
+    resources = ResourceRegistry()
+    kernel = PhysicsKernel(func_map, resources)
+    reactor = Reactor(graph, memory, kernel)
 
     # 1. Inject signal for Path A
     memory.put(d_in, Token(payload="path_a"))
@@ -81,7 +85,9 @@ async def test_branching_path_b(branching_topology):
     graph, d_in, d_a, d_b, func_map = branching_topology
 
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory, func_map)
+    resources = ResourceRegistry()
+    kernel = PhysicsKernel(func_map, resources)
+    reactor = Reactor(graph, memory, kernel)
 
     # 1. Inject signal for Path B
     memory.put(d_in, Token(payload="path_b"))

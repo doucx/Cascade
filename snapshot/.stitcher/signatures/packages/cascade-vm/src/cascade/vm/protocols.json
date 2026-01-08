@@ -8,14 +8,17 @@
     "baseline_code_structure_hash": "2f74aec3166e2e9750b28295848e2465e03a0a0c89911aff5243c2dca3cda785",
     "baseline_yaml_content_hash": "6044f02f16fb28ae4bf4aee4cf2f064b2cf0a043a55f11efef6a26b81d0ae878"
   },
+  "ReactorProtocol.drain_event": {},
+  "ReactorProtocol.ingress_queue": {},
   "ReactorProtocol.prime": {
     "baseline_code_signature_text": "def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:",
     "baseline_code_structure_hash": "2c7501c8774bdf1aaea3894fac5086d67d836b20e6a01d36945e121356ca5243",
     "baseline_yaml_content_hash": "6d57c44407439cf284674b68fd40eed3f3b163bfe7370922bf9a61a4bd09d664"
   },
+  "ReactorProtocol.shutdown_event": {},
   "ReactorProtocol.step": {
-    "baseline_code_signature_text": "async def step(self) -> int:",
-    "baseline_code_structure_hash": "5917d1593782fc58a1dd6c4ae986c38c33e7a8f32330503f356d963f3ea4cb2a",
+    "baseline_code_signature_text": "def step(self) -> int:",
+    "baseline_code_structure_hash": "d04d9baf243ec115db08033852849a345080b31d376c109e68e80e804927541b",
     "baseline_yaml_content_hash": "e03c7707252d0f4f927e8fc1fba7b13ce52790aad38cdb346f0e0cac3041398e"
   }
 }

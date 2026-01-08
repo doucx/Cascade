@@ -14,15 +14,15 @@
   },
   "HashingService": {},
   "HashingService._build_hash_components": {
-    "baseline_code_signature_text": "def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Node]) -> List[str]:",
-    "baseline_code_structure_hash": "c0690bf5a0b16166dfa6d1b79feabef38d265ef8a79876054e4892c4bf343bf9"
+    "baseline_code_signature_text": "def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, NodeIR]) -> List[str]:",
+    "baseline_code_structure_hash": "e93d595ebb2fe3dedf67b6d97ce0a501cb8a6e567242f379616644d13ae26b76"
   },
   "HashingService._get_merkle_hash": {
     "baseline_code_signature_text": "def _get_merkle_hash(self, components: List[str]) -> str:",
     "baseline_code_structure_hash": "f6f4c15396ae743d076c4bcd2e7abf1e927b864e3fb94a364c3089b1320a006b"
   },
   "HashingService.compute_node_instance_hash": {
-    "baseline_code_signature_text": "def compute_node_instance_hash(self, definition: TaskDef, result: Any, dep_nodes: Dict[str, Node]) -> str:",
-    "baseline_code_structure_hash": "4ee3787af6af821e52472560e97e38e5d72f48d62d9683ad59bdd55f58791ede"
+    "baseline_code_signature_text": "def compute_node_instance_hash(self, definition: TaskDef, result: Any, dep_nodes: Dict[str, NodeIR]) -> str:",
+    "baseline_code_structure_hash": "a244714db935fa4ca8414f02ad522d908fe5adba4ab20896a282de026e053d7e"
   }
 }

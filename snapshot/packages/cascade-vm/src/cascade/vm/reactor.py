@@ -1,7 +1,6 @@
 import asyncio
-import inspect
 import logging
-from typing import List, Callable, Dict, Tuple, Awaitable, Optional, Any
+from typing import List, Dict, Tuple, Optional, Any
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand

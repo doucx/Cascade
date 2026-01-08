@@ -1,6 +1,5 @@
 import asyncio
-from typing import Protocol, Callable, Awaitable, Dict, Any, Optional
-from cascade.spec.physical.nodes import Token
+from typing import Protocol, Dict, Any, Optional
 
 
 class ReactorProtocol(Protocol):

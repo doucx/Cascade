@@ -1,4 +1,5 @@
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Callable
+from dataclasses import dataclass, field
 
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.spec.dsl.routing import Router
@@ -7,16 +8,25 @@ from cascade.spec.ir.graph import GraphIR, NodeIR
 from cascade.reflection import ReflectionAnalyzer, HashingService
 
 
+@dataclass
+class GenerationResult:
+    ir: GraphIR
+    # Maps node_instance_hash -> Python Callable (the actual code to run)
+    executables: Dict[str, Callable] = field(default_factory=dict)
+
+
 class IRGenerator:
     def __init__(self):
         self.analyzer = ReflectionAnalyzer()
         self.hashing_service = HashingService()
         # id -> NodeIR
         self.nodes: Dict[str, NodeIR] = {}
+        # id -> Callable
+        self.executables: Dict[str, Callable] = {}
         # Tracks visited LazyResult UUIDs to their generated Node IDs to handle DAGs
         self._visited: Dict[str, str] = {}
 
-    def generate(self, target: Any) -> GraphIR:
+    def generate(self, target: Any) -> GenerationResult:
         # If target is a list, treat all items as roots. Otherwise, wrap it.
         targets = target if isinstance(target, (list, tuple)) else [target]
         root_logical_ids = []
@@ -29,9 +39,10 @@ class IRGenerator:
         # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
         # which corresponds to the post-order traversal (dependencies first),
         # providing a natural topological sort.
-        return GraphIR(
+        ir = GraphIR(
             nodes=list(self.nodes.values()), root_logical_ids=root_logical_ids
         )
+        return GenerationResult(ir=ir, executables=self.executables)
 
     def _visit(self, obj: Any) -> Any:
         if isinstance(obj, LazyResult):
@@ -172,6 +183,13 @@ class IRGenerator:
         # 5. Register
         self.nodes[node_id] = node_ir
         self._visited[lr._uuid] = node_id
+        
+        # Capture executable
+        if hasattr(lr.task, "func"):
+             self.executables[node_id] = lr.task.func
+        else:
+             # Fallback for raw callables
+             self.executables[node_id] = lr.task
 
         return node_id
 
@@ -213,5 +231,8 @@ class IRGenerator:
 
         self.nodes[node_id] = node_ir
         self._visited[lr._uuid] = node_id
+        
+        # Capture factory
+        self.executables[node_id] = lr.factory
 
         return node_id

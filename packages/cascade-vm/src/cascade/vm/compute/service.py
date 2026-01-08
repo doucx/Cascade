@@ -19,7 +19,7 @@ class LocalComputeService:
         registry: CodeRegistry,
         inbound_queue: "asyncio.Queue[ComputeRequest]",
         outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
-        max_workers: int = None,
+        max_workers: Optional[int] = None,
         wakeup_event: Optional[asyncio.Event] = None,
     ):
         self.store = store

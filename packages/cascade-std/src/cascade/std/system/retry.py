@@ -23,5 +23,5 @@ def standard_retry_logic(
         trace["retry_count"] = retry_count
         return {"retry_out": context_token}
     else:
-        # Fail permanently: route error token to failure sink
+        # Fail permanently: route error token to the failure output port
         return {"fail_out": error_token}

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from cascade.vm.reactor import Reactor
+from cascade.vm.protocols import ReactorProtocol
 from cascade.vm.compute.service import LocalComputeService
 from cascade.vm.services.chronos import ChronosService
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class Machine:
     def __init__(
         self,
-        reactor: Reactor,
+        reactor: ReactorProtocol,
         compute_service: LocalComputeService,
         chronos_service: ChronosService,
         wakeup_event: asyncio.Event,
@@ -42,10 +42,13 @@ class Machine:
                         # - No physics transitions occurred (fired_count == 0)
                         # - No compute tasks are running (active_count == 0)
                         # - No results are pending ingress (ingress_queue empty)
+                        is_ingress_pending = (
+                            self.ingress_queue and not self.ingress_queue.empty()
+                        )
                         if (
                             fired_count == 0
                             and self.compute_service.active_count == 0
-                            and self.ingress_queue.empty()
+                            and not is_ingress_pending
                         ):
                             logger.info("System drained (Quiescent). Shutting down.")
                             self.reactor.shutdown_event.set()

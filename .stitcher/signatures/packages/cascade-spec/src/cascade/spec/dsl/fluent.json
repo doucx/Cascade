@@ -47,6 +47,7 @@
   "MappedLazyResult._condition": {},
   "MappedLazyResult._constraints": {},
   "MappedLazyResult._dependencies": {},
+  "MappedLazyResult._jump_selector": {},
   "MappedLazyResult._retry_policy": {},
   "MappedLazyResult._uuid": {},
   "MappedLazyResult.after": {

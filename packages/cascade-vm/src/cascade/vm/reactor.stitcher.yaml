@@ -1,8 +1,6 @@
 "Reactor": |-
   The heart of the physics engine.
   Scans the topology for excited states and fires transitions.
-"Reactor.add_sink": |-
-  Register a callback to receive tokens emitted by a specific port.
 "Reactor.prime": |-
   Injects initial potential energy (tokens) into the system
   based on PhysicsDataNode.initial_tokens.

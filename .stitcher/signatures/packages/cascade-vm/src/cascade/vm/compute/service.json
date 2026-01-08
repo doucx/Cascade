@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "d5cff9af5c82d7e59fd60a124d9c11011ea72abf672939cf02e87385adb8b9ab"
   },
   "LocalComputeService.__init__": {
-    "baseline_code_signature_text": "def __init__(self, store: ObjectStore, registry: CodeRegistry, inbound_queue: asyncio.Queue[ComputeRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], max_workers: int = None, wakeup_event: Optional[asyncio.Event] = None):",
-    "baseline_code_structure_hash": "816f607eda26ba28723dc26722b6d187cdf5b574464b189990b2e98586cbc8b0"
+    "baseline_code_signature_text": "def __init__(self, store: ObjectStore, registry: CodeRegistry, inbound_queue: asyncio.Queue[ComputeRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], max_workers: Optional[int] = None, wakeup_event: Optional[asyncio.Event] = None):",
+    "baseline_code_structure_hash": "3f3ca63bb8e75ae763b7687f1f8cf2681693aa1b47a216824ec7f646cc6f3a4a"
   },
   "LocalComputeService._active_count": {},
   "LocalComputeService._pool": {},

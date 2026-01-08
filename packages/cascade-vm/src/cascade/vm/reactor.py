@@ -1,7 +1,6 @@
 import asyncio
-import inspect
 import logging
-from typing import List, Callable, Dict, Tuple, Awaitable, Optional, Any
+from typing import List, Dict, Tuple, Optional, Any
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
@@ -27,10 +26,6 @@ class Reactor:
         # Lifecycle Signals
         self.shutdown_event = asyncio.Event()
         self.drain_event = asyncio.Event()
-
-        # State
-        # node_id -> port_name -> list of callbacks
-        self.sinks: Dict[str, Dict[str, List[Callable[[Token], Awaitable[None]]]]] = {}
 
         # Indexing for O(1) lookups during step/fire
         self._func_nodes: List[PhysicsFuncNode] = []
@@ -67,18 +62,6 @@ class Reactor:
             ):
                 # Record the full channel to support filtering logic later
                 self._outbound_channels[source.id].append(channel)
-
-    def add_sink(
-        self,
-        node_id: str,
-        port_name: str,
-        callback: Callable[[Token], Awaitable[None]],
-    ) -> None:
-        if node_id not in self.sinks:
-            self.sinks[node_id] = {}
-        if port_name not in self.sinks[node_id]:
-            self.sinks[node_id][port_name] = []
-        self.sinks[node_id][port_name].append(callback)
 
     def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:
         genesis_trace = genesis_trace or {}
@@ -149,7 +132,6 @@ class Reactor:
             return
 
         outbound = self._outbound_channels.get(node.id, [])
-        node_sinks = self.sinks.get(node.id, {})
 
         for port_name, token in results.items():
             if token is None:
@@ -159,22 +141,7 @@ class Reactor:
             if isinstance(token.payload, SystemControlToken):
                 self._handle_control_signal(token.payload)
 
-            # A. Handle Sinks (Callbacks)
-            # Note: Sinks in the physical layer MUST be non-blocking.
-            # If they return a coroutine, we schedule it on the loop but do NOT await.
-            if port_name in node_sinks:
-                for cb in node_sinks[port_name]:
-                    try:
-                        res = cb(token)
-                        if inspect.isawaitable(res):
-                            # Fire and forget for async sinks
-                            asyncio.create_task(res)
-                    except Exception as e:
-                        logger.exception(
-                            f"Sink callback failed for {node.id}:{port_name}: {e}"
-                        )
-
-            # B. Handle Outbound Channels (Topological Flow)
+            # A. Handle Outbound Channels (Topological Flow)
             matching_channels = [c for c in outbound if c.source_port == port_name]
             for channel in matching_channels:
                 target_node = self.graph.nodes[channel.target_node_id]

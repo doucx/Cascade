@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, Tuple, Callable, List
+from typing import Dict, Any, Optional, Tuple, Callable
 from dataclasses import dataclass
 
 from cascade.spec.ir.graph import NodeIR
@@ -68,7 +68,6 @@ class IRToRuntimeAdapter:
         return self.graph, instance_map, executables
 
     def _is_dependency(self, value: Any) -> bool:
-        """Check if a value looks like a node reference (Physical ID)."""
         if isinstance(value, str) and value in self.node_map:
             return True
         return False
@@ -105,11 +104,11 @@ class IRToRuntimeAdapter:
         for k, v in node_ir.inputs.items():
             if isinstance(v, dict) and v.get("$router"):
                 continue
-            
+
             # If it's a direct dependency string, don't add to bindings
             if self._is_dependency(v):
                 continue
-                
+
             input_bindings[k] = v
             if not has_complex_inputs and check_complexity(v):
                 has_complex_inputs = True
@@ -231,7 +230,6 @@ class IRToRuntimeAdapter:
                         )
 
     def _scan_and_create_nested_edges(self, obj: Any, arg_name: str, target_node: Node):
-        """Recursively scan object for Node IDs and create edges."""
         if self._is_dependency(obj):
             source_node = self.node_map[obj]
             self.graph.add_edge(

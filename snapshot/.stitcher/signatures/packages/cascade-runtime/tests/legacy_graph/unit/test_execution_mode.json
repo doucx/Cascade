@@ -1,0 +1,23 @@
+{
+  "blocking_task": {
+    "baseline_code_signature_text": "def blocking_task():",
+    "baseline_code_structure_hash": "f03d5bc50a81498b7c1567abe40e9d0e7a08976792ff9c4fcd8ec30ba5fccc5f"
+  },
+  "collect_results": {
+    "baseline_code_signature_text": "def collect_results(c, b, d):",
+    "baseline_code_structure_hash": "6850eb2f2b07e5e25c25ea0de60bb57c176d7ddd39fae8dc928ce5fa3e2bfadb"
+  },
+  "compute_task": {
+    "baseline_code_signature_text": "def compute_task():",
+    "baseline_code_structure_hash": "857be53814d09c8ae50666822aea2d4a3b3d11f4746920452549d499fb05fcaf"
+  },
+  "default_task": {
+    "baseline_code_signature_text": "def default_task():",
+    "baseline_code_structure_hash": "fb4963bf627a10809b681a472c315e4d175e6c3265a452099ab913cf14a2d92b"
+  },
+  "test_execution_mode_is_passed_to_node": {
+    "baseline_code_signature_text": "def test_execution_mode_is_passed_to_node():",
+    "baseline_code_structure_hash": "65c741d6e0c1db63f8e6c7e4cb3169de19cf03d9e09e22306c4ce38582f424ea",
+    "baseline_yaml_content_hash": "ea99a889d25e547809001f98da305c64e24e3ad24a6179325ce0db06dd0d3d37"
+  }
+}

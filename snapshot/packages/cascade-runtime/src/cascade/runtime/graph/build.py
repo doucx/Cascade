@@ -8,10 +8,6 @@ from cascade.runtime.graph.registry import NodeRegistry
 def build_graph(
     target: Any, registry: Optional[NodeRegistry] = None
 ) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:
-    """
-    Legacy compatibility layer for graph building.
-    Internally uses the Cascade Compiler (IRGenerator) and Runtime Adapter.
-    """
     # 1. Generate Intermediate Representation (IR)
     ir = IRGenerator().generate(target)
 

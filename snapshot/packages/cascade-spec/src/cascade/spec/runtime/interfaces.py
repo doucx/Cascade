@@ -1,4 +1,13 @@
-from typing import Protocol, List, Any, Dict, Optional, Callable, Awaitable, TYPE_CHECKING
+from typing import (
+    Protocol,
+    List,
+    Any,
+    Dict,
+    Optional,
+    Callable,
+    Awaitable,
+    TYPE_CHECKING,
+)
 
 if TYPE_CHECKING:
     from cascade.runtime.graph.model import Graph, Node

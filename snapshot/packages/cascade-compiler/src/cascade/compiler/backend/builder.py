@@ -19,6 +19,7 @@ from cascade.compiler.wiring.policies.control import ControlFlowWiringPolicy
 from cascade.compiler.wiring.policies.observability import ObservabilityWiringPolicy
 from cascade.compiler.wiring.policies.resource import ResourceWiringPolicy
 from cascade.compiler.wiring.policies.pulse import PulseWiringPolicy
+from cascade.spec.physical.constants import NodePrefix
 
 
 class Builder:
@@ -89,12 +90,16 @@ class Builder:
             node_id
             for node_id, node in physical_graph.nodes.items()
             if isinstance(node, PhysicsDataNode)
-            and (node_id.startswith("const.") or node_id.startswith("pulse."))
+            and (
+                node_id.startswith(f"{NodePrefix.CONST}.")
+                or node_id.startswith(f"{NodePrefix.PULSE}.")
+            )
         ]
         exit_points = {
             node.id.split(".")[1]: node.id
             for node in physical_graph.nodes.values()
-            if isinstance(node, PhysicsDataNode) and node.id.startswith("egress.")
+            if isinstance(node, PhysicsDataNode)
+            and node.id.startswith(f"{NodePrefix.EGRESS}.")
         }
 
         manifest = CompilationManifest(

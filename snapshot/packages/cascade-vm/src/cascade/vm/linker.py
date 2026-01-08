@@ -15,6 +15,7 @@ from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.system.egress import standard_egress
 from cascade.std.system.gate import gate_passthrough
+from cascade.spec.physical.constants import NodePrefix
 
 
 class LinkerError(RuntimeError):
@@ -64,9 +65,9 @@ class Linker:
 
     def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:
         # Triad
-        if node_id.endswith(".bleach"):
+        if node_id.endswith(f".{NodePrefix.BLEACH}"):
             return standard_bleacher
-        if node_id.endswith(".stain"):
+        if node_id.endswith(f".{NodePrefix.STAIN}"):
             return standard_stainer
 
         # Observability
@@ -78,13 +79,13 @@ class Linker:
             return discrete_allocator
         if "reclaimer" in node_id:
             return discrete_reclaimer
-        if node_id.startswith("req."):
+        if node_id.startswith(f"{NodePrefix.REQ}."):
             return resource_requestor
-        if "gate.wakeup" in node_id:
+        if f"{NodePrefix.GATE}.wakeup" in node_id:
             return gate_passthrough
 
         # System / Egress
-        if node_id.startswith("egress."):
+        if node_id.startswith(f"{NodePrefix.EGRESS}."):
             return standard_egress
 
         return None

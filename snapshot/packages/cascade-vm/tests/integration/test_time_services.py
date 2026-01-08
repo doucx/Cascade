@@ -1,40 +1,3 @@
-现在我们通过一个集成测试来验证 `ChronosService` 和 `standard_sleep` IC 的实际工作情况。
-
-这个测试将构建一个微型物理图，模拟一次“睡眠”操作。我们将测量从发送数据到接收数据的实际耗时，以确保时间延迟确实发生且大致准确，同时验证数据载荷在穿越“时间虫洞”后保持完整。
-
-## [WIP] test(vm): 验证时间延迟服务的集成测试
-
-### 用户需求
-1.  创建一个集成测试，验证 `standard_sleep` IC 和 `ChronosService` 的协同工作。
-2.  测试应断言两点：
-    *   **延迟性**：操作确实花费了预期的时间（允许一定误差）。
-    *   **完整性**：经过延迟的数据 Token 在返回时，其 Payload 和 Trace 保持不变。
-
-### 评论
-这个测试不仅仅是功能验证，更是对 Cascade 核心设计哲学的验证：物理层可以在不阻塞主线程的情况下处理“非物理”的时间操作。通过测量 `wait_for` 之前的 `start_time` 和之后的 `end_time`，我们可以直观地看到 `ChronosService` 在幕后默默工作的效果。
-
-### 目标
-1.  创建 `packages/cascade-vm/tests/integration/test_time_services.py`。
-2.  在其中构建一个拓扑：`Input -> F_sleep -> (Void)` ... `(Time)` ... `D_wakeup -> Output`。
-3.  运行测试，设置延迟为 0.1 秒，并断言总耗时在 0.1 到 0.2 秒之间。
-
-### 基本原理
-我们在测试中构建了一个极简的图，其中 `F_sleep` 节点将执行流“送出”到 `ChronosService`。此时 `Reactor` 应该会检测到物理层静止（Quiescence），但 `Machine` 知道 `ChronosService` 正在工作，所以不会通过 DRAIN 信号关闭。当时间到期，`D_wakeup` 收到 Token，再次激活物理层，最终流向 `Output`。
-
-### 标签
-#intent/test #flow/ready #priority/high #comp/tests #concept/time #task/domain/testing #task/object/time-integration #task/action/create #task/state/end
-
----
-
-### Script
-
-#### Acts 1: 创建集成测试文件
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_time_services.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 import pytest
@@ -190,17 +153,3 @@ async def test_sleep_ic_integration():
         # Cleanup
         reactor.shutdown_event.set()
         await machine_task
-
-~~~~~
-
-### 下一步建议
-如果这个测试通过，我们就有了一个坚如磐石的时间基础。
-
-接下来，我们将进入第四步：**实现指数退避**。这将是一个更复杂的任务，因为它涉及：
-1.  修改 `RetryNode` 定义，增加 `initial_delay` 和 `backoff_factor` 参数。
-2.  更新 `standard_retry_logic`，使其不仅能决定重试，还能计算出延迟时间。
-3.  最关键的是，我们需要设计重试逻辑如何与 `sleep` 节点交互。
-    *   **方案 A (推荐)**: 编译器自动为每个 Triad 插入一个 `D_delay -> F_sleep -> D_wakeup` 结构，并让 `F_retry` 输出到 `D_delay`。
-    *   **方案 B**: `F_retry` 本身承担 `sleep` 的功能。但这违反了单一职责原则。
-
-我倾向于方案 A，这需要修改编译器的 `Builder` 逻辑。在测试通过后，我们可以详细规划这一点。

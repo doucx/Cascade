@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple, Callable
 import inspect
-from cascade.graph.model import (
+from cascade.runtime.graph.model import (
     Graph,
     Node,
     Edge,

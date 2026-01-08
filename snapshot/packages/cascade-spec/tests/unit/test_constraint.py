@@ -1,5 +1,5 @@
 import cascade as cs
-from cascade.graph.build import build_graph
+from cascade.runtime.graph.build import build_graph
 from cascade.spec.dsl.constraint import ResourceConstraint
 
 

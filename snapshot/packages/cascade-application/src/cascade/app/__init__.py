@@ -5,8 +5,8 @@ from cascade.spec.dsl.fluent import LazyResult
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import Connector, StateBackend
 
-from cascade.graph.build import build_graph
-from cascade.graph.model import Node, EdgeType
+from cascade.runtime.graph.build import build_graph
+from cascade.runtime.graph.model import Node, EdgeType
 
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus

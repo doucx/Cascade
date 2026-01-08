@@ -8,7 +8,7 @@ from cascade.compiler.wiring.protocol import WiringPolicy
 
 
 class PulseWiringPolicy(WiringPolicy):
-    def setup_globals(self, ctx: WiringContext) -> None:
+    def setup_globals(self, ctx: WiringContext) -> None:  # pragma: no cover
         pass
 
     def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:

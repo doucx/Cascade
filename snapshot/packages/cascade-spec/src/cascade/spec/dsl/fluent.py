@@ -70,6 +70,7 @@ class MappedLazyResult(Generic[T]):
     _cache_policy: Optional[Any] = None  # CachePolicy
     _constraints: Optional[Any] = None  # ResourceConstraint
     _dependencies: List[LazyResult] = field(default_factory=list)
+    _jump_selector: Optional[Any] = None  # Explicit Control Flow (JumpSelector)
 
     def __hash__(self):
         return hash(self._uuid)

@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import time
 
-from cascade.spec import EventIR, EventType, EventState
+from cascade.spec import EventIR, EventType, EventState, EventContext
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.triad import BleachNode
 from cascade.spec.physical.ports import PortRole
@@ -46,7 +46,7 @@ def standard_bleacher(
         trace_payload["held_resources"] = held_resources
 
     # 3. Construct EventIR (The Hologram)
-    ctx = {}
+    ctx: EventContext = {}
     if "rid" in trace_payload:
         ctx["rid"] = trace_payload["rid"]
 

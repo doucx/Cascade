@@ -1,7 +1,7 @@
 from typing import Dict, Any
 import time
 
-from cascade.spec import EventIR, EventType, EventState
+from cascade.spec import EventIR, EventType, EventState, EventContext
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.triad import StainNode
 from cascade.spec.physical.ports import PortRole
@@ -52,7 +52,7 @@ def standard_stainer(
         state = EventState.FAILED
         error_msg = str(result_payload)
 
-    ctx = {}
+    ctx: EventContext = {}
     if "rid" in trace_payload:
         ctx["rid"] = trace_payload["rid"]
 

@@ -39,7 +39,7 @@ def discrete_allocator(
         ledger = ledger_data
 
     req_token = inputs["req_in"]
-    req_amount = _extract_scalar(req_token.payload)
+    req_amount = int(_extract_scalar(req_token.payload))
 
     outputs: Dict[str, Token] = {}
 
@@ -75,7 +75,7 @@ def discrete_reclaimer(
         ledger = ledger_data
 
     rel_token = inputs["rel_in"]
-    release_amount = _extract_scalar(rel_token.payload)
+    release_amount = int(_extract_scalar(rel_token.payload))
 
     # Replenish
     ledger.available = min(ledger.total, ledger.available + release_amount)

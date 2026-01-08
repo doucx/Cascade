@@ -99,6 +99,9 @@ class IRGenerator:
 
         if lr._condition:
             collect_deps(lr._condition)
+        if lr._constraints:
+            for val in lr._constraints.requirements.values():
+                collect_deps(val)
         for dep in lr._dependencies:
             collect_deps(dep)
 
@@ -134,6 +137,11 @@ class IRGenerator:
         condition_id = None
         if lr._condition:
             condition_id = self._visit(lr._condition)
+        
+        # Visit dynamic constraints to ensure they are generated
+        if lr._constraints:
+            for val in lr._constraints.requirements.values():
+                self._visit(val)
 
         dependency_ids = []
         for dep in lr._dependencies:
@@ -213,6 +221,10 @@ class IRGenerator:
         condition_id = None
         if lr._condition:
             condition_id = self._visit(lr._condition)
+
+        if lr._constraints:
+            for val in lr._constraints.requirements.values():
+                self._visit(val)
 
         dependency_ids = []
         for dep in lr._dependencies:

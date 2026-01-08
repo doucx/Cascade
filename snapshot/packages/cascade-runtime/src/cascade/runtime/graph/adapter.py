@@ -224,6 +224,27 @@ class IRToRuntimeAdapter:
         if node_ir.flow_control:
             self._reconstruct_jump_edges(node_ir.flow_control, target_node)
 
+        # 5. Constraint Edges
+        if node_ir.constraints:
+            from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+
+            for key, val in node_ir.constraints.items():
+                if isinstance(val, (LazyResult, MappedLazyResult)):
+                    # Note: val is the LazyResult object because IRGenerator copied the dict.
+                    # We need to find its logical ID or use UUID to lookup in maps.
+                    # IRGenerator output guarantees nodes are generated.
+                    # Since Adapter has logic to build maps, we use logical_map for UUIDs.
+                    if val._uuid in self.logical_map:
+                        source_node = self.logical_map[val._uuid]
+                        self.graph.add_edge(
+                            Edge(
+                                source=source_node,
+                                target=target_node,
+                                arg_name=key,
+                                edge_type=EdgeType.CONSTRAINT,
+                            )
+                        )
+
     def _reconstruct_router_edges(
         self, router_def: Dict[str, Any], arg_name: str, target_node: Node
     ):

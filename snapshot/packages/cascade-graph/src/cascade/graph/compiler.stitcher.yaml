@@ -1,2 +1,0 @@
-"BlueprintBuilder": |-
-  Compiles a LazyResult dependency graph into a linear Blueprint for VM execution.

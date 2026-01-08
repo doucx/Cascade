@@ -4,6 +4,7 @@ from cascade.spec.ir.graph import TaskDef
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.spec.dsl.routing import Router
 from cascade.spec.dsl.resources import Inject
+from cascade.runtime.graph.model import Node
 
 
 class HashingService:

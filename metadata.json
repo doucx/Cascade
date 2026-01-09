@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(compiler): 迁移 ControlFlowWiringPolicy 以分离节点创建", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767960131.1391184, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(compiler): 迁移 PulseWiringPolicy 以分离节点创建", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767960206.8341322, "duration_ms": 0}}

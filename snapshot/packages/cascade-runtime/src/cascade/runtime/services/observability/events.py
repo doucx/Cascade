@@ -182,15 +182,7 @@ def _hydrate_lifecycle(
     # Prefer logical IDs from data, fallback to physical IDs
     task_id = data.get("task_id", phy.get("nid", ""))
     task_name = data.get("task_name", "unknown")
-
-    # Safely convert raw state string to EventState enum
     state_raw = data.get("state")
-    state: Optional[EventState] = None
-    if state_raw:
-        try:
-            state = EventState(state_raw)
-        except ValueError:
-            logger.warning(f"Unknown EventState '{state_raw}' in EventIR data.")
 
     base_kwargs = {
         "timestamp": timestamp,
@@ -199,10 +191,21 @@ def _hydrate_lifecycle(
         "task_name": task_name,
     }
 
+    # Early exit for invalid or missing state
+    if not state_raw:
+        return TaskEvent(**base_kwargs)
+    try:
+        state = EventState(state_raw)
+    except ValueError:
+        logger.warning(f"Unknown EventState '{state_raw}' in EventIR data.")
+        return TaskEvent(**base_kwargs)
+
+    # --- From this point, `state` is guaranteed to be a valid EventState member ---
+
     if state == EventState.RUNNING:
         return TaskExecutionStarted(**base_kwargs)
 
-    elif state in (EventState.SUCCEEDED, EventState.FAILED):
+    if state in (EventState.SUCCEEDED, EventState.FAILED):
         # Convert ms to seconds for internal Event model compatibility
         duration_sec = data.get("duration_ms", 0.0) / 1000.0
 
@@ -214,17 +217,17 @@ def _hydrate_lifecycle(
             result_preview=data.get("result_preview"),
         )
 
-    elif state == EventState.SKIPPED:
+    if state == EventState.SKIPPED:
         return TaskSkipped(
             **base_kwargs,
             reason=data.get("reason", "Unknown"),
         )
 
-    elif state == EventState.PENDING:
+    if state == EventState.PENDING:
         # Map Pending to generic TaskEvent or a specific one if needed later
         return TaskEvent(**base_kwargs)
 
-    # Fallback
+    # Fallback for any other valid but unhandled state
     return TaskEvent(**base_kwargs)
 
 

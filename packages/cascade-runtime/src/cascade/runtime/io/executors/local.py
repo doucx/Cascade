@@ -2,9 +2,9 @@ import asyncio
 import functools
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Callable
-from cascade.runtime.graph.model import Node
+from cascade.execution.graph.model.model import Node
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.runtime.graph.exceptions import StaticGraphError
+from cascade.execution.graph.model.exceptions import StaticGraphError
 
 
 class LocalExecutor:

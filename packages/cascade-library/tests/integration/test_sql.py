@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 
 # Skip if sqlalchemy missing
 pytest.importorskip("sqlalchemy")

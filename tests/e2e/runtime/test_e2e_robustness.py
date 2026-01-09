@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, ANY
 
 import cascade as cs
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
 from cascade.runtime.services.observability.events import TaskExecutionStarted
 from cascade.spec.dsl.constraint import GlobalConstraint

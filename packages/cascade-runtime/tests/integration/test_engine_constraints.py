@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
 from cascade.spec.dsl.constraint import GlobalConstraint

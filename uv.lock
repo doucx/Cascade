@@ -16,6 +16,7 @@ members = [
     "cascade-compiler",
     "cascade-connector-local",
     "cascade-connector-mqtt",
+    "cascade-execution-graph",
     "cascade-library",
     "cascade-monorepo",
     "cascade-provider-ipfs",
@@ -772,6 +773,27 @@ requires-dist = [
 ]
 
 [[package]]
+name = "cascade-execution-graph"
+version = "0.1.0"
+source = { editable = "packages/cascade-execution-graph" }
+dependencies = [
+    { name = "cascade-common" },
+    { name = "cascade-compiler" },
+    { name = "cascade-runtime" },
+    { name = "cascade-spec" },
+    { name = "python-constraint" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cascade-common", editable = "packages/cascade-common" },
+    { name = "cascade-compiler", editable = "packages/cascade-compiler" },
+    { name = "cascade-runtime", editable = "packages/cascade-runtime" },
+    { name = "cascade-spec", editable = "packages/cascade-spec" },
+    { name = "python-constraint" },
+]
+
+[[package]]
 name = "cascade-library"
 version = "0.1.0"
 source = { editable = "packages/cascade-library" }
@@ -862,6 +884,7 @@ dev = [
     { name = "cascade-compiler" },
     { name = "cascade-connector-local" },
     { name = "cascade-connector-mqtt" },
+    { name = "cascade-execution-graph" },
     { name = "cascade-provider-ipfs" },
     { name = "cascade-std" },
     { name = "cascade-test-utils" },
@@ -913,6 +936,7 @@ requires-dist = [
     { name = "cascade-compiler", marker = "extra == 'dev'", editable = "packages/cascade-compiler" },
     { name = "cascade-connector-local", marker = "extra == 'dev'", editable = "packages/cascade-connector-local" },
     { name = "cascade-connector-mqtt", marker = "extra == 'dev'", editable = "packages/cascade-connector-mqtt" },
+    { name = "cascade-execution-graph", marker = "extra == 'dev'", editable = "packages/cascade-execution-graph" },
     { name = "cascade-library", editable = "packages/cascade-library" },
     { name = "cascade-provider-ipfs", marker = "extra == 'dev'", editable = "packages/cascade-provider-ipfs" },
     { name = "cascade-runtime", editable = "packages/cascade-runtime" },

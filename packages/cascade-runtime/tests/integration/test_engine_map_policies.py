@@ -6,7 +6,7 @@ from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
 from cascade.runtime.services.observability.events import TaskRetrying
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.test_utils.helpers import SpySubscriber
 
 

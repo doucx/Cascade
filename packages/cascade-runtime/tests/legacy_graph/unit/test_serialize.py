@@ -1,7 +1,7 @@
 import json
 import cascade as cs
-from cascade.runtime.graph.build import build_graph
-from cascade.runtime.graph.serialize import to_json, from_json, graph_to_dict
+from cascade.execution.graph.model.build import build_graph
+from cascade.execution.graph.model.serialize import to_json, from_json, graph_to_dict
 
 # --- Top-Level Tasks for Serialization Testing ---
 
@@ -149,7 +149,7 @@ def test_serialize_edge_types():
     # We only need to check the edges pointing to t_target (the target node of the chains)
     target_node = next(n for n in restored_graph.nodes if n.name == "t_target")
 
-    from cascade.runtime.graph.model import EdgeType
+    from cascade.execution.graph.model.model import EdgeType
 
     data_edges = [
         e

@@ -1,9 +1,9 @@
 import pytest
 import cascade as cs
-from cascade.runtime.graph import StaticGraphError
+from cascade.execution.graph.model.exceptions import StaticGraphError
 from cascade.runtime import Engine, EventBus
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 
 
 @pytest.mark.asyncio

@@ -43,7 +43,7 @@ async def test_sync_task_offloading_prevents_blocking():
     """
     from cascade.runtime.host.instance import Engine
     from cascade.runtime import EventBus
-    from cascade.runtime.kernel.solvers.native import NativeSolver
+    from cascade.execution.graph.solvers.native import NativeSolver
     from cascade.runtime.io.executors.local import LocalExecutor
 
     engine = Engine(

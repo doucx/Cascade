@@ -20,17 +20,20 @@ _IMPORT_MAP = {
     "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
     "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
     "Event": ("cascade.runtime.services.observability.events", "Event"),
-    "DependencyMissingError": ("cascade.runtime.errors", "DependencyMissingError"),
+    "DependencyMissingError": (
+        "cascade.execution.graph.errors",
+        "DependencyMissingError",
+    ),
     "sequence": ("cascade.flow", "sequence"),
     "pipeline": ("cascade.flow", "pipeline"),
     # Adapters & Protocols
-    "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
+    "NativeSolver": ("cascade.execution.graph.solvers.native", "NativeSolver"),
     "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
     "Connector": ("cascade.spec.runtime.interfaces", "Connector"),
     "StateBackend": ("cascade.spec.runtime.interfaces", "StateBackend"),
     # Tools & Utilities
-    "to_json": ("cascade.runtime.graph.serialize", "to_json"),
-    "from_json": ("cascade.runtime.graph.serialize", "from_json"),
+    "to_json": ("cascade.execution.graph.model.serialize", "to_json"),
+    "from_json": ("cascade.execution.graph.model.serialize", "from_json"),
     "override_resource": ("cascade.test_utils.helpers", "override_resource"),
     "ControllerTestApp": ("cascade.test_utils.helpers", "ControllerTestApp"),
     "create_cli": ("cascade.tools.cli", "create_cli"),
@@ -51,14 +54,14 @@ if TYPE_CHECKING:
     from cascade.runtime.host.instance import Engine
     from cascade.runtime.services.observability.bus import EventBus
     from cascade.runtime.services.observability.events import Event
-    from cascade.runtime.errors import DependencyMissingError
+    from cascade.execution.graph.errors import DependencyMissingError
     from cascade.flow import sequence, pipeline
 
-    from cascade.runtime.kernel.solvers.native import NativeSolver
+    from cascade.execution.graph.solvers.native import NativeSolver
     from cascade.runtime.io.executors.local import LocalExecutor
     from cascade.spec.runtime.interfaces import Connector, StateBackend
 
-    from cascade.runtime.graph.serialize import to_json, from_json
+    from cascade.execution.graph.model.serialize import to_json, from_json
     from cascade.test_utils.helpers import override_resource, ControllerTestApp
     from cascade.tools.cli import create_cli
 

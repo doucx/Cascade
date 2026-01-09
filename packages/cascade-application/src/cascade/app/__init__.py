@@ -5,8 +5,8 @@ from cascade.spec.dsl.fluent import LazyResult
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import Connector, StateBackend
 
-from cascade.runtime.graph.build import build_graph
-from cascade.runtime.graph.model import Node, EdgeType
+from cascade.execution.graph.model.build import build_graph
+from cascade.execution.graph.model.model import Node, EdgeType
 
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
@@ -19,7 +19,7 @@ from cascade.runtime.services.observability.subscribers import (
     HumanReadableLogSubscriber,
     TelemetrySubscriber,
 )
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.io.executors.local import LocalExecutor
 
 from cascade.common.messaging import bus

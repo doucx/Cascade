@@ -7,7 +7,7 @@ from cascade.runtime.services.observability.events import (
     Event,
 )
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 
 # --- Test Resources ---
 
@@ -151,7 +151,7 @@ def test_unregistered_resource_raises_error():
 
 def test_resource_scan_finds_inject_in_dict():
     from cascade.runtime.services.resources.container import ResourceContainer
-    from cascade.runtime.graph.build import build_graph
+    from cascade.execution.graph.model.build import build_graph
 
     @cs.resource
     def my_res():

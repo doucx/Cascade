@@ -3,7 +3,7 @@ import cascade as cs
 from aiohttp import web
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.io.executors.local import LocalExecutor
 
 # The CID we will request in the test

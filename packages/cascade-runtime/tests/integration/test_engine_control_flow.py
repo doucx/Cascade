@@ -4,7 +4,8 @@ from cascade.runtime import EventBus
 from cascade.runtime.host.instance import Engine
 from cascade.runtime.services.observability.events import TaskSkipped
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.execution.graph.errors import DependencyMissingError
 from cascade.test_utils.helpers import SpySubscriber
 
 
@@ -48,7 +49,7 @@ async def test_run_if_false():
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     # Now asserts DependencyMissingError instead of KeyError
-    with pytest.raises(cs.DependencyMissingError):
+    with pytest.raises(DependencyMissingError):
         await engine.run(flow)
 
     # Verify Skip Event using the new helper
@@ -80,7 +81,7 @@ async def test_cascade_skip():
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     # Now asserts DependencyMissingError instead of KeyError
-    with pytest.raises(cs.DependencyMissingError):
+    with pytest.raises(DependencyMissingError):
         await engine.run(res_b)
 
     skip_events = spy.events_of_type(TaskSkipped)

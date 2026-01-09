@@ -7,7 +7,7 @@ from cascade.runtime.services.observability.events import (
     TaskExecutionFinished,
 )
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.test_utils.helpers import SpySubscriber
 
 

@@ -1,5 +1,5 @@
 from typing import Dict, Callable
-from cascade.runtime.graph.model import Node
+from cascade.execution.graph.model.model import Node
 
 
 class NodeRegistry:

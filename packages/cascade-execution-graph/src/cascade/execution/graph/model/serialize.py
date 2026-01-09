@@ -3,7 +3,15 @@ import importlib
 from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass
 
-from .model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
+from cascade.execution.graph.model.model import (
+    Graph,
+    Node,
+    Edge,
+    EdgeType,
+    TaskNode,
+    MapNode,
+    ParamNode,
+)
 from cascade.spec.dsl.constraint import ResourceConstraint
 from cascade.spec.dsl.fluent import RetryPolicy, LazyResult, MappedLazyResult
 from cascade.spec.dsl.routing import Router

@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, List, Set
-from cascade.runtime.graph.model import Graph, Node, Edge, EdgeType
-from cascade.runtime.graph.build import build_graph
+from cascade.execution.graph.model.model import Graph, Node, Edge, EdgeType
+from cascade.execution.graph.model.build import build_graph
 from cascade.spec.dsl.fluent import LazyResult
 
 
@@ -98,7 +98,7 @@ class LispTranspiler:
     def _render_expr(self, node: Node) -> str:
         parts = []
 
-        from cascade.runtime.graph.model import MapNode
+        from cascade.execution.graph.model.model import MapNode
 
         # Function Name
         if isinstance(node, MapNode):

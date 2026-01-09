@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
-from cascade.runtime.graph.model import Node, Graph, EdgeType, Edge
+from cascade.execution.graph.model.model import Node, Graph, EdgeType, Edge
 from cascade.spec.runtime.interfaces import StateBackend
 
 

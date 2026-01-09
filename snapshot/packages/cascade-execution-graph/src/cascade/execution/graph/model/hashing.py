@@ -1,6 +1,6 @@
 import hashlib
 from typing import List
-from cascade.runtime.graph.model import Graph, Node
+from cascade.execution.graph.model.model import Graph, Node
 
 
 class BlueprintHasher:

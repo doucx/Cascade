@@ -102,6 +102,7 @@ dev = [
   "cascade-vm",
   "cascade-vm-rs",
   "cascade-compiler",
+  "cascade-execution-graph",
   "cascade-std",
   "ruff",
 ]

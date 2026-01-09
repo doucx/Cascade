@@ -26,7 +26,7 @@ from cascade.runtime.services.constraints.handlers import (
     RateLimitConstraintHandler,
 )
 from cascade.runtime.io.state import InMemoryStateBackend
-from cascade.runtime.legacy.processor import NodeProcessor
+from cascade.execution.graph.logic.processor import NodeProcessor
 from cascade.runtime.services.resources.container import ResourceContainer
 from cascade.runtime.legacy.strategies import (
     GraphExecutionStrategy,

@@ -1,7 +1,7 @@
 import pytest
 from cascade.spec.dsl.task import task
-from cascade.runtime.graph.build import build_graph
-from cascade.runtime.kernel.solvers.csp import CSPSolver
+from cascade.execution.graph.model.build import build_graph
+from cascade.execution.graph.solvers.csp import CSPSolver
 
 # Skip tests if python-constraint is not installed
 pytest.importorskip("constraint")

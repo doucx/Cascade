@@ -1,106 +1,39 @@
-## [WIP] chore: Migrate runtime code to cascade-execution-graph
+# 📸 Snapshot Capture
 
-### 用户需求
+检测到工作区发生变更。
 
-执行 Phase 2 "Code Migration"。创建一个 Stitcher 迁移脚本，将 `cascade-runtime` 中的遗留图执行逻辑物理移动到 `cascade-execution-graph` 包中。
-
-### 评论
-
-这是一个纯粹的代码搬运操作，利用 `stitcher` 的语义重构能力来保持引用的完整性。我们将拆解 `runtime/legacy` 目录，将其分散到新的 `logic` 和 `strategy` 模块中，同时整体迁移 `graph` 模型和 `solvers`。
-
-### 目标
-
-创建一个名为 `migrations/004_migrate_execution_graph.py` 的迁移脚本，定义以下移动操作：
-1.  `runtime/graph` -> `execution/graph/model`
-2.  `runtime/kernel/solvers` -> `execution/graph/solvers`
-3.  `runtime/legacy/{processor,flow,resolvers}.py` -> `execution/graph/logic/`
-4.  `runtime/legacy/strategies/graph.py` -> `execution/graph/strategy.py`
-5.  `runtime/errors.py` -> `execution/graph/errors.py`
-
-### 基本原理
-
-使用 `stitcher` 脚本可以确保在文件移动的同时，自动更新跨文件的 import 路径和符号引用，这比手动移动文件和 grep-replace 要安全和高效得多。
-
-### 标签
-
-#intent/tooling #flow/ready #priority/high #comp/runtime #scope/core #ai/instruct #task/domain/runtime #task/object/decoupling #task/action/migration #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建迁移脚本
-
-~~~~~act
-write_file
-migrations/004_migrate_execution_graph.py
-~~~~~
-~~~~~python
-from pathlib import Path
-from stitcher.refactor.migration import MigrationSpec, Move, MoveDir
-
-
-def upgrade(spec: MigrationSpec):
-    # Define absolute base paths for source and destination packages
-    runtime_base = Path("packages/cascade-runtime/src/cascade/runtime").absolute()
-    graph_base = Path(
-        "packages/cascade-execution-graph/src/cascade/execution/graph"
-    ).absolute()
-
-    # ==========================================
-    # 1. Model Layer
-    # ==========================================
-    # Move the entire graph model directory
-    # packages/cascade-runtime/src/cascade/runtime/graph -> .../execution/graph/model
-    spec.add(MoveDir(runtime_base / "graph", graph_base / "model"))
-
-    # ==========================================
-    # 2. Solvers
-    # ==========================================
-    # Move the solvers directory
-    # packages/cascade-runtime/src/cascade/runtime/kernel/solvers -> .../execution/graph/solvers
-    spec.add(MoveDir(runtime_base / "kernel/solvers", graph_base / "solvers"))
-
-    # ==========================================
-    # 3. Logic Layer (Splitting 'legacy' folder)
-    # ==========================================
-    # Move individual logic files to a new 'logic' subdirectory
-    spec.add(
-        Move(
-            runtime_base / "legacy/processor.py", graph_base / "logic/processor.py"
-        )
-    )
-    spec.add(Move(runtime_base / "legacy/flow.py", graph_base / "logic/flow.py"))
-    spec.add(
-        Move(
-            runtime_base / "legacy/resolvers.py", graph_base / "logic/resolvers.py"
-        )
-    )
-
-    # ==========================================
-    # 4. Strategy
-    # ==========================================
-    # Move the graph execution strategy implementation
-    spec.add(
-        Move(
-            runtime_base / "legacy/strategies/graph.py",
-            graph_base / "strategy.py",
-        )
-    )
-
-    # ==========================================
-    # 5. Shared Errors
-    # ==========================================
-    # Move errors.py as it contains DependencyMissingError used by logic
-    spec.add(Move(runtime_base / "errors.py", graph_base / "errors.py"))
-~~~~~
-
-### 下一步建议
-
-迁移脚本已准备就绪。请运行以下命令执行迁移并验证结果：
-
-```bash
-stitcher refactor apply migrations/004_migrate_execution_graph.py
+### 📝 变更文件摘要:
 ```
-
-执行后，我们需要处理可能的 `__init__.py` 缺失问题（例如在新的 `logic` 目录中），并运行测试以确保引用已正确更新。
+.../src/cascade/execution/graph/errors.json        | 22 +++++++++
+ .../src/cascade/execution/graph/logic/flow.json    | 40 +++++++++++++++
+ .../cascade/execution/graph/logic/processor.json   | 44 +++++++++++++++++
+ .../cascade/execution/graph/logic/resolvers.json   | 42 ++++++++++++++++
+ .../cascade/execution/graph/model/__init__.json    |  3 ++
+ .../src/cascade/execution/graph/model/adapter.json | 45 +++++++++++++++++
+ .../src/cascade/execution/graph/model/build.json   |  7 +++
+ .../cascade/execution/graph/model/exceptions.json  |  4 ++
+ .../src/cascade/execution/graph/model/hashing.json | 15 ++++++
+ .../src/cascade/execution/graph/model/model.json   | 57 ++++++++++++++++++++++
+ .../cascade/execution/graph/model/registry.json    | 16 ++++++
+ .../cascade/execution/graph/model/serialize.json   | 40 +++++++++++++++
+ .../src/cascade/execution/graph/solvers/csp.json   | 19 ++++++++
+ .../cascade/execution/graph/solvers/native.json    | 10 ++++
+ .../src/cascade/execution/graph/strategy.json      | 45 +++++++++++++++++
+ .../src/cascade/runtime/errors.json                | 22 ---------
+ .../src/cascade/runtime/graph/__init__.json        |  3 --
+ .../src/cascade/runtime/graph/adapter.json         | 45 -----------------
+ .../src/cascade/runtime/graph/build.json           |  7 ---
+ .../src/cascade/runtime/graph/exceptions.json      |  4 --
+ .../src/cascade/runtime/graph/hashing.json         | 15 ------
+ .../src/cascade/runtime/graph/model.json           | 57 ----------------------
+ .../src/cascade/runtime/graph/registry.json        | 16 ------
+ .../src/cascade/runtime/graph/serialize.json       | 40 ---------------
+ .../src/cascade/runtime/kernel/solvers/csp.json    | 19 --------
+ .../src/cascade/runtime/kernel/solvers/native.json | 10 ----
+ .../src/cascade/runtime/legacy/flow.json           | 40 ---------------
+ .../src/cascade/runtime/legacy/processor.json      | 44 -----------------
+ .../src/cascade/runtime/legacy/resolvers.json      | 42 ----------------
+ .../cascade/runtime/legacy/strategies/graph.json   | 45 -----------------
+ ...
+ 154 files changed, 2855 insertions(+), 2877 deletions(-)
+```

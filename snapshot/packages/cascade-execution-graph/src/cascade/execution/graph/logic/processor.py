@@ -3,15 +3,15 @@ import asyncio
 from typing import Any, Dict, List, Callable, Awaitable, TYPE_CHECKING, Tuple
 
 
-from cascade.runtime.graph.model import Node
+from cascade.execution.graph.model.model import Node
 
 if TYPE_CHECKING:
-    from cascade.runtime.graph.model import MapNode
+    from cascade.execution.graph.model.model import MapNode
 from cascade.spec.runtime.interfaces import Executor, StateBackend, Solver
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints.manager import ConstraintManager
-from cascade.runtime.legacy.resolvers import ArgumentResolver, ConstraintResolver
+from cascade.execution.graph.logic.resolvers import ArgumentResolver, ConstraintResolver
 from cascade.spec import EventState
 from cascade.runtime.services.observability.events import (
     TaskExecutionStarted,
@@ -137,7 +137,7 @@ class NodeProcessor:
         )
 
         # 5. Handle Map Nodes (special execution logic)
-        from cascade.runtime.graph.model import MapNode
+        from cascade.execution.graph.model.model import MapNode
 
         if isinstance(node, MapNode):
             return await self._execute_map_node(

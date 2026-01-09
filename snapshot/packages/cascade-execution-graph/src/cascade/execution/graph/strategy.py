@@ -2,18 +2,18 @@ import asyncio
 from contextlib import ExitStack
 from typing import Any, Dict, List, Optional, Callable
 
-from cascade.runtime.graph.model import Graph, Node, EdgeType
+from cascade.execution.graph.model.model import Graph, Node, EdgeType
 from cascade.compiler.frontend.generator import IRGenerator
-from cascade.runtime.graph.adapter import IRToRuntimeAdapter
-from cascade.runtime.graph.registry import NodeRegistry
-from cascade.runtime.graph.hashing import BlueprintHasher
+from cascade.execution.graph.model.adapter import IRToRuntimeAdapter
+from cascade.execution.graph.model.registry import NodeRegistry
+from cascade.execution.graph.model.hashing import BlueprintHasher
 from cascade.spec.runtime.interfaces import Solver, StateBackend
 from cascade.spec.dsl.jump import Jump
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.resources.container import ResourceContainer
-from cascade.runtime.legacy.processor import NodeProcessor
-from cascade.runtime.legacy.flow import FlowManager
-from cascade.runtime.errors import DependencyMissingError
+from cascade.execution.graph.logic.processor import NodeProcessor
+from cascade.execution.graph.logic.flow import FlowManager
+from cascade.execution.graph.errors import DependencyMissingError
 from cascade.runtime.services.observability.events import TaskSkipped, TaskBlocked
 from cascade.runtime.services.constraints.manager import ConstraintManager
 from cascade.spec.runtime import ExecutionContext

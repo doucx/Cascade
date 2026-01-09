@@ -1,8 +1,8 @@
 from typing import Any, Tuple, Dict, Callable, Optional
 from cascade.compiler.frontend.generator import IRGenerator
-from cascade.runtime.graph.adapter import IRToRuntimeAdapter
-from cascade.runtime.graph.model import Graph, Node
-from cascade.runtime.graph.registry import NodeRegistry
+from cascade.execution.graph.model.adapter import IRToRuntimeAdapter
+from cascade.execution.graph.model.model import Graph, Node
+from cascade.execution.graph.model.registry import NodeRegistry
 
 
 def build_graph(

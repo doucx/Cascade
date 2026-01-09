@@ -2,7 +2,7 @@ import pytest
 import cascade as cs
 from cascade.runtime.host.instance import Engine
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime import EventBus
 
 

@@ -10,7 +10,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from cascade.runtime.graph.model import Graph, Node
+    from cascade.execution.graph.model.model import Graph, Node
 
 # An execution plan is a list of stages, where each stage is a list of nodes
 # that can be executed in parallel.

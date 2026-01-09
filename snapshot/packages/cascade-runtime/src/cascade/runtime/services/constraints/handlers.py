@@ -3,7 +3,7 @@ import fnmatch
 from cascade.common.messaging import bus
 
 from cascade.runtime.services.constraints.protocols import ConstraintHandler
-from cascade.runtime.graph.model import Node
+from cascade.execution.graph.model.model import Node
 from cascade.spec.dsl.constraint import GlobalConstraint
 from cascade.runtime.services.constraints.rate_limiter import RateLimiter
 

@@ -35,7 +35,7 @@ from observatory.benchmarks.tco_performance import (
     run_benchmark,
 )
 from cascade.runtime import Engine, EventBus
-from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.io.executors.local import LocalExecutor
 
 

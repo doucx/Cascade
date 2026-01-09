@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(compiler): 为 WiringHarness 实现锁定机制以强制职责分离", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767961069.303515, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] docs(compiler): 更新 Stitcher YAML 文档以反映架构变更", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767961179.4948664, "duration_ms": 0}}

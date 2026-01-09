@@ -39,6 +39,7 @@ cascade-common = { workspace = true }
 cascade-test-utils = { workspace = true }
 cascade-vm = { workspace = true }
 cascade-compiler = { workspace = true }
+cascade-execution-graph = { workspace = true }
 cascade-std = { workspace = true }
 cascade = { workspace = true }
 cascade-vm-rs = { workspace = true }
@@ -57,6 +58,7 @@ packages = [
     "packages/cascade-vm-rs",
     "packages/cascade-reflection",
     "packages/cascade-test-utils",
+    "packages/cascade-execution-graph",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -110,6 +110,9 @@ class Builder:
             for policy in self._expansion_policies:
                 policy.expand(ctx, node_ir, subgraph)
 
+        # --- Phase Transition: Lock down the graph structure ---
+        wire.lock()
+
         # 4. Phase 2: Wiring
         # Connect all the created nodes together.
         for node_ir in graph_ir.nodes:

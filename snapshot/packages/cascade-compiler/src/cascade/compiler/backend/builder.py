@@ -24,10 +24,19 @@ from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
 from cascade.compiler.backend.expansion.policies.parameter import (
     ParameterExpansionPolicy,
 )
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
+from cascade.compiler.backend.expansion.policies.parameter import (
+    ParameterExpansionPolicy,
+)
 from cascade.compiler.backend.expansion.policies.control import (
     ControlFlowExpansionPolicy,
 )
 from cascade.compiler.backend.expansion.policies.pulse import PulseExpansionPolicy
+from cascade.compiler.backend.expansion.policies.resource import (
+    ResourceExpansionPolicy,
+)
 from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
 from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
 from cascade.compiler.backend.wiring.policies.observability import (
@@ -42,13 +51,21 @@ class Builder:
     def __init__(self):
         self._expander = Expander()
         self._validator = GraphValidator()
+
+        # Instantiate policies to share prism instances
+        resource_wiring_policy = ResourceWiringPolicy()
+        resource_expansion_policy = ResourceExpansionPolicy()
+        # A bit of a hack to share. A proper DI system would be better.
+        resource_expansion_policy._prisms = resource_wiring_policy._prisms
+
         self._expansion_policies: List[ExpansionPolicy] = [
+            resource_expansion_policy,
             ParameterExpansionPolicy(),
             ControlFlowExpansionPolicy(),
             PulseExpansionPolicy(),
         ]
         self._wiring_policies: List[WiringPolicy] = [
-            ResourceWiringPolicy(),
+            resource_wiring_policy,
             ObservabilityWiringPolicy(),
             ParameterWiringPolicy(),
             ControlFlowWiringPolicy(),

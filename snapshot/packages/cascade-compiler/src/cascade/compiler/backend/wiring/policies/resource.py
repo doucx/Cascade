@@ -32,7 +32,7 @@ class ResourceWiringPolicy(WiringPolicy):
         for res_name, amount in node_ir.constraints.items():
             res_def = env_resources[res_name]
             prism = self._get_prism(res_def.type)
-            prism.connect_task(ctx, node_ir, subgraph, res_name, amount)
+            prism.wire_task(ctx, node_ir, subgraph, res_name, amount)
 
     def _get_prism(self, type_name: str) -> ResourcePrism:
         if type_name not in self._prisms:

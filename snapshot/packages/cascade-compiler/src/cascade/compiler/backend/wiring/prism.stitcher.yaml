@@ -1,7 +1,7 @@
 "ResourcePrism": |-
   A Prism refracts a high-level Resource Definition into a complex physical topology.
   It encapsulates the knowledge of how to wire a specific type of resource.
-  
+
   It follows the two-phase compilation model:
   - expand_task: Creates the physical components.
   - wire_task: Connects the components to the grid.

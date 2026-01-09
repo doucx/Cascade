@@ -18,18 +18,6 @@ from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
 from cascade.compiler.backend.expansion.policies.parameter import (
     ParameterExpansionPolicy,
 )
-from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.wiring.protocol import WiringPolicy
-from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
-from cascade.compiler.backend.expansion.policies.parameter import (
-    ParameterExpansionPolicy,
-)
-from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.wiring.protocol import WiringPolicy
-from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
-from cascade.compiler.backend.expansion.policies.parameter import (
-    ParameterExpansionPolicy,
-)
 from cascade.compiler.backend.expansion.policies.control import (
     ControlFlowExpansionPolicy,
 )

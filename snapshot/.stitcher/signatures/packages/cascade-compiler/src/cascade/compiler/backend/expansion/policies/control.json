@@ -1,0 +1,7 @@
+{
+  "ControlFlowExpansionPolicy": {},
+  "ControlFlowExpansionPolicy.expand": {
+    "baseline_code_signature_text": "def expand(self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+    "baseline_code_structure_hash": "9e6f7eb4babef76415c4ab2830113301f0c8f5a48717e271ebae724abb97f673"
+  }
+}

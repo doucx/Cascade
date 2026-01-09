@@ -17,7 +17,6 @@ class WiringHarness:
         self._locked = False
 
     def lock(self) -> None:
-        """Locks the harness, preventing any further node additions."""
         self._locked = True
 
     def add_node(self, node: PhysicsNode) -> None:

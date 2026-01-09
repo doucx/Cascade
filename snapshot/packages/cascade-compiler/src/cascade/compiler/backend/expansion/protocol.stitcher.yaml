@@ -1,17 +1,11 @@
 "ExpansionPolicy": |-
   Protocol for a Materialization strategy.
-  
+
   Each policy is responsible for creating a specific category of auxiliary physical nodes
   (e.g., constants, control flow gates) and registering them into the SubGraph.
-"ExpansionPolicy.expand": |-
-  Executes the expansion logic for a single logical node.
-  
-  Args:
-      ctx: The expansion context.
-      node_ir: The logical node definition.
-      subgraph: The container to populate with new nodes.
-      
-  Constraints:
-      - MUST create nodes using `ctx.wire.add_node()`.
-      - MUST register created nodes into `subgraph.nodes` and specialized buckets (e.g. `subgraph.constants`).
-      - MUST NOT create any channels/connections.
+"ExpansionPolicy.expand": "Executes the expansion logic for a single logical node.\n\
+  \nArgs:\n    ctx: The expansion context.\n    node_ir: The logical node definition.\n\
+  \    subgraph: The container to populate with new nodes.\n    \nConstraints:\n \
+  \   - MUST create nodes using `ctx.wire.add_node()`.\n    - MUST register created\
+  \ nodes into `subgraph.nodes` and specialized buckets (e.g. `subgraph.constants`).\n\
+  \    - MUST NOT create any channels/connections."

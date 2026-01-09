@@ -1,4 +1,5 @@
 {
+  "ArchitectureViolationError": {},
   "WiringError": {
     "baseline_yaml_content_hash": "3b21916298700b03378d763810845d75f019d0c3b202fbb3e232a44611803906"
   },
@@ -9,6 +10,7 @@
     "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph):",
     "baseline_code_structure_hash": "9e2ed3a8078baff441a4fc10e9fb372d16867e2c940ba1c7945117b2955f25dd"
   },
+  "WiringHarness._locked": {},
   "WiringHarness.add_node": {
     "baseline_code_signature_text": "def add_node(self, node: PhysicsNode) -> None:",
     "baseline_code_structure_hash": "91e5d5cfbd46cd95ff5922ccf06026addc16955271c646a8cfbea2cddb1299f9",
@@ -24,5 +26,10 @@
     "baseline_code_structure_hash": "3e982a76dd0bf5d5e8a3047cc15674deea00746c24920e0a678077346368d3c6",
     "baseline_yaml_content_hash": "14a3550b91fd1bb514f62e05697a2369c55d497709d812c07dc309044573857d"
   },
-  "WiringHarness.graph": {}
+  "WiringHarness.graph": {},
+  "WiringHarness.lock": {
+    "baseline_code_signature_text": "def lock(self) -> None:",
+    "baseline_code_structure_hash": "63955423c0720e4d5d405ff5f19341231babbb6a1b0d0cca0655c100c208f98b",
+    "baseline_yaml_content_hash": "655edde6a3aa1ec52ec82b7fdc3414a3034c36f0347f9069d5bf061641409f3c"
+  }
 }

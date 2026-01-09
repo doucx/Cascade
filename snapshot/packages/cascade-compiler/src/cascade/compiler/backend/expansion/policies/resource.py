@@ -1,4 +1,4 @@
-from typing import Dict, cast
+from typing import Dict
 
 from cascade.spec.ir.graph import NodeIR
 from cascade.compiler.backend.expander import SubGraph

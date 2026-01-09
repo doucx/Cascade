@@ -23,9 +23,7 @@ class ControlFlowExpansionPolicy(ExpansionPolicy):
             d_cond_id = (
                 f"cond.{node_ir.condition}.to.{node_ir.current_node_instance_hash}"
             )
-            d_cond = PhysicsDataNode(
-                id=d_cond_id, name=f"Cond({node_ir.condition})"
-            )
+            d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
             ctx.wire.add_node(d_cond)
             subgraph.nodes[d_cond.id] = d_cond
             subgraph.controls[f"cond_from_{node_ir.condition}"] = d_cond

@@ -1,198 +1,108 @@
-好的，我们来执行路线图的 `2.3` 阶段，完成所有简单策略的迁移。
+好的，我们进入路线图的**阶段三**，这是整个重构中最核心的部分。我们首先执行 `3.1 重构 ResourcePrism 协议`。
 
-此计划将处理 `PulseWiringPolicy`，它负责为工作流的“源头”任务提供初始动力。我们将把它拆分为创建和连接两个部分，为阶段二画上一个圆满的句号。
+此计划将重塑资源管理的接口契约。我们将 `ResourcePrism` 这个原本“大包大揽”的接口，拆解为符合两阶段编译模型的 `expand_task`（造点）和 `wire_task`（连线），为后续的实现类迁移提供法律依据。
 
-## [WIP] refactor(compiler): 迁移 PulseWiringPolicy 以分离节点创建
+## [WIP] refactor(compiler): 重构 ResourcePrism 协议以支持两阶段编译
 
 ### 用户需求
 
-根据架构路线图 2.3，需要将 `PulseWiringPolicy` 的职责进行拆分。创建一个新的 `PulseExpansionPolicy` 来负责识别源节点并为其创建 `D_pulse` 启动节点，并简化原有的 `PulseWiringPolicy`，使其只负责连接这个 `D_pulse` 节点。
+根据架构路线图 3.1，需要修改 `packages/cascade-compiler/src/cascade/compiler/backend/wiring/prism.py` 文件。
+目标是将 `ResourcePrism` 协议中的 `connect_task` 方法拆分为两个独立的方法：
+1.  `expand_task`: 负责创建资源相关的物理节点（如 `F_req`, `D_amt`）。
+2.  `wire_task`: 负责连接这些节点到全局资源基础设施。
 
 ### 评论
 
-这次迁移虽然简单，但意义重大。它标志着我们完成了所有非资源型策略的重构。至此，所有关于参数、控制流和启动脉冲的物理节点都在确定性的“物理实化”阶段被创建。这为我们接下来处理最复杂的 `ResourceWiringPolicy` 扫清了所有障碍，使我们能够以一个干净、稳定的架构基础来迎接最大的挑战。
+这是对资源管理子系统的“宪法修正案”。`ResourcePrism` 负责将高层的资源需求（如“需要 1 个 GPU”）“折射”为底层的物理拓扑。此前，这个折射过程是一次性完成的。现在，为了配合 `Builder` 的两阶段模型，我们必须强制要求所有的 `Prism` 实现都明确区分“制造零件”和“组装零件”这两个步骤。这不仅是为了适配新架构，更是为了让复杂的资源拓扑变得可调试、可观测。
 
 ### 目标
 
-1.  创建 `expansion/policies/pulse.py` 文件。
-2.  在其中实现 `PulseExpansionPolicy`，负责识别“真正”的源节点并为其创建 `D_pulse` 节点，然后将其注册到 `SubGraph` 的 `controls` 字典中。
-3.  重构 `wiring/policies/pulse.py`，移除节点创建和源节点识别逻辑，使其仅在 `SubGraph` 中发现 `D_pulse` 节点时执行连接操作。
-4.  更新 `builder.py`，将新的 `PulseExpansionPolicy` 注册到 `_expansion_policies` 列表中。
+1.  修改 `packages/cascade-compiler/src/cascade/compiler/backend/wiring/prism.py`。
+2.  引入 `ExpansionContext` 的导入。
+3.  在 `ResourcePrism` 协议中删除 `connect_task` 方法。
+4.  新增 `expand_task` 方法，接受 `ExpansionContext`。
+5.  新增 `wire_task` 方法，接受 `WiringContext`。
 
 ### 基本原理
 
-当前的 `PulseWiringPolicy` 在连接阶段动态地判断一个节点是否需要启动脉冲，并即时创建 `D_pulse` 节点。这使得图的“能量源”在最后一刻才被确定下来。
+当前的 `ResourcePrism` 协议定义了一个单一的 `connect_task` 方法，这迫使实现者（如 `DiscreteResourcePrism`）在同一个方法里混合使用 `add_node`（造点）和 `connect`（连线）。
 
-通过本次重构：
--   **`PulseExpansionPolicy`** 将在第一阶段就明确地识别出所有源节点，并为它们打上“启动”标记——即，在它们的 `SubGraph` 中创建一个 `D_pulse` 节点。
--   **`PulseWiringPolicy`** 在第二阶段只需检查这个标记是否存在。如果存在，就将脉冲源连接到任务的启动端口上。
+通过将其拆分为 `expand_task` 和 `wire_task`，我们在接口层面强制实施了单一职责原则：
+-   **`expand_task`**：输入是“需求”，输出是“组件”。它告诉编译器：“为了满足这个资源需求，我们需要创建这些物理节点。”
+-   **`wire_task`**：输入是“组件”，输出是“连接”。它告诉编译器：“现在这些节点都造好了，请把它们连入电网。”
 
-这种模式将“识别”与“执行”分离，使得整个流程更加清晰和健壮。
+注意：此更改会暂时破坏现有的 `DiscreteResourcePrism` 实现和 `ResourceWiringPolicy` 调用，这是预期的。接下来的 3.2 和 3.3 步骤将修复它们。
 
 ### 标签
 
-#intent/refine #flow/ready #priority/high #task/domain/compiler #task/object/wiring-policy #task/action/refactor #task/state/continue #scope/core #ai/instruct
+#intent/refine #flow/ready #priority/high #task/domain/compiler #task/object/resource-prism #task/action/refactor #task/state/continue #scope/core #scope/api #ai/instruct
 
 ---
 
 ### Script
 
-#### Acts 1: 实现 `PulseExpansionPolicy`
+#### Acts 1: 更新 `ResourcePrism` 协议定义
 
-这个新策略将负责识别源节点并为其创建 `D_pulse` 节点。
+我们将重写 `prism.py`，引入必要的上下文导入，并重新定义协议方法。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/pulse.py
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/prism.py
 ~~~~~
 ~~~~~python
+from typing import Protocol, Any
+from cascade.spec.physical.environment import ResourceDef
 from cascade.spec.ir.graph import NodeIR
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring.context import WiringContext
 from cascade.compiler.backend.expansion.context import ExpansionContext
-from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
 
 
-class PulseExpansionPolicy(ExpansionPolicy):
-    def expand(
-        self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph
+class ResourcePrism(Protocol):
+    def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None:
+        """
+        Creates global infrastructure for this resource type (e.g., Allocator, Ledger).
+        Called once per resource type during the global setup phase.
+        """
+        ...
+
+    def expand_task(
+        self,
+        ctx: ExpansionContext,
+        node_ir: NodeIR,
+        subgraph: SubGraph,
+        res_name: str,
+        amount: Any,
     ) -> None:
-        # A true source has no inputs, dependencies, conditions, or constraints.
-        is_true_source = (
-            not node_ir.inputs
-            and not node_ir.dependencies
-            and not node_ir.condition
-            and not node_ir.constraints
-        )
+        """
+        Phase 1: Materialization.
+        Creates the physical nodes required for a task to consume this resource
+        (e.g., Requestor, Amount Constant).
+        MUST NOT create any connections.
+        """
+        ...
 
-        if is_true_source:
-            d_pulse_id = PhysicalIdGenerator.pulse_source(
-                node_ir.current_node_instance_hash
-            )
-            d_pulse = PhysicsDataNode(
-                id=d_pulse_id,
-                name=f"Pulse({node_ir.current_node_instance_hash})",
-                capacity=1,
-                initial_tokens=1,
-            )
-            ctx.wire.add_node(d_pulse)
-            subgraph.nodes[d_pulse.id] = d_pulse
-            subgraph.controls["pulse_source"] = d_pulse
-~~~~~
-
-#### Acts 2: 重构 `PulseWiringPolicy` 为纯连接逻辑
-
-现在，我们简化 `PulseWiringPolicy`，使其只负责连接。
-
-~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/pulse.py
-~~~~~
-~~~~~python
-from cascade.spec.ir.graph import NodeIR
-from cascade.std.specs import BleacherSpec
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.wiring.protocol import WiringPolicy
-
-
-class PulseWiringPolicy(WiringPolicy):
-    def setup_globals(self, ctx: WiringContext) -> None:  # pragma: no cover
-        pass
-
-    def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:
-        assert subgraph.bleacher is not None
-
-        # Check if a pulse source was created for this node during expansion
-        if "pulse_source" in subgraph.controls:
-            d_pulse = subgraph.controls["pulse_source"]
-            ctx.wire.connect(
-                d_pulse.id, "out", subgraph.bleacher.id, BleacherSpec.pulse.name
-            )
-~~~~~
-
-#### Acts 3: 更新 `Builder` 以集成新策略
-
-最后，我们在 `Builder` 中注册新的 `PulseExpansionPolicy`。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-from cascade.compiler.backend.expansion.policies.control import (
-    ControlFlowExpansionPolicy,
-)
-from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
-from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
-from cascade.compiler.backend.wiring.policies.observability import (
-    ObservabilityWiringPolicy,
-)
-from cascade.compiler.backend.wiring.policies.resource import ResourceWiringPolicy
-from cascade.compiler.backend.wiring.policies.pulse import PulseWiringPolicy
-from cascade.spec.physical.constants import NodePrefix
-
-
-class Builder:
-    def __init__(self):
-        self._expander = Expander()
-        self._validator = GraphValidator()
-        self._expansion_policies: List[ExpansionPolicy] = [
-            ParameterExpansionPolicy(),
-            ControlFlowExpansionPolicy(),
-        ]
-        self._wiring_policies: List[WiringPolicy] = [
-            ResourceWiringPolicy(),
-            ObservabilityWiringPolicy(),
-            ParameterWiringPolicy(),
-            ControlFlowWiringPolicy(),
-            PulseWiringPolicy(),
-        ]
-~~~~~
-~~~~~python.new
-from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.wiring.protocol import WiringPolicy
-from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
-from cascade.compiler.backend.expansion.policies.parameter import (
-    ParameterExpansionPolicy,
-)
-from cascade.compiler.backend.expansion.policies.control import (
-    ControlFlowExpansionPolicy,
-)
-from cascade.compiler.backend.expansion.policies.pulse import PulseExpansionPolicy
-from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
-from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
-from cascade.compiler.backend.wiring.policies.observability import (
-    ObservabilityWiringPolicy,
-)
-from cascade.compiler.backend.wiring.policies.resource import ResourceWiringPolicy
-from cascade.compiler.backend.wiring.policies.pulse import PulseWiringPolicy
-from cascade.spec.physical.constants import NodePrefix
-
-
-class Builder:
-    def __init__(self):
-        self._expander = Expander()
-        self._validator = GraphValidator()
-        self._expansion_policies: List[ExpansionPolicy] = [
-            ParameterExpansionPolicy(),
-            ControlFlowExpansionPolicy(),
-            PulseExpansionPolicy(),
-        ]
-        self._wiring_policies: List[WiringPolicy] = [
-            ResourceWiringPolicy(),
-            ObservabilityWiringPolicy(),
-            ParameterWiringPolicy(),
-            ControlFlowWiringPolicy(),
-            PulseWiringPolicy(),
-        ]
+    def wire_task(
+        self,
+        ctx: WiringContext,
+        node_ir: NodeIR,
+        subgraph: SubGraph,
+        res_name: str,
+        amount: Any,
+    ) -> None:
+        """
+        Phase 2: Wiring.
+        Connects the nodes created in Phase 1 to the task's triad and the
+        global resource infrastructure.
+        MUST NOT create any new nodes.
+        """
+        ...
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功完成了阶段二的所有任务。所有简单的 `WiringPolicy` 都已成功迁移，我们的两阶段编译架构也经受住了考验。
+我们已经更新了 `ResourcePrism` 协议，现在接口已经清晰地支持两阶段编译了。
 
-现在，是时候进入路线图的**阶段三：复杂策略迁移**了。这将是本次重构中最具挑战性但也最有价值的部分。我们将从 `3.1 重构 ResourcePrism 协议` 开始，为 `ResourceWiringPolicy` 的迁移做准备。
+路线图的下一步 (`3.2`) 是**升级 `DiscreteResourcePrism`**。我们需要修改这个具体的实现类，使其符合新的协议，将原本堆砌在 `connect_task` 中的逻辑拆分到 `expand_task` 和 `wire_task` 中。
 
-如果你同意，我将开始制定重构 `ResourcePrism` 协议的计划。
+如果你同意，我将开始制定升级 `DiscreteResourcePrism` 的计划。

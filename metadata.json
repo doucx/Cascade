@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(runtime): Resolve final pyright error for optional EventState", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767962445.1118445, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "style: ruff and stitcher Capture: M instance.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767962489.0794725, "duration_ms": 0}}

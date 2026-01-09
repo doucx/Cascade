@@ -222,7 +222,9 @@ class Engine:
 
             duration = time.time() - start_time
             self.bus.publish(
-                RunFinished(run_id=run_id, status=EventState.SUCCEEDED, duration=duration)
+                RunFinished(
+                    run_id=run_id, status=EventState.SUCCEEDED, duration=duration
+                )
             )
             return final_result
 

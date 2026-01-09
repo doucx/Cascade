@@ -21,6 +21,13 @@ class ResourceExpansionPolicy(ExpansionPolicy):
     ) -> None:
         env_resources = {r.name: r for r in ctx.environment.resources}
 
+        # First, validate that all required resources are defined in the environment.
+        for res_name in node_ir.constraints:
+            if res_name not in env_resources:
+                raise ValueError(
+                    f"Resource '{res_name}' required by node '{node_ir.current_node_instance_hash}' is not defined"
+                )
+
         for res_name, amount in node_ir.constraints.items():
             res_def = env_resources[res_name]
             prism = self._get_prism(res_def.type)

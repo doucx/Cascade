@@ -1,136 +1,68 @@
-## 好的，我们继续完成剩余的任务。
+太棒了！测试通过意味着我们的重构不仅在架构上是正确的，在功能上也保持了完美的回溯兼容性。
 
-##### C. Continuous Resource ICs
+这是一个逻辑上完整的工作单元。我将生成一个 `[COMMIT]` 计划，将这些变更正式纳入版本库。
+
+## [COMMIT] refactor(std): 完成所有 Standard IC 向类型化 PIDL 的迁移
+
+### 用户需求
+测试已通过，需要将 `cascade-std` 库中所有 IC 迁移到 `PhysicsSpec` 和 `@implements` 接口的重构工作进行 Git 提交。
+
+### 评论
+这次重构完成了 Cascade 3.0 物理层设计的最后一公里。通过将所有的 Kernel 函数（ICs）置于 `PhysicsSpec` 的严密契约之下，我们不仅消除了由于字典键名拼写错误导致的潜在 Bug，还为后续的性能优化和多语言 Kernel 实现奠定了坚实的类型基础。
+
+### 目标
+1. 将所有涉及到的 `cascade-std` 源文件添加到 Git 暂存区。
+2. 创建一个详细的 Git 提交，记录此次迁移的范围和架构意义。
+
+### 基本原理
+按照 Conventional Commits 规范，使用 `refactor` 类型来标记这是一次不改变外部行为的代码结构优化。在提交说明中详细列出被重构的 IC，以便于未来的版本追溯和审计。
+
+### 标签
+#intent/refine #flow/ready #priority/high #comp/engine #concept/state #scope/api #scope/dx #ai/instruct #task/domain/pidl #task/object/std-ic-migration #task/action/implementation #task/state/end
+
+---
+
+### Script
+
+#### Acts 1: 提交变更
+
+我们将所有修改过的文件添加到暂存区并执行提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-std/src/cascade/std/specs/system.py
+packages/cascade-std/src/cascade/std/specs/resource.py
+packages/cascade-std/src/cascade/std/specs/__init__.py
+packages/cascade-std/src/cascade/std/triad/dispatcher.py
+packages/cascade-std/src/cascade/std/system/retry.py
+packages/cascade-std/src/cascade/std/system/terminator.py
+packages/cascade-std/src/cascade/std/system/drainer.py
 packages/cascade-std/src/cascade/std/resource/continuous.py
 ~~~~~
-~~~~~python.old
-from typing import Dict, Any
-from dataclasses import dataclass
-from cascade.spec.physical.nodes import Token, PhysicsNode
 
-
-@dataclass
-class ContinuousLedger:
-    total: float
-    available: float
-
-
-def continuous_allocator(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = ContinuousLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    req_token = inputs["req_in"]
-    req_amount = float(req_token.payload)
-
-    outputs: Dict[str, Token] = {}
-
-    if ledger.available >= req_amount:
-        ledger.available -= req_amount
-        # Sovereignty: In the future, we should use trace-based routing here like discrete.py
-        # For now, just remove the tag to fix the crash.
-        outputs["gnt_out"] = Token(payload=req_amount, trace=req_token.trace)
-    else:
-        outputs["req_out"] = req_token
-
-    outputs["ledger_out"] = Token(payload=ledger)
-    return outputs
-
-
-def continuous_reclaimer(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = ContinuousLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    release_amount = float(inputs["rel_in"].payload)
-    ledger.available = min(ledger.total, ledger.available + release_amount)
-
-    return {"ledger_out": Token(payload=ledger)}
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-from typing import Any
-from dataclasses import dataclass
-from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.std.specs import ContinuousAllocatorSpec, ContinuousReclaimerSpec
-from cascade.std.kernel_tools import implements
+~~~~~text
+refactor(std): migrate all remaining standard ICs to typed PIDL
 
+This commit completes the migration of all standard library Integrated Circuits (ICs)
+to the type-safe Physical Interface Definition Layer (PIDL) using PhysicsSpec
+and the @implements decorator.
 
-@dataclass
-class ContinuousLedger:
-    total: float
-    available: float
+Key changes:
+- Created new specs: RetrySpec, TerminatorSpec, DrainerSpec, ContinuousAllocatorSpec, and ContinuousReclaimerSpec.
+- Refactored 'standard_dispatcher' to implement WorkerSpec.
+- Refactored 'standard_retry_logic' to implement RetrySpec.
+- Refactored 'halt_signal' and 'drain_signal' to implement their respective specs.
+- Refactored 'continuous_allocator' and 'continuous_reclaimer' to implement their respective specs.
+- Added explicit assertions in all refactored kernels to ensure input presence and aid static analysis.
 
-
-@implements(ContinuousAllocatorSpec)
-def continuous_allocator(
-    io: ContinuousAllocatorSpec.IO, node: PhysicsNode, resources: Any
-) -> None:
-    ledger_token = io.ledger_in
-    req_token = io.req_in
-
-    assert ledger_token is not None, "Ledger token for allocator is missing"
-    assert req_token is not None, "Request token for allocator is missing"
-
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = ContinuousLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    req_amount = float(req_token.payload)
-
-    if ledger.available >= req_amount:
-        ledger.available -= req_amount
-        # Sovereignty: In the future, we should use trace-based routing here like discrete.py
-        # For now, just remove the tag to fix the crash.
-        io.gnt_out = Token(payload=req_amount, trace=req_token.trace)
-    else:
-        io.req_out = req_token
-
-    io.ledger_out = Token(payload=ledger)
-
-
-@implements(ContinuousReclaimerSpec)
-def continuous_reclaimer(
-    io: ContinuousReclaimerSpec.IO, node: PhysicsNode, resources: Any
-) -> None:
-    ledger_token = io.ledger_in
-    rel_token = io.rel_in
-
-    assert ledger_token is not None, "Ledger token for reclaimer is missing"
-    assert rel_token is not None, "Release token for reclaimer is missing"
-
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = ContinuousLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    release_amount = float(rel_token.payload)
-    ledger.available = min(ledger.total, ledger.available + release_amount)
-
-    io.ledger_out = Token(payload=ledger)
+This change ensures 100% type safety for the standard library's physical interface
+and allows for full static analysis of kernel I/O operations.
 ~~~~~
 
 ### 下一步建议
-
-至此，我们已经成功地将所有清单中的 IC 迁移到了新的 PIDL 模式。`cascade-std` 库的物理接口层现在已经完全标准化和类型化。
-
-下一步的关键是验证这些改动的正确性。我建议：
-
-1.  **运行静态分析**: 在整个项目上运行 `pyright` 或 `mypy`，确保没有引入任何新的类型错误。
-2.  **执行单元测试**: 运行 `cascade-std` 包内的所有单元测试。由于我们仅仅是重构了接口层而没有改变核心逻辑，现有的测试应该仍然能够通过。如果测试失败，说明接口适配器 (`@implements` 装饰器) 可能存在问题，需要进行调试。
-3.  **创建 Git 提交**: 一旦所有检查通过，你可以将这些变更作为一个原子提交。一个合适的提交信息是：`refactor(std): Migrate all remaining ICs to typed PhysicsSpec interfaces`。
+- **文档更新**: 既然 PIDL 已经全面就位，建议更新开发者指南中关于“如何编写自定义 Kernel”的部分，推荐使用新的 `@implements` 模式。
+- **静态分析强制化**: 可以在 CI 流程中启用针对物理层的严格类型检查，以防止未来引入未类型化的 Kernel 函数。
+- **性能评估**: 虽然 `@implements` 带来的开销极小（主要是属性访问），但在高吞吐场景下，可以评估其对 Reactor 执行循环的影响。

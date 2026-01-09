@@ -69,9 +69,7 @@ class ContinuousAllocatorSpec(PhysicsSpec):
 
     ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
     gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE)
-    req_out = Port.Output(
-        "req_out", role=PortRole.DATA
-    )  # For failed/parked requests
+    req_out = Port.Output("req_out", role=PortRole.DATA)  # For failed/parked requests
 
     class IO(Protocol):
         ledger_in: Optional[Token]

@@ -16,6 +16,7 @@ members = [
     "cascade-compiler",
     "cascade-connector-local",
     "cascade-connector-mqtt",
+    "cascade-execution-graph",
     "cascade-library",
     "cascade-monorepo",
     "cascade-provider-ipfs",
@@ -769,6 +770,27 @@ dependencies = [
 requires-dist = [
     { name = "aiomqtt" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
+]
+
+[[package]]
+name = "cascade-execution-graph"
+version = "0.1.0"
+source = { editable = "packages/cascade-execution-graph" }
+dependencies = [
+    { name = "cascade-common" },
+    { name = "cascade-compiler" },
+    { name = "cascade-runtime" },
+    { name = "cascade-spec" },
+    { name = "python-constraint" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cascade-common", editable = "packages/cascade-common" },
+    { name = "cascade-compiler", editable = "packages/cascade-compiler" },
+    { name = "cascade-runtime", editable = "packages/cascade-runtime" },
+    { name = "cascade-spec", editable = "packages/cascade-spec" },
+    { name = "python-constraint" },
 ]
 
 [[package]]

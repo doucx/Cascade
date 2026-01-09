@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M uv.lock", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767966074.2755322, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] chore: Migrate runtime code to cascade-execution-graph", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767966281.659671, "duration_ms": 0}}

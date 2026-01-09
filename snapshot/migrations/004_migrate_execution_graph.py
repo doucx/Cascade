@@ -1,41 +1,3 @@
-## [WIP] chore: Migrate runtime code to cascade-execution-graph
-
-### 用户需求
-
-执行 Phase 2 "Code Migration"。创建一个 Stitcher 迁移脚本，将 `cascade-runtime` 中的遗留图执行逻辑物理移动到 `cascade-execution-graph` 包中。
-
-### 评论
-
-这是一个纯粹的代码搬运操作，利用 `stitcher` 的语义重构能力来保持引用的完整性。我们将拆解 `runtime/legacy` 目录，将其分散到新的 `logic` 和 `strategy` 模块中，同时整体迁移 `graph` 模型和 `solvers`。
-
-### 目标
-
-创建一个名为 `migrations/004_migrate_execution_graph.py` 的迁移脚本，定义以下移动操作：
-1.  `runtime/graph` -> `execution/graph/model`
-2.  `runtime/kernel/solvers` -> `execution/graph/solvers`
-3.  `runtime/legacy/{processor,flow,resolvers}.py` -> `execution/graph/logic/`
-4.  `runtime/legacy/strategies/graph.py` -> `execution/graph/strategy.py`
-5.  `runtime/errors.py` -> `execution/graph/errors.py`
-
-### 基本原理
-
-使用 `stitcher` 脚本可以确保在文件移动的同时，自动更新跨文件的 import 路径和符号引用，这比手动移动文件和 grep-replace 要安全和高效得多。
-
-### 标签
-
-#intent/tooling #flow/ready #priority/high #comp/runtime #scope/core #ai/instruct #task/domain/runtime #task/object/decoupling #task/action/migration #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建迁移脚本
-
-~~~~~act
-write_file
-migrations/004_migrate_execution_graph.py
-~~~~~
-~~~~~python
 from pathlib import Path
 from stitcher.refactor.migration import MigrationSpec, Move, MoveDir
 
@@ -93,14 +55,3 @@ def upgrade(spec: MigrationSpec):
     # ==========================================
     # Move errors.py as it contains DependencyMissingError used by logic
     spec.add(Move(runtime_base / "errors.py", graph_base / "errors.py"))
-~~~~~
-
-### 下一步建议
-
-迁移脚本已准备就绪。请运行以下命令执行迁移并验证结果：
-
-```bash
-stitcher refactor apply migrations/004_migrate_execution_graph.py
-```
-
-执行后，我们需要处理可能的 `__init__.py` 缺失问题（例如在新的 `logic` 目录中），并运行测试以确保引用已正确更新。

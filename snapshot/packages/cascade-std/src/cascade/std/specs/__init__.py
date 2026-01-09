@@ -1,4 +1,4 @@
-from .resource import DiscreteAllocatorSpec, DiscreteReclaimerSpec
+from .resource import DiscreteAllocatorSpec, DiscreteReclaimerSpec, ResourceRequestorSpec
 from .triad import BleacherSpec, WorkerSpec, StainerSpec, ObservabilitySpec
 from .system import EgressSpec, GateSpec, SleepSpec
 
@@ -12,4 +12,5 @@ __all__ = [
     "EgressSpec",
     "GateSpec",
     "SleepSpec",
+    "ResourceRequestorSpec"
 ]

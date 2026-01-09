@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(compiler): 实施 PIDL 阶段四 - Batch 3 (Resource & PortName Removal)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767946948.5107148, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767947010.8467917, "duration_ms": 0}}

@@ -31,6 +31,8 @@ from cascade.runtime.services.resources.container import ResourceContainer
 from cascade.runtime.legacy.strategies import (
     GraphExecutionStrategy,
 )
+from cascade.runtime.strategies.vm import VMExecutionStrategy
+from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.spec.runtime import ExecutionContext
 
 
@@ -93,7 +95,21 @@ class Engine:
             bus=self.bus,
             wakeup_event=self._wakeup_event,
         )
-        self.vm_strategy = self.graph_strategy  # for future
+
+        # Initialize VM Strategy
+        # Map system_resources dict to EnvironmentDef for the compiler
+        env_resources = []
+        if system_resources:
+            for name, capacity in system_resources.items():
+                # Simple heuristic: assume discrete resources
+                env_resources.append(ResourceDef(name=name, capacity=int(capacity)))
+        
+        vm_env = EnvironmentDef(resources=env_resources)
+        
+        self.vm_strategy = VMExecutionStrategy(
+            bus=self.bus,
+            environment=vm_env
+        )
 
         self._managed_subscribers = []
 

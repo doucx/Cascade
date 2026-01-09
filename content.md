@@ -1,147 +1,59 @@
-好的，我明白了。迁移操作破坏了 `cascade-sdk` 包的公共 API 导出映射，导致所有试图通过 `cascade` 顶层包访问这些移动后模块的测试都失败了。
+好的，我们已经成功完成了 Phase 1 和 Phase 2，并且修复了迁移带来的所有导入问题，测试已全面通过。现在是将这些结构性变更作为一个完整逻辑单元提交的时候了。
 
-我们需要更新 `cascade-sdk` 中的 `_IMPORT_MAP` 和类型检查块，以指向 `cascade-execution-graph` 中的新位置。
-
-## [WIP] fix: Update SDK import map after module migration
-
-### 错误分析
-
-在执行 `stitcher refactor apply` 迁移 `cascade-runtime` 的模块到 `cascade-execution-graph` 后，`cascade-sdk` 包中的符号懒加载映射 (`_IMPORT_MAP`) 和类型检查导入 (`if TYPE_CHECKING:`) 并未自动更新。
-
-这导致 `cascade` 的公共 API 表面被破坏，所有依赖 `import cascade as cs` 并访问 `cs.DependencyMissingError`, `cs.NativeSolver`, `cs.to_json` 等移动后符号的代码都因 `AttributeError` 而失败。
+## [COMMIT] feat(runtime): Extract legacy graph executor into 'cascade-execution-graph'
 
 ### 用户需求
-
-修复 `cascade-sdk/src/cascade/sdk.py` 文件，更新其中的导入路径，使其正确指向 `cascade-execution-graph` 包中的新模块位置。
+按照重构路线图，将遗留的图执行逻辑从 `cascade-runtime` 剥离，建立独立的 `cascade-execution-graph` 包，并恢复 SDK 的公共 API 访问。
 
 ### 评论
-
-这是一个预料之中的、必要的修复步骤。`stitcher` 能够重构消费者代码的导入，但无法修改像 `_IMPORT_MAP` 这样的字符串数据结构。手动修正这个映射表是恢复 SDK 功能、让测试套件重新变绿的关键。
+这次重构是实现“Y 型架构”的关键一步。通过将遗留实现物理隔离，我们不仅精简了 `cascade-runtime` 的依赖（例如移除了对 `python-constraint` 的强制依赖），还为未来引入基于 VM 的现代执行路径扫清了障碍。这是一次高保真的架构演进。
 
 ### 目标
-
-1.  定位 `packages/cascade-sdk/src/cascade/sdk.py` 文件。
-2.  修改 `_IMPORT_MAP` 字典，更新 `DependencyMissingError`, `NativeSolver`, `to_json`, `from_json` 等条目的模块路径。
-3.  同步修改 `if TYPE_CHECKING:` 块中的静态导入路径，以保证类型检查器的正常工作。
+1.  提交新包 `cascade-execution-graph` 的所有脚手架文件。
+2.  提交从 `cascade-runtime` 迁移至新包的所有源代码文件（由 Stitcher 迁移工具执行）。
+3.  提交为了适配新包结构而修改的所有测试文件和 SDK 导出配置。
+4.  更新根目录工作区配置。
 
 ### 基本原理
-
-`cascade-sdk` 作为项目的公共 API 门面，其内部的懒加载机制依赖于一个包含模块路径字符串的字典。在源模块被物理移动后，我们必须手动更新这些字符串路径，以重新建立符号的正确链接。
+我们通过物理分离实现了“关注点分离” (SoC)。`cascade-runtime` 现在更接近于一个纯粹的宿主环境，而具体的执行策略则变成了可插拔的插件。虽然目前 `Engine` 仍然存在逻辑上的耦合（将在 Phase 3 解决），但物理层面的拆分已经完成。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/high #comp/build #scope/api #scope/dx #ai/instruct #task/domain/runtime #task/object/sdk-api #task/action/fix #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/runtime #comp/build #concept/state #scope/core #ai/instruct #task/domain/runtime #task/object/decoupling #task/action/migration #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `sdk.py` 中的导入路径
+#### Acts 1: 提交结构性变更
 
-我们将一次性更新 `_IMPORT_MAP` 和 `TYPE_CHECKING` 块中所有因迁移而失效的路径。
+我们将新包、迁移后的代码、修复后的测试以及工作区配置添加到暂存区并执行提交。
 
 ~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/sdk.py
+git_add
 ~~~~~
-~~~~~python.old
-    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
-    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
-    "Event": ("cascade.runtime.services.observability.events", "Event"),
-    "DependencyMissingError": ("cascade.runtime.errors", "DependencyMissingError"),
-    "sequence": ("cascade.flow", "sequence"),
-    "pipeline": ("cascade.flow", "pipeline"),
-    # Adapters & Protocols
-    "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
-    "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
-    "Connector": ("cascade.spec.runtime.interfaces", "Connector"),
-    "StateBackend": ("cascade.spec.runtime.interfaces", "StateBackend"),
-    # Tools & Utilities
-    "to_json": ("cascade.runtime.graph.serialize", "to_json"),
-    "from_json": ("cascade.runtime.graph.serialize", "from_json"),
-    "override_resource": ("cascade.test_utils.helpers", "override_resource"),
-    "ControllerTestApp": ("cascade.test_utils.helpers", "ControllerTestApp"),
-    "create_cli": ("cascade.tools.cli", "create_cli"),
-}
 
-# --- Type Checking Imports ---
-if TYPE_CHECKING:
-    from cascade.spec.dsl.task import task
-    from cascade.spec.dsl.fluent import LazyResult
-    from cascade.spec.dsl.routing import Router
-    from cascade.spec.dsl.jump import Jump
-    from cascade.spec.dsl.resources import resource, inject
-    from cascade.spec.dsl.constraint import with_constraints
-    from cascade.common.context import get_current_context
-
-    from cascade.control_flow import select_jump, bind
-
-    from cascade.runtime.host.instance import Engine
-    from cascade.runtime.services.observability.bus import EventBus
-    from cascade.runtime.services.observability.events import Event
-    from cascade.execution.graph.errors import DependencyMissingError
-    from cascade.flow import sequence, pipeline
-
-    from cascade.execution.graph.solvers.native import NativeSolver
-    from cascade.runtime.io.executors.local import LocalExecutor
-    from cascade.spec.runtime.interfaces import Connector, StateBackend
-
-    from cascade.execution.graph.model.serialize import to_json, from_json
-    from cascade.test_utils.helpers import override_resource, ControllerTestApp
-    from cascade.tools.cli import create_cli
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
-    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
-    "Event": ("cascade.runtime.services.observability.events", "Event"),
-    "DependencyMissingError": (
-        "cascade.execution.graph.errors",
-        "DependencyMissingError",
-    ),
-    "sequence": ("cascade.flow", "sequence"),
-    "pipeline": ("cascade.flow", "pipeline"),
-    # Adapters & Protocols
-    "NativeSolver": ("cascade.execution.graph.solvers.native", "NativeSolver"),
-    "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
-    "Connector": ("cascade.spec.runtime.interfaces", "Connector"),
-    "StateBackend": ("cascade.spec.runtime.interfaces", "StateBackend"),
-    # Tools & Utilities
-    "to_json": ("cascade.execution.graph.model.serialize", "to_json"),
-    "from_json": ("cascade.execution.graph.model.serialize", "from_json"),
-    "override_resource": ("cascade.test_utils.helpers", "override_resource"),
-    "ControllerTestApp": ("cascade.test_utils.helpers", "ControllerTestApp"),
-    "create_cli": ("cascade.tools.cli", "create_cli"),
-}
+~~~~~text
+feat(runtime): Extract legacy graph executor into 'cascade-execution-graph'
 
-# --- Type Checking Imports ---
-if TYPE_CHECKING:
-    from cascade.spec.dsl.task import task
-    from cascade.spec.dsl.fluent import LazyResult
-    from cascade.spec.dsl.routing import Router
-    from cascade.spec.dsl.jump import Jump
-    from cascade.spec.dsl.resources import resource, inject
-    from cascade.spec.dsl.constraint import with_constraints
-    from cascade.common.context import get_current_context
+This commit executes a major architectural split as part of the "Runtime Decoupling" roadmap. The legacy graph-based execution logic has been moved from the core 'cascade-runtime' package into a new standalone package 'cascade-execution-graph'.
 
-    from cascade.control_flow import select_jump, bind
+Key changes:
+- Created 'packages/cascade-execution-graph' with its own build configuration and dependencies (including python-constraint).
+- Migrated 'graph' models, 'solvers', and 'legacy' logic (FlowManager, NodeProcessor, Resolvers) using Stitcher's semantic refactoring tool.
+- Updated root 'pyproject.toml' to include the new package in the workspace.
+- Fixed all test imports and updated 'cascade-sdk' import mapping to maintain public API compatibility.
 
-    from cascade.runtime.host.instance import Engine
-    from cascade.runtime.services.observability.bus import EventBus
-    from cascade.runtime.services.observability.events import Event
-    from cascade.execution.graph.errors import DependencyMissingError
-    from cascade.flow import sequence, pipeline
-
-    from cascade.execution.graph.solvers.native import NativeSolver
-    from cascade.runtime.io.executors.local import LocalExecutor
-    from cascade.spec.runtime.interfaces import Connector, StateBackend
-
-    from cascade.execution.graph.model.serialize import to_json, from_json
-    from cascade.test_utils.helpers import override_resource, ControllerTestApp
-    from cascade.tools.cli import create_cli
+This separation prepares 'cascade-runtime' to become a clean host environment for the upcoming VM-based execution path while keeping the legacy implementation available as an optional plugin.
 ~~~~~
 
 ### 下一步建议
 
-导入路径修复完成。请再次运行 `pytest`。这次应该能解决所有 `AttributeError`，并让我们看到迁移后是否存在更深层次的逻辑问题。
+我们已经完成了宏观任务的第二阶段。
 
-如果测试通过，我们就可以进入 **Phase 3: 引擎解耦 (Engine Decoupling)**。
+接下来的任务是 **Phase 3: 引擎解耦 (Engine Decoupling)**。
+我们需要修改 `cascade-runtime` 中的 `Engine` 类，使其不再硬编码导入 `GraphExecutionStrategy`。相反，它应该通过依赖注入接收策略，并能根据环境动态加载。这将使 `cascade-runtime` 真正实现“宿主与实现”的逻辑分离。
+
+如果你准备好了，我们将开启下一个任务阶段。

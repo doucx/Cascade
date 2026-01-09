@@ -4,6 +4,7 @@ from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.backend.wiring.context import WiringContext
 from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.std.specs import StainerSpec
 
 
 class ParameterWiringPolicy(WiringPolicy):
@@ -41,7 +42,7 @@ class ParameterWiringPolicy(WiringPolicy):
 
                 # Source Stainer -> D_dep (Connect from output_default)
                 ctx.wire.connect(
-                    source_subgraph.stainer.id, "output_default", d_dep_id, "in"
+                    source_subgraph.stainer.id, StainerSpec.output_default.name, d_dep_id, "in"
                 )
 
                 # D_dep -> Target Bleacher

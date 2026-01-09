@@ -1,5 +1,6 @@
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.std.specs import StainerSpec, EgressSpec, BleacherSpec
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.backend.wiring.context import WiringContext
 from cascade.compiler.backend.wiring.protocol import WiringPolicy
@@ -27,7 +28,7 @@ class ControlFlowWiringPolicy(WiringPolicy):
                 ctx.wire.add_node(d_seq)
 
                 ctx.wire.connect(
-                    source_subgraph.stainer.id, "output_default", d_seq_id, "in"
+                    source_subgraph.stainer.id, StainerSpec.output_default.name, d_seq_id, "in"
                 )
                 ctx.wire.connect(d_seq_id, "out", subgraph.bleacher.id, port_name)
 
@@ -44,7 +45,7 @@ class ControlFlowWiringPolicy(WiringPolicy):
             ctx.wire.add_node(d_cond)
 
             ctx.wire.connect(
-                source_subgraph.stainer.id, "output_default", d_cond_id, "in"
+                source_subgraph.stainer.id, StainerSpec.output_default.name, d_cond_id, "in"
             )
             ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")
 
@@ -57,4 +58,4 @@ class ControlFlowWiringPolicy(WiringPolicy):
             ctx.wire.add_node(d_egress)
 
             # Connect the stainer's default output to this egress node
-            ctx.wire.connect(subgraph.stainer.id, "output_default", d_egress_id, "in")
+            ctx.wire.connect(subgraph.stainer.id, StainerSpec.output_default.name, d_egress_id, EgressSpec.input_token.name)

@@ -10,6 +10,7 @@ requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
   "cascade-reflection",
+  "cascade-std",
 ]
 
 [tool.hatch.build.targets.wheel]

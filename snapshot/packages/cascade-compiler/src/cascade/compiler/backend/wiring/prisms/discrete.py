@@ -5,6 +5,7 @@ from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole, PortName
 from cascade.std.resource.discrete import DiscreteLedger
+from cascade.std.specs import DiscreteAllocatorSpec, DiscreteReclaimerSpec, GateSpec
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.backend.wiring.context import WiringContext
@@ -34,14 +35,8 @@ class DiscreteResourcePrism(ResourcePrism):
         f_reclaimer = PhysicsFuncNode(
             id=reclaimer_id,
             name=f"Reclaimer({res_def.name})",
-            input_ports={
-                PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                PortName.REL: PortDef(PortName.REL, PortRole.DATA),
-            },
-            output_ports={
-                PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                PortName.SIGNAL_OUT: PortDef(PortName.SIGNAL_OUT, PortRole.SIGNAL),
-            },
+            input_ports=DiscreteReclaimerSpec.input_ports,
+            output_ports=DiscreteReclaimerSpec.output_ports,
         )
         ctx.wire.add_node(f_reclaimer)
 
@@ -49,25 +44,27 @@ class DiscreteResourcePrism(ResourcePrism):
         f_allocator = PhysicsFuncNode(
             id=allocator_id,
             name=f"Allocator({res_def.name})",
-            input_ports={
-                PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
-            },
-            output_ports={
-                PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
-                PortName.REQ_PARKED: PortDef(PortName.REQ_PARKED, PortRole.DATA),
-            },
+            input_ports=DiscreteAllocatorSpec.input_ports,
+            # We must handle the dynamic grant ports separately if not in Spec? 
+            # Actually Spec defines static ports + Map. The Graph builder (WiringHarness) 
+            # doesn't strictly validate dynamic ports existence at definition time, 
+            # but relies on connect() to create them if needed?
+            # Wait, WiringHarness *does* validate port existence.
+            # So we must ensure output_ports dict is populated if we want to wire to it.
+            # For dynamic ports, we might need a way to 'declare' them on the node instance 
+            # if they are not in the Spec's static dict.
+            # However, for now, let's copy the static ones from Spec.
+            output_ports=DiscreteAllocatorSpec.output_ports.copy(),
         )
         ctx.wire.add_node(f_allocator)
 
         # Wiring: Ledger <-> Allocator
-        ctx.wire.connect(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
-        ctx.wire.connect(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
+        ctx.wire.connect(ledger_id, "out", allocator_id, DiscreteAllocatorSpec.ledger_in.name)
+        ctx.wire.connect(allocator_id, DiscreteAllocatorSpec.ledger_out.name, ledger_id, "in")
 
         # Wiring: Ledger <-> Reclaimer
-        ctx.wire.connect(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
-        ctx.wire.connect(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
+        ctx.wire.connect(ledger_id, "out", reclaimer_id, DiscreteReclaimerSpec.ledger_in.name)
+        ctx.wire.connect(reclaimer_id, DiscreteReclaimerSpec.ledger_out.name, ledger_id, "in")
 
         # Request Buffer
         d_req_buffer_id = f"buffer.req.{res_def.name}"
@@ -77,7 +74,7 @@ class DiscreteResourcePrism(ResourcePrism):
         ctx.wire.add_node(d_req_buffer)
 
         # Buffer -> Allocator
-        ctx.wire.connect(d_req_buffer_id, "out", allocator_id, PortName.REQ)
+        ctx.wire.connect(d_req_buffer_id, "out", allocator_id, DiscreteAllocatorSpec.req_in.name)
 
         # --- Parking & Wake-up Mechanism ---
         # 1. New Nodes
@@ -97,24 +94,21 @@ class DiscreteResourcePrism(ResourcePrism):
         f_gate = PhysicsFuncNode(
             id=f_gate_id,
             name=f"Gate({res_def.name})",
-            input_ports={
-                "req_in": PortDef("req_in", PortRole.DATA),
-                "signal_in": PortDef("signal_in", PortRole.SIGNAL),
-            },
-            output_ports={"req_out": PortDef("req_out", PortRole.DATA)},
+            input_ports=GateSpec.input_ports,
+            output_ports=GateSpec.output_ports,
         )
         ctx.wire.add_node(f_gate)
 
         # 2. New Wiring
         # Allocator parks rejected requests
-        ctx.wire.connect(allocator_id, PortName.REQ_PARKED, d_parked_id, "in")
+        ctx.wire.connect(allocator_id, DiscreteAllocatorSpec.req_parked.name, d_parked_id, "in")
         # Reclaimer sends wake-up signal
-        ctx.wire.connect(reclaimer_id, PortName.SIGNAL_OUT, d_signal_id, "in")
+        ctx.wire.connect(reclaimer_id, DiscreteReclaimerSpec.signal_out.name, d_signal_id, "in")
         # Gate is triggered by parked request and signal
-        ctx.wire.connect(d_parked_id, "out", f_gate_id, "req_in")
-        ctx.wire.connect(d_signal_id, "out", f_gate_id, "signal_in")
+        ctx.wire.connect(d_parked_id, "out", f_gate_id, GateSpec.req_in.name)
+        ctx.wire.connect(d_signal_id, "out", f_gate_id, GateSpec.signal_in.name)
         # Gate sends request back to the main buffer for retry
-        ctx.wire.connect(f_gate_id, "req_out", d_req_buffer_id, "in")
+        ctx.wire.connect(f_gate_id, GateSpec.req_out.name, d_req_buffer_id, "in")
 
         # Release Buffer
         rel_buffer_id = f"buffer.rel.{res_def.name}"
@@ -124,7 +118,7 @@ class DiscreteResourcePrism(ResourcePrism):
         ctx.wire.add_node(d_rel_buffer)
 
         # Buffer -> Reclaimer
-        ctx.wire.connect(rel_buffer_id, "out", reclaimer_id, PortName.REL)
+        ctx.wire.connect(rel_buffer_id, "out", reclaimer_id, DiscreteReclaimerSpec.rel_in.name)
 
     def connect_task(
         self,

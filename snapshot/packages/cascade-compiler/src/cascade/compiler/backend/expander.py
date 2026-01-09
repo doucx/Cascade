@@ -7,6 +7,7 @@ from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.physical.topology import Channel
 from cascade.spec.physical.ports import PortDef, PortRole, PortName
 from cascade.reflection import PhysicalIdGenerator
+from cascade.std.specs import BleacherSpec, WorkerSpec, StainerSpec
 
 
 @dataclass
@@ -69,11 +70,7 @@ class Expander:
             id=f_pre_id,
             name=f"Bleach({node_ir.name})",
             input_ports=bleacher_inputs,
-            output_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict"),
-                "trace_output": PortDef("trace_output", PortRole.DATA, "TraceCtx"),
-                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
-            },
+            output_ports=BleacherSpec.output_ports,
         )
 
         # D_worker_in: Holds the pure kwargs for the worker
@@ -86,12 +83,8 @@ class Expander:
             id=f_worker_id,
             name=f"Exec({node_ir.name})",
             canonical_code_structure_hash=canonical_hash,
-            input_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict")
-            },
-            output_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA, "Any")
-            },
+            input_ports=WorkerSpec.input_ports,
+            output_ports=WorkerSpec.output_ports,
         )
 
         # D_worker_out: Holds the raw result
@@ -103,11 +96,7 @@ class Expander:
         # F_post: The Stainer
         # Outputs = Result + Resource Returns
         # Sovereign Ports: Explicitly define default and error paths
-        stainer_outputs = {
-            "output_default": PortDef("output_default", PortRole.DATA, "Token"),
-            "output_error": PortDef("output_error", PortRole.DATA, "Token"),
-            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
-        }
+        stainer_outputs = StainerSpec.output_ports.copy()
         for res_name in node_ir.constraints.keys():
             port_name = f"res_{res_name}"
             stainer_outputs[port_name] = PortDef(
@@ -142,7 +131,7 @@ class Expander:
         channels.append(
             Channel(
                 source_node_id=f_pre_id,
-                source_port="worker_input",
+                source_port=BleacherSpec.worker_input.name,
                 target_node_id=d_worker_in_id,
                 target_port="in",
             )
@@ -153,14 +142,14 @@ class Expander:
                 source_node_id=d_worker_in_id,
                 source_port="out",
                 target_node_id=f_worker_id,
-                target_port="worker_input",
+                target_port=WorkerSpec.worker_input.name,
             )
         )
         # F_worker -> D_worker_out
         channels.append(
             Channel(
                 source_node_id=f_worker_id,
-                source_port="worker_result",
+                source_port=WorkerSpec.worker_result.name,
                 target_node_id=d_worker_out_id,
                 target_port="in",
             )
@@ -171,7 +160,7 @@ class Expander:
                 source_node_id=d_worker_out_id,
                 source_port="out",
                 target_node_id=f_post_id,
-                target_port="worker_result",
+                target_port=StainerSpec.worker_result.name,
             )
         )
 
@@ -180,7 +169,7 @@ class Expander:
         channels.append(
             Channel(
                 source_node_id=f_pre_id,
-                source_port="trace_output",
+                source_port=BleacherSpec.trace_output.name,
                 target_node_id=d_trace_id,
                 target_port="in",
             )
@@ -191,7 +180,7 @@ class Expander:
                 source_node_id=d_trace_id,
                 source_port="out",
                 target_node_id=f_post_id,
-                target_port="trace_input",
+                target_port=StainerSpec.trace_input.name,
             )
         )
 

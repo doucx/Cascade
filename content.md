@@ -1,453 +1,674 @@
 简要回答
-我们将更新 `BleacherSpec` 和 `DiscreteAllocatorSpec` 以引入动态端口映射，并使用 `@implements` 装饰器重构相应的 Kernel 函数，使其通过强类型的 `io` 接口与物理层交互。
+我们将修改 `cascade-compiler` 中的连线策略 (Wiring Policies)，使用 `cascade.std.specs` 中定义的强类型 Spec 属性来替代硬编码的字符串字面量，从而完成 PIDL 的闭环。
 
-## [WIP] feat: 实施 PIDL 阶段三 - 重构 Bleacher 与 Resource Kernels
+## [WIP] feat: 实施 PIDL 阶段四 - Compiler 连线重构
 
 ### 用户需求
-1.  修改 `BleacherSpec`，添加 `Port.MapInput` 以支持动态参数输入。
-2.  修改 `DiscreteAllocatorSpec`，添加 `Port.MapOutput` 以支持动态资源授权输出。
-3.  重构 `standard_bleacher` Kernel，使用 `io.args` 处理输入。
-4.  重构 `discrete_allocator` 和 `discrete_reclaimer` Kernel，使用 `io.grants` 和静态属性处理资源逻辑。
+1.  修改 `cascade-compiler` 的依赖项，使其能够访问 `cascade.std.specs`。
+2.  重构 `ResourceWiringPolicy` (特别是 `DiscreteResourcePrism`)，使用 `DiscreteAllocatorSpec` 和 `DiscreteReclaimerSpec`。
+3.  重构 `Expander`，使用 `BleacherSpec`, `WorkerSpec`, `StainerSpec` 定义端口。
+4.  重构 `ParameterWiringPolicy` 和 `ControlFlowWiringPolicy`，引用相应的 Spec 属性。
 
 ### 评论
-这是 PIDL 实施的关键战役。`Bleacher` 和 `Allocator` 是系统中动态性最强的两个组件。成功重构它们意味着我们的“静态优先，动态兜底”策略（PIDL + IOWrapper）能够覆盖 Cascade 中最复杂的场景，为全面推广铺平道路。
+这是 PIDL 的最后一块拼图。一旦完成，编译器将不再通过猜测字符串（如 `"ledger_in"`）来连接节点，而是通过引用物理法则（如 `DiscreteAllocatorSpec.ledger_in.name`）来构建图。这意味着如果我们在 Spec 中更改了端口名，编译器会自动适应，或者在静态检查阶段报错，而不是在运行时默默失败。
 
 ### 目标
-1.  更新 `packages/cascade-std/src/cascade/std/specs/triad.py`。
-2.  更新 `packages/cascade-std/src/cascade/std/specs/resource.py`。
-3.  重构 `packages/cascade-std/src/cascade/std/triad/bleacher.py`。
-4.  重构 `packages/cascade-std/src/cascade/std/resource/discrete.py`。
+1.  更新 `packages/cascade-compiler/pyproject.toml`。
+2.  更新 `packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py`。
+3.  更新 `packages/cascade-compiler/src/cascade/compiler/backend/expander.py`。
+4.  更新 `packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/control.py` 等相关策略。
 
 ### 基本原理
-*   **Bleacher 重构**: `Bleacher` 的核心职责是将杂乱的输入（数据、资源、信号）清洗为纯净的 Worker Input。通过 `io.args`，我们能获取所有非静态定义的输入 Token，然后结合 `node.input_ports` 元数据进行分类处理。这保持了逻辑的灵活性，同时规范了接口访问。
-*   **Allocator 重构**: 利用 `Port.MapOutput(prefix="gnt_for_")`，我们在 Spec 层面显式声明了“动态授权”的存在。Kernel 代码使用 `io.grants["gnt_for_x"] = token` 进行赋值，`IOWrapper` 会自动校验前缀，从而增强了安全性。
+*   **依赖倒置**: 编译器现在依赖于标准库的 Spec 定义，而不是标准库依赖编译器的约定。
+*   **SSoT**: Spec 类成为唯一的端口名事实来源。
+*   **示例**:
+    *   **Old**: `ctx.wire.connect(ledger_id, "out", allocator_id, "ledger_in")`
+    *   **New**: `ctx.wire.connect(ledger_id, "out", allocator_id, DiscreteAllocatorSpec.ledger_in.name)`
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/std #comp/interfaces #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/kernel-refactor #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/compiler #concept/wiring #scope/core #ai/instruct #task/domain/core #task/object/compiler-wiring #task/action/refactor #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 Triad Specs
+#### Acts 1: 更新 Compiler 依赖
 
-为 `BleacherSpec` 添加动态输入映射。
-
-~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/specs/triad.py
-~~~~~
-~~~~~python.old
-class BleacherSpec(PhysicsSpec):
-    """
-    Contract for the Pre-process Node (F_pre).
-    Inputs are dynamic (based on Task arguments), so they are not exhaustively listed here.
-    """
-    # Outputs
-    worker_input = Port.Output("worker_input", role=PortRole.DATA, type="Dict")
-~~~~~
-~~~~~python.new
-class BleacherSpec(PhysicsSpec):
-    """
-    Contract for the Pre-process Node (F_pre).
-    Inputs are dynamic (based on Task arguments), so they are not exhaustively listed here.
-    """
-    # Inputs (Dynamic)
-    # Collects all inputs not matched by other static input definitions.
-    args = Port.MapInput(role=PortRole.DATA)
-
-    # Outputs
-    worker_input = Port.Output("worker_input", role=PortRole.DATA, type="Dict")
-~~~~~
-
-#### Acts 2: 更新 Resource Specs
-
-为 `DiscreteAllocatorSpec` 添加动态输出映射。
+我们需要将 `cascade-std` 添加到 `cascade-compiler` 的依赖中，以便访问 Specs。
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/specs/resource.py
+packages/cascade-compiler/pyproject.toml
 ~~~~~
-~~~~~python.old
-    # Note: The main grant output. Dynamic dedicated ports (gnt_for_X) may also exist.
-    gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE, type=PortType.Token)
-    # Output for requests that cannot be satisfied immediately
-    req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
+~~~~~toml.old
+dependencies = [
+  "cascade-spec",
+  "cascade-reflection",
+]
 ~~~~~
-~~~~~python.new
-    # Note: The main grant output. Dynamic dedicated ports (gnt_for_X) may also exist.
-    gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE, type=PortType.Token)
-    
-    # Dynamic Grant Outputs
-    # Allows writing to 'gnt_for_{requestor_id}'
-    grants = Port.MapOutput(prefix="gnt_for_", role=PortRole.RESOURCE, type=PortType.Token)
-
-    # Output for requests that cannot be satisfied immediately
-    req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
+~~~~~toml.new
+dependencies = [
+  "cascade-spec",
+  "cascade-reflection",
+  "cascade-std",
+]
 ~~~~~
 
-#### Acts 3: 重构 Bleacher Kernel
+#### Acts 2: 重构 Expander (Triad Wiring)
 
-使用 `@implements(BleacherSpec)` 和 `io.args` 重构 `standard_bleacher`。
+修改 `expander.py`，使用 `BleacherSpec`, `WorkerSpec`, `StainerSpec`。
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
 ~~~~~
 ~~~~~python.old
-from typing import Dict, Any, List
-import time
-
-from cascade.spec import EventIR, EventType, EventState, EventContext
-from cascade.spec.physical.nodes import Token
-from cascade.spec.physical.triad import BleachNode
-from cascade.spec.physical.ports import PortRole
-
-
-def standard_bleacher(
-    inputs: Dict[str, Token], node: BleachNode, resources: Any
-) -> Dict[str, Token]:
-    worker_payload: Dict[str, Any] = {}
-    trace_payload: Dict[str, Any] = {}
-    held_resources: List[str] = []
-
-    # 1. Extract payloads and merge traces from all inputs
-    for port_name, input_token in inputs.items():
-        port_def = node.input_ports[port_name]
-
-        if port_def.role == PortRole.DATA:
-            worker_payload[port_name] = input_token.payload
-        elif port_def.role == PortRole.RESOURCE:
-            # It's a GNT token.
-            held_resources.append(port_name)
-            if "resource_amounts" not in trace_payload:
-                trace_payload["resource_amounts"] = {}
-            trace_payload["resource_amounts"][port_name] = input_token.payload
-
-        trace_payload.update(input_token.trace)
-
-    # 2. Capture metadata
-    start_ts = time.time()  # Use wall clock for IR
-    mono_ts = time.monotonic()  # Use monotonic for internal duration calc
-
-    logical_id = node.id.replace(".bleach", "")
-
-    # Heuristic: Extract task_name from physical name "Bleach(MyTask)"
-    task_name = "unknown"
-    if node.name.startswith("Bleach(") and node.name.endswith(")"):
-        task_name = node.name[7:-1]
-
-    trace_payload["start_ts"] = mono_ts
-    trace_payload["id"] = logical_id
-    if held_resources:
-        trace_payload["held_resources"] = held_resources
-
-    # 3. Construct EventIR (The Hologram)
-    ctx: EventContext = {}
-    if "rid" in trace_payload:
-        ctx["rid"] = trace_payload["rid"]
-
-    ir: EventIR = {
-        "v": "1.0",
-        "t": EventType.LIFECYCLE,
-        "ts": start_ts,
-        "ctx": ctx,
-        "phy": {"nid": node.id},
-        "data": {
-            "state": EventState.RUNNING,
-            "task_id": logical_id,
-            "task_name": task_name,
-        },
-    }
-
-    # 4. Create the output tokens
-    worker_token = Token(payload=worker_payload, trace=trace_payload)
-    trace_token = Token(payload=trace_payload)
-    # The context payload IS the worker payload (the input refs)
-    context_token = Token(payload=worker_payload, trace=trace_payload)
-    # obs_output now carries the IR as payload
-    obs_token = Token(payload=ir, trace=trace_payload)
-
-    return {
-        "worker_input": worker_token,
-        "trace_output": trace_token,
-        "context_output": context_token,
-        "obs_output": obs_token,
-    }
-~~~~~
-~~~~~python.new
-from typing import Dict, Any, List
-import time
-
-from cascade.spec import EventIR, EventType, EventState, EventContext
-from cascade.spec.physical.nodes import Token
-from cascade.spec.physical.triad import BleachNode
-from cascade.spec.physical.ports import PortRole
-from cascade.std.specs import BleacherSpec
-from cascade.std.kernel_tools import implements
-
-
-@implements(BleacherSpec)
-def standard_bleacher(
-    io: BleacherSpec.IO, node: BleachNode, resources: Any
-) -> None:
-    worker_payload: Dict[str, Any] = {}
-    trace_payload: Dict[str, Any] = {}
-    held_resources: List[str] = []
-
-    # 1. Extract payloads and merge traces from all inputs
-    # Use io.args to get all dynamic inputs
-    for port_name, input_token in io.args.items():
-        # Even though we use IO wrapper, we still rely on Node metadata for roles
-        port_def = node.input_ports[port_name]
-
-        if port_def.role == PortRole.DATA:
-            worker_payload[port_name] = input_token.payload
-        elif port_def.role == PortRole.RESOURCE:
-            # It's a GNT token.
-            held_resources.append(port_name)
-            if "resource_amounts" not in trace_payload:
-                trace_payload["resource_amounts"] = {}
-            trace_payload["resource_amounts"][port_name] = input_token.payload
-
-        trace_payload.update(input_token.trace)
-
-    # 2. Capture metadata
-    start_ts = time.time()  # Use wall clock for IR
-    mono_ts = time.monotonic()  # Use monotonic for internal duration calc
-
-    logical_id = node.id.replace(".bleach", "")
-
-    # Heuristic: Extract task_name from physical name "Bleach(MyTask)"
-    task_name = "unknown"
-    if node.name.startswith("Bleach(") and node.name.endswith(")"):
-        task_name = node.name[7:-1]
-
-    trace_payload["start_ts"] = mono_ts
-    trace_payload["id"] = logical_id
-    if held_resources:
-        trace_payload["held_resources"] = held_resources
-
-    # 3. Construct EventIR (The Hologram)
-    ctx: EventContext = {}
-    if "rid" in trace_payload:
-        ctx["rid"] = trace_payload["rid"]
-
-    ir: EventIR = {
-        "v": "1.0",
-        "t": EventType.LIFECYCLE,
-        "ts": start_ts,
-        "ctx": ctx,
-        "phy": {"nid": node.id},
-        "data": {
-            "state": EventState.RUNNING,
-            "task_id": logical_id,
-            "task_name": task_name,
-        },
-    }
-
-    # 4. Create the output tokens
-    worker_token = Token(payload=worker_payload, trace=trace_payload)
-    trace_token = Token(payload=trace_payload)
-    # The context payload IS the worker payload (the input refs)
-    context_token = Token(payload=worker_payload, trace=trace_payload)
-    # obs_output now carries the IR as payload
-    obs_token = Token(payload=ir, trace=trace_payload)
-
-    # 5. Set outputs via IO wrapper
-    io.worker_input = worker_token
-    io.trace_output = trace_token
-    io.context_output = context_token
-    io.obs_output = obs_token
-~~~~~
-
-#### Acts 4: 重构 Discrete Resource Kernels
-
-使用 `@implements(DiscreteAllocatorSpec)` 和 `@implements(DiscreteReclaimerSpec)` 重构 `discrete.py`。
-
-~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/resource/discrete.py
-~~~~~
-~~~~~python.old
-from typing import Dict, Any, Union
-from dataclasses import dataclass
-from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.spec.physical.object import Ref
-from cascade.spec.physical.ports import PortName
+from cascade.spec.physical.ports import PortDef, PortRole, PortName
+from cascade.reflection import PhysicalIdGenerator
 
 
 @dataclass
-class DiscreteLedger:
-    total: int
-    available: int
-
-
-def _extract_scalar(payload: Any) -> Union[int, float]:
-    if isinstance(payload, Ref):
-        # v3.1: Try to get hoisted scalar
-        if "scalar_value" in payload.meta:
-            return payload.meta["scalar_value"]
-        # If not hoisted, we technically can't read it in Kernel.
-        # But for now we fail gracefully or return 0?
-        # Raising error is better to catch missing hoisting.
-        raise ValueError(
-            f"Ref {payload.uri} missing 'scalar_value' metadata for Kernel access."
-        )
-    return payload
-
-
-def discrete_allocator(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-
-    # Extract Ledger (Handle Ref if ledger itself is ref-based in future, currently payload is obj)
-    # For now ledger payload is passed as-is (PhysicsDataNode initial_payload)
-    if isinstance(ledger_data, dict):
-        ledger = DiscreteLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    req_token = inputs["req_in"]
-    req_amount = int(_extract_scalar(req_token.payload))
-
-    outputs: Dict[str, Token] = {}
-
-    if ledger.available >= req_amount:
-        # Grant
-        ledger.available -= req_amount
-
-        # Sovereignty Routing: Determine output port based on requestor_id in trace
-        requestor_id = req_token.trace.get("requestor_id")
-        if requestor_id:
-            # The Builder constructs the port name as f"gnt_for_{requestor_id}"
-            out_port = f"gnt_for_{requestor_id}"
-            outputs[out_port] = Token(payload=req_amount, trace=req_token.trace)
-        else:
-            # Fallback for legacy/testing
-            outputs["gnt_out"] = Token(payload=req_amount, trace=req_token.trace)
-    else:
-        # Reject & Park
-        outputs[PortName.REQ_PARKED] = req_token
-
-    outputs["ledger_out"] = Token(payload=ledger)
-    return outputs
-
-
-def discrete_reclaimer(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = DiscreteLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    rel_token = inputs["rel_in"]
-    release_amount = int(_extract_scalar(rel_token.payload))
-
-    # Replenish
-    ledger.available = min(ledger.total, ledger.available + release_amount)
-
-    outputs = {"ledger_out": Token(payload=ledger)}
-    # Emit wake-up signal
-    outputs[PortName.SIGNAL_OUT] = Token(payload=None, trace=rel_token.trace)
-
-    return outputs
+class SubGraph:
 ~~~~~
 ~~~~~python.new
-from typing import Any, Union
-from dataclasses import dataclass
-from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.spec.physical.object import Ref
-from cascade.std.specs import DiscreteAllocatorSpec, DiscreteReclaimerSpec
-from cascade.std.kernel_tools import implements
+from cascade.spec.physical.ports import PortDef, PortRole, PortName
+from cascade.reflection import PhysicalIdGenerator
+from cascade.std.specs import BleacherSpec, WorkerSpec, StainerSpec
 
 
 @dataclass
-class DiscreteLedger:
-    total: int
-    available: int
+class SubGraph:
+~~~~~
 
-
-def _extract_scalar(payload: Any) -> Union[int, float]:
-    if isinstance(payload, Ref):
-        # v3.1: Try to get hoisted scalar
-        if "scalar_value" in payload.meta:
-            return payload.meta["scalar_value"]
-        # If not hoisted, we technically can't read it in Kernel.
-        # But for now we fail gracefully or return 0?
-        # Raising error is better to catch missing hoisting.
-        raise ValueError(
-            f"Ref {payload.uri} missing 'scalar_value' metadata for Kernel access."
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+~~~~~
+~~~~~python.old
+        f_pre = BleachNode(
+            id=f_pre_id,
+            name=f"Bleach({node_ir.name})",
+            input_ports=bleacher_inputs,
+            output_ports={
+                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict"),
+                "trace_output": PortDef("trace_output", PortRole.DATA, "TraceCtx"),
+                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
+            },
         )
-    return payload
+
+        # D_worker_in: Holds the pure kwargs for the worker
+        d_worker_in = PhysicsDataNode(id=d_worker_in_id, name=f"In({node_ir.name})")
+
+        # F_worker: The actual execution logic
+        # It conceptually takes *args/**kwargs, but physically takes one 'worker_input' dict
+        canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]
+        f_worker = WorkerNode(
+            id=f_worker_id,
+            name=f"Exec({node_ir.name})",
+            canonical_code_structure_hash=canonical_hash,
+            input_ports={
+                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict")
+            },
+            output_ports={
+                "worker_result": PortDef("worker_result", PortRole.DATA, "Any")
+            },
+        )
+
+        # D_worker_out: Holds the raw result
+        d_worker_out = PhysicsDataNode(id=d_worker_out_id, name=f"Out({node_ir.name})")
+
+        # D_trace: The wormhole for metadata (start_ts, trace_id)
+        d_trace = PhysicsDataNode(id=d_trace_id, name=f"Trace({node_ir.name})")
+
+        # F_post: The Stainer
+        # Outputs = Result + Resource Returns
+        # Sovereign Ports: Explicitly define default and error paths
+        stainer_outputs = {
+            "output_default": PortDef("output_default", PortRole.DATA, "Token"),
+            "output_error": PortDef("output_error", PortRole.DATA, "Token"),
+            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
+        }
+~~~~~
+~~~~~python.new
+        f_pre = BleachNode(
+            id=f_pre_id,
+            name=f"Bleach({node_ir.name})",
+            input_ports=bleacher_inputs,
+            output_ports=BleacherSpec.output_ports,
+        )
+
+        # D_worker_in: Holds the pure kwargs for the worker
+        d_worker_in = PhysicsDataNode(id=d_worker_in_id, name=f"In({node_ir.name})")
+
+        # F_worker: The actual execution logic
+        # It conceptually takes *args/**kwargs, but physically takes one 'worker_input' dict
+        canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]
+        f_worker = WorkerNode(
+            id=f_worker_id,
+            name=f"Exec({node_ir.name})",
+            canonical_code_structure_hash=canonical_hash,
+            input_ports=WorkerSpec.input_ports,
+            output_ports=WorkerSpec.output_ports,
+        )
+
+        # D_worker_out: Holds the raw result
+        d_worker_out = PhysicsDataNode(id=d_worker_out_id, name=f"Out({node_ir.name})")
+
+        # D_trace: The wormhole for metadata (start_ts, trace_id)
+        d_trace = PhysicsDataNode(id=d_trace_id, name=f"Trace({node_ir.name})")
+
+        # F_post: The Stainer
+        # Outputs = Result + Resource Returns
+        # Sovereign Ports: Explicitly define default and error paths
+        stainer_outputs = StainerSpec.output_ports.copy()
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+~~~~~
+~~~~~python.old
+        # Path 1: Execution Flow
+        # F_pre -> D_worker_in
+        channels.append(
+            Channel(
+                source_node_id=f_pre_id,
+                source_port="worker_input",
+                target_node_id=d_worker_in_id,
+                target_port="in",
+            )
+        )
+        # D_worker_in -> F_worker
+        channels.append(
+            Channel(
+                source_node_id=d_worker_in_id,
+                source_port="out",
+                target_node_id=f_worker_id,
+                target_port="worker_input",
+            )
+        )
+        # F_worker -> D_worker_out
+        channels.append(
+            Channel(
+                source_node_id=f_worker_id,
+                source_port="worker_result",
+                target_node_id=d_worker_out_id,
+                target_port="in",
+            )
+        )
+        # D_worker_out -> F_post
+        channels.append(
+            Channel(
+                source_node_id=d_worker_out_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port="worker_result",
+            )
+        )
+
+        # Path 2: Trace Bypass
+        # F_pre -> D_trace
+        channels.append(
+            Channel(
+                source_node_id=f_pre_id,
+                source_port="trace_output",
+                target_node_id=d_trace_id,
+                target_port="in",
+            )
+        )
+        # D_trace -> F_post
+        channels.append(
+            Channel(
+                source_node_id=d_trace_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port="trace_input",
+            )
+        )
+~~~~~
+~~~~~python.new
+        # Path 1: Execution Flow
+        # F_pre -> D_worker_in
+        channels.append(
+            Channel(
+                source_node_id=f_pre_id,
+                source_port=BleacherSpec.worker_input.name,
+                target_node_id=d_worker_in_id,
+                target_port="in",
+            )
+        )
+        # D_worker_in -> F_worker
+        channels.append(
+            Channel(
+                source_node_id=d_worker_in_id,
+                source_port="out",
+                target_node_id=f_worker_id,
+                target_port=WorkerSpec.worker_input.name,
+            )
+        )
+        # F_worker -> D_worker_out
+        channels.append(
+            Channel(
+                source_node_id=f_worker_id,
+                source_port=WorkerSpec.worker_result.name,
+                target_node_id=d_worker_out_id,
+                target_port="in",
+            )
+        )
+        # D_worker_out -> F_post
+        channels.append(
+            Channel(
+                source_node_id=d_worker_out_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port=StainerSpec.worker_result.name,
+            )
+        )
+
+        # Path 2: Trace Bypass
+        # F_pre -> D_trace
+        channels.append(
+            Channel(
+                source_node_id=f_pre_id,
+                source_port=BleacherSpec.trace_output.name,
+                target_node_id=d_trace_id,
+                target_port="in",
+            )
+        )
+        # D_trace -> F_post
+        channels.append(
+            Channel(
+                source_node_id=d_trace_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port=StainerSpec.trace_input.name,
+            )
+        )
+~~~~~
+
+#### Acts 3: 重构 Resource Prism
+
+修改 `prisms/discrete.py`，使用 `DiscreteAllocatorSpec` 和 `DiscreteReclaimerSpec`。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py
+~~~~~
+~~~~~python.old
+from cascade.std.resource.discrete import DiscreteLedger
+from cascade.compiler.backend.expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.prism import ResourcePrism
 
 
-@implements(DiscreteAllocatorSpec)
-def discrete_allocator(
-    io: DiscreteAllocatorSpec.IO, node: PhysicsNode, resources: Any
-) -> None:
-    ledger_token = io.ledger_in
-    ledger_data = ledger_token.payload
-
-    # Extract Ledger (Handle Ref if ledger itself is ref-based in future, currently payload is obj)
-    # For now ledger payload is passed as-is (PhysicsDataNode initial_payload)
-    if isinstance(ledger_data, dict):
-        ledger = DiscreteLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    req_token = io.req_in
-    req_amount = int(_extract_scalar(req_token.payload))
-
-    if ledger.available >= req_amount:
-        # Grant
-        ledger.available -= req_amount
-
-        # Sovereignty Routing: Determine output port based on requestor_id in trace
-        requestor_id = req_token.trace.get("requestor_id")
-        if requestor_id:
-            # The Builder constructs the port name as f"gnt_for_{requestor_id}"
-            out_port = f"gnt_for_{requestor_id}"
-            # Use dynamic output map
-            io.grants[out_port] = Token(payload=req_amount, trace=req_token.trace)
-        else:
-            # Fallback for legacy/testing
-            io.gnt_out = Token(payload=req_amount, trace=req_token.trace)
-    else:
-        # Reject & Park
-        io.req_parked = req_token
-
-    io.ledger_out = Token(payload=ledger)
+class DiscreteResourcePrism(ResourcePrism):
+~~~~~
+~~~~~python.new
+from cascade.std.resource.discrete import DiscreteLedger
+from cascade.std.specs import DiscreteAllocatorSpec, DiscreteReclaimerSpec, GateSpec
+from cascade.compiler.backend.expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.prism import ResourcePrism
 
 
-@implements(DiscreteReclaimerSpec)
-def discrete_reclaimer(
-    io: DiscreteReclaimerSpec.IO, node: PhysicsNode, resources: Any
-) -> None:
-    ledger_token = io.ledger_in
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = DiscreteLedger(**ledger_data)
-    else:
-        ledger = ledger_data
+class DiscreteResourcePrism(ResourcePrism):
+~~~~~
 
-    rel_token = io.rel_in
-    release_amount = int(_extract_scalar(rel_token.payload))
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py
+~~~~~
+~~~~~python.old
+        # F_reclaimer
+        f_reclaimer = PhysicsFuncNode(
+            id=reclaimer_id,
+            name=f"Reclaimer({res_def.name})",
+            input_ports={
+                PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+            },
+            output_ports={
+                PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                PortName.SIGNAL_OUT: PortDef(PortName.SIGNAL_OUT, PortRole.SIGNAL),
+            },
+        )
+        ctx.wire.add_node(f_reclaimer)
 
-    # Replenish
-    ledger.available = min(ledger.total, ledger.available + release_amount)
+        # F_allocator
+        f_allocator = PhysicsFuncNode(
+            id=allocator_id,
+            name=f"Allocator({res_def.name})",
+            input_ports={
+                PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
+            },
+            output_ports={
+                PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
+                PortName.REQ_PARKED: PortDef(PortName.REQ_PARKED, PortRole.DATA),
+            },
+        )
+        ctx.wire.add_node(f_allocator)
 
-    io.ledger_out = Token(payload=ledger)
-    # Emit wake-up signal
-    io.signal_out = Token(payload=None, trace=rel_token.trace)
+        # Wiring: Ledger <-> Allocator
+        ctx.wire.connect(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
+        ctx.wire.connect(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
+
+        # Wiring: Ledger <-> Reclaimer
+        ctx.wire.connect(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
+        ctx.wire.connect(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
+
+        # Request Buffer
+        d_req_buffer_id = f"buffer.req.{res_def.name}"
+        d_req_buffer = PhysicsDataNode(
+            id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
+        )
+        ctx.wire.add_node(d_req_buffer)
+
+        # Buffer -> Allocator
+        ctx.wire.connect(d_req_buffer_id, "out", allocator_id, PortName.REQ)
+
+        # --- Parking & Wake-up Mechanism ---
+        # 1. New Nodes
+        d_parked_id = f"parked.req.{res_def.name}"
+        d_parked = PhysicsDataNode(
+            id=d_parked_id, name=f"Parked({res_def.name})", capacity=1000
+        )
+        ctx.wire.add_node(d_parked)
+
+        d_signal_id = f"signal.wakeup.{res_def.name}"
+        d_signal = PhysicsDataNode(
+            id=d_signal_id, name=f"Signal({res_def.name})", capacity=1000
+        )
+        ctx.wire.add_node(d_signal)
+
+        f_gate_id = f"gate.wakeup.{res_def.name}"
+        f_gate = PhysicsFuncNode(
+            id=f_gate_id,
+            name=f"Gate({res_def.name})",
+            input_ports={
+                "req_in": PortDef("req_in", PortRole.DATA),
+                "signal_in": PortDef("signal_in", PortRole.SIGNAL),
+            },
+            output_ports={"req_out": PortDef("req_out", PortRole.DATA)},
+        )
+        ctx.wire.add_node(f_gate)
+
+        # 2. New Wiring
+        # Allocator parks rejected requests
+        ctx.wire.connect(allocator_id, PortName.REQ_PARKED, d_parked_id, "in")
+        # Reclaimer sends wake-up signal
+        ctx.wire.connect(reclaimer_id, PortName.SIGNAL_OUT, d_signal_id, "in")
+        # Gate is triggered by parked request and signal
+        ctx.wire.connect(d_parked_id, "out", f_gate_id, "req_in")
+        ctx.wire.connect(d_signal_id, "out", f_gate_id, "signal_in")
+        # Gate sends request back to the main buffer for retry
+        ctx.wire.connect(f_gate_id, "req_out", d_req_buffer_id, "in")
+
+        # Release Buffer
+        rel_buffer_id = f"buffer.rel.{res_def.name}"
+        d_rel_buffer = PhysicsDataNode(
+            id=rel_buffer_id, name=f"RelBuffer({res_def.name})", capacity=1000
+        )
+        ctx.wire.add_node(d_rel_buffer)
+
+        # Buffer -> Reclaimer
+        ctx.wire.connect(rel_buffer_id, "out", reclaimer_id, PortName.REL)
+~~~~~
+~~~~~python.new
+        # F_reclaimer
+        f_reclaimer = PhysicsFuncNode(
+            id=reclaimer_id,
+            name=f"Reclaimer({res_def.name})",
+            input_ports=DiscreteReclaimerSpec.input_ports,
+            output_ports=DiscreteReclaimerSpec.output_ports,
+        )
+        ctx.wire.add_node(f_reclaimer)
+
+        # F_allocator
+        f_allocator = PhysicsFuncNode(
+            id=allocator_id,
+            name=f"Allocator({res_def.name})",
+            input_ports=DiscreteAllocatorSpec.input_ports,
+            # We must handle the dynamic grant ports separately if not in Spec? 
+            # Actually Spec defines static ports + Map. The Graph builder (WiringHarness) 
+            # doesn't strictly validate dynamic ports existence at definition time, 
+            # but relies on connect() to create them if needed?
+            # Wait, WiringHarness *does* validate port existence.
+            # So we must ensure output_ports dict is populated if we want to wire to it.
+            # For dynamic ports, we might need a way to 'declare' them on the node instance 
+            # if they are not in the Spec's static dict.
+            # However, for now, let's copy the static ones from Spec.
+            output_ports=DiscreteAllocatorSpec.output_ports.copy(),
+        )
+        ctx.wire.add_node(f_allocator)
+
+        # Wiring: Ledger <-> Allocator
+        ctx.wire.connect(ledger_id, "out", allocator_id, DiscreteAllocatorSpec.ledger_in.name)
+        ctx.wire.connect(allocator_id, DiscreteAllocatorSpec.ledger_out.name, ledger_id, "in")
+
+        # Wiring: Ledger <-> Reclaimer
+        ctx.wire.connect(ledger_id, "out", reclaimer_id, DiscreteReclaimerSpec.ledger_in.name)
+        ctx.wire.connect(reclaimer_id, DiscreteReclaimerSpec.ledger_out.name, ledger_id, "in")
+
+        # Request Buffer
+        d_req_buffer_id = f"buffer.req.{res_def.name}"
+        d_req_buffer = PhysicsDataNode(
+            id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
+        )
+        ctx.wire.add_node(d_req_buffer)
+
+        # Buffer -> Allocator
+        ctx.wire.connect(d_req_buffer_id, "out", allocator_id, DiscreteAllocatorSpec.req_in.name)
+
+        # --- Parking & Wake-up Mechanism ---
+        # 1. New Nodes
+        d_parked_id = f"parked.req.{res_def.name}"
+        d_parked = PhysicsDataNode(
+            id=d_parked_id, name=f"Parked({res_def.name})", capacity=1000
+        )
+        ctx.wire.add_node(d_parked)
+
+        d_signal_id = f"signal.wakeup.{res_def.name}"
+        d_signal = PhysicsDataNode(
+            id=d_signal_id, name=f"Signal({res_def.name})", capacity=1000
+        )
+        ctx.wire.add_node(d_signal)
+
+        f_gate_id = f"gate.wakeup.{res_def.name}"
+        f_gate = PhysicsFuncNode(
+            id=f_gate_id,
+            name=f"Gate({res_def.name})",
+            input_ports=GateSpec.input_ports,
+            output_ports=GateSpec.output_ports,
+        )
+        ctx.wire.add_node(f_gate)
+
+        # 2. New Wiring
+        # Allocator parks rejected requests
+        ctx.wire.connect(allocator_id, DiscreteAllocatorSpec.req_parked.name, d_parked_id, "in")
+        # Reclaimer sends wake-up signal
+        ctx.wire.connect(reclaimer_id, DiscreteReclaimerSpec.signal_out.name, d_signal_id, "in")
+        # Gate is triggered by parked request and signal
+        ctx.wire.connect(d_parked_id, "out", f_gate_id, GateSpec.req_in.name)
+        ctx.wire.connect(d_signal_id, "out", f_gate_id, GateSpec.signal_in.name)
+        # Gate sends request back to the main buffer for retry
+        ctx.wire.connect(f_gate_id, GateSpec.req_out.name, d_req_buffer_id, "in")
+
+        # Release Buffer
+        rel_buffer_id = f"buffer.rel.{res_def.name}"
+        d_rel_buffer = PhysicsDataNode(
+            id=rel_buffer_id, name=f"RelBuffer({res_def.name})", capacity=1000
+        )
+        ctx.wire.add_node(d_rel_buffer)
+
+        # Buffer -> Reclaimer
+        ctx.wire.connect(rel_buffer_id, "out", reclaimer_id, DiscreteReclaimerSpec.rel_in.name)
+~~~~~
+
+#### Acts 4: 重构 Control Flow & Egress Wiring
+
+修改 `policies/control.py`，使用 `EgressSpec` 和 `StainerSpec`。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/control.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.spec.physical.constants import NodePrefix
+
+
+class ControlFlowWiringPolicy(WiringPolicy):
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.std.specs import StainerSpec, EgressSpec, BleacherSpec
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.spec.physical.constants import NodePrefix
+
+
+class ControlFlowWiringPolicy(WiringPolicy):
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/control.py
+~~~~~
+~~~~~python.old
+                ctx.wire.connect(
+                    source_subgraph.stainer.id, "output_default", d_seq_id, "in"
+                )
+                ctx.wire.connect(d_seq_id, "out", subgraph.bleacher.id, port_name)
+
+        # 4.3 Condition (.run_if())
+        if node_ir.condition and node_ir.condition in ctx.subgraphs:
+            source_subgraph = ctx.get_subgraph(node_ir.condition)
+            assert source_subgraph.stainer is not None
+
+            # Violation Fix: Insert D_cond
+            d_cond_id = (
+                f"cond.{node_ir.condition}.to.{node_ir.current_node_instance_hash}"
+            )
+            d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
+            ctx.wire.add_node(d_cond)
+
+            ctx.wire.connect(
+                source_subgraph.stainer.id, "output_default", d_cond_id, "in"
+            )
+            ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")
+
+        # 4.4 Egress for Root Nodes
+        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
+            assert subgraph.stainer is not None
+            # Create a dedicated, addressable exit point for this graph root
+            d_egress_id = f"{NodePrefix.EGRESS}.{node_ir.logical_id}"
+            d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
+            ctx.wire.add_node(d_egress)
+
+            # Connect the stainer's default output to this egress node
+            ctx.wire.connect(subgraph.stainer.id, "output_default", d_egress_id, "in")
+~~~~~
+~~~~~python.new
+                ctx.wire.connect(
+                    source_subgraph.stainer.id, StainerSpec.output_default.name, d_seq_id, "in"
+                )
+                ctx.wire.connect(d_seq_id, "out", subgraph.bleacher.id, port_name)
+
+        # 4.3 Condition (.run_if())
+        if node_ir.condition and node_ir.condition in ctx.subgraphs:
+            source_subgraph = ctx.get_subgraph(node_ir.condition)
+            assert source_subgraph.stainer is not None
+
+            # Violation Fix: Insert D_cond
+            d_cond_id = (
+                f"cond.{node_ir.condition}.to.{node_ir.current_node_instance_hash}"
+            )
+            d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
+            ctx.wire.add_node(d_cond)
+
+            ctx.wire.connect(
+                source_subgraph.stainer.id, StainerSpec.output_default.name, d_cond_id, "in"
+            )
+            ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")
+
+        # 4.4 Egress for Root Nodes
+        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
+            assert subgraph.stainer is not None
+            # Create a dedicated, addressable exit point for this graph root
+            d_egress_id = f"{NodePrefix.EGRESS}.{node_ir.logical_id}"
+            d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
+            ctx.wire.add_node(d_egress)
+
+            # Connect the stainer's default output to this egress node
+            ctx.wire.connect(subgraph.stainer.id, StainerSpec.output_default.name, d_egress_id, EgressSpec.input_token.name)
+~~~~~
+
+#### Acts 5: 重构 Parameter Wiring
+
+修改 `policies/parameter.py`。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.compiler.backend.expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.protocol import WiringPolicy
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.compiler.backend.expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.std.specs import StainerSpec
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py
+~~~~~
+~~~~~python.old
+                # Source Stainer -> D_dep (Connect from output_default)
+                ctx.wire.connect(
+                    source_subgraph.stainer.id, "output_default", d_dep_id, "in"
+                )
+
+                # D_dep -> Target Bleacher
+                ctx.wire.connect(d_dep_id, "out", subgraph.bleacher.id, port_name)
+~~~~~
+~~~~~python.new
+                # Source Stainer -> D_dep (Connect from output_default)
+                ctx.wire.connect(
+                    source_subgraph.stainer.id, StainerSpec.output_default.name, d_dep_id, "in"
+                )
+
+                # D_dep -> Target Bleacher
+                ctx.wire.connect(d_dep_id, "out", subgraph.bleacher.id, port_name)
 ~~~~~
 
 ### 下一步建议
-我们已经完成了核心 Kernel 的重构。请运行测试以验证修改是否正确。
+我们已经完成了 PIDL 的所有实施阶段。
+1.  **定义法则**: 建立了 `Port`, `PortDef`, `PhysicsSpec`。
+2.  **标准化契约**: 在 `cascade-std` 中定义了所有核心 Specs。
+3.  **实现重构**: Kernel 函数现在通过 `@implements` 绑定到 Specs。
+4.  **连线重构**: Compiler 现在通过 Specs 来连接图。
 
-接下来的 **阶段四：Compiler 连线重构 (The Wiring)** 将利用我们定义的 Specs 来消除 Compiler 中的硬编码字符串。具体来说，我们将修改 `cascade.compiler.backend.wiring.policies` 中的逻辑，使其引用 `Spec.port.name` 而不是字面量。这将闭合 PIDL 的环路。
+现在，整个物理层从定义、实现到连线，都由同一套 PIDL 驱动。这意味着如果我们修改了 Spec，编译器会报错，Kernel 也会报错，系统的一致性得到了强保证。
+
+最后一步是运行所有测试，确保这次大规模的“心脏移植”手术没有引发排异反应。

@@ -23,6 +23,15 @@ class DiscreteAllocatorSpec(PhysicsSpec):
     req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
 
 
+class ResourceRequestorSpec(PhysicsSpec):
+    """
+    Contract for the Resource Requestor Node (F_req).
+    Converts a static amount into a request token tagged with the requestor ID.
+    """
+    amount = Port.Input("amount", role=PortRole.DATA, type="int")
+    req_out = Port.Output("req_out", role=PortRole.DATA, type=PortType.Token)
+
+
 class DiscreteReclaimerSpec(PhysicsSpec):
     """
     Contract for a Discrete Resource Reclaimer.

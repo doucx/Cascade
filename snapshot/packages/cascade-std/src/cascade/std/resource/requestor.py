@@ -1,15 +1,18 @@
-from typing import Dict, Any
+from typing import Any
 from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.std.specs import ResourceRequestorSpec
+from cascade.std.kernel_tools import implements
 
 
+@implements(ResourceRequestorSpec)
 def resource_requestor(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    amount_token = inputs["amount"]
+    io: ResourceRequestorSpec.IO, node: PhysicsNode, resources: Any
+) -> None:
+    amount_token = io.amount
 
     # Sovereignty Update: We inject the requestor's ID into the trace.
     # The Allocator will use this to route the Grant to the correct dedicated port.
     trace = amount_token.trace.copy()
     trace["requestor_id"] = node.id
 
-    return {"req_out": Token(payload=amount_token.payload, trace=trace)}
+    io.req_out = Token(payload=amount_token.payload, trace=trace)

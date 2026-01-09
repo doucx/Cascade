@@ -6,6 +6,10 @@ class BleacherSpec(PhysicsSpec):
     Contract for the Pre-process Node (F_pre).
     Inputs are dynamic (based on Task arguments), so they are not exhaustively listed here.
     """
+    # Inputs (Dynamic)
+    # Collects all inputs not matched by other static input definitions.
+    args = Port.MapInput(role=PortRole.DATA)
+
     # Outputs
     worker_input = Port.Output("worker_input", role=PortRole.DATA, type="Dict")
     trace_output = Port.Output("trace_output", role=PortRole.DATA, type="TraceCtx")

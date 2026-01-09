@@ -1,289 +1,453 @@
 简要回答
-我们将升级 `cascade-spec` 和 `cascade-std` 中的基础设施，引入 `Port.Map` 概念和相应的运行时支持，以处理动态端口（如 Bleacher 的参数和 Allocator 的 Grant）。
+我们将更新 `BleacherSpec` 和 `DiscreteAllocatorSpec` 以引入动态端口映射，并使用 `@implements` 装饰器重构相应的 Kernel 函数，使其通过强类型的 `io` 接口与物理层交互。
 
-## [WIP] feat: PIDL 基础设施升级 - 支持动态端口映射
+## [WIP] feat: 实施 PIDL 阶段三 - 重构 Bleacher 与 Resource Kernels
 
 ### 用户需求
-1.  修改 `PortDef` 和 `Port` 工厂，支持定义动态端口映射 (`MapInput`, `MapOutput`)。
-2.  升级 `IOWrapper`，使其在访问 Map 类型的端口时，能够动态收集未匹配的输入或提供支持前缀校验的输出代理。
+1.  修改 `BleacherSpec`，添加 `Port.MapInput` 以支持动态参数输入。
+2.  修改 `DiscreteAllocatorSpec`，添加 `Port.MapOutput` 以支持动态资源授权输出。
+3.  重构 `standard_bleacher` Kernel，使用 `io.args` 处理输入。
+4.  重构 `discrete_allocator` 和 `discrete_reclaimer` Kernel，使用 `io.grants` 和静态属性处理资源逻辑。
 
 ### 评论
-引入 "Static First, Dynamic Fallback" 策略是对 PIDL 的重要补充。它不仅解决了 `Bleacher` 和 `Allocator` 的燃眉之急，也为未来任何需要灵活接口的 IC 提供了标准模式。这种模式在保持核心契约强类型的同时，保留了必要的动态灵活性。
+这是 PIDL 实施的关键战役。`Bleacher` 和 `Allocator` 是系统中动态性最强的两个组件。成功重构它们意味着我们的“静态优先，动态兜底”策略（PIDL + IOWrapper）能够覆盖 Cascade 中最复杂的场景，为全面推广铺平道路。
 
 ### 目标
-1.  更新 `packages/cascade-spec/src/cascade/spec/physics/core.py`。
-2.  更新 `packages/cascade-std/src/cascade/std/kernel_tools.py`。
+1.  更新 `packages/cascade-std/src/cascade/std/specs/triad.py`。
+2.  更新 `packages/cascade-std/src/cascade/std/specs/resource.py`。
+3.  重构 `packages/cascade-std/src/cascade/std/triad/bleacher.py`。
+4.  重构 `packages/cascade-std/src/cascade/std/resource/discrete.py`。
 
 ### 基本原理
-*   **Schema 层 (`core.py`)**: 增加 `is_map` 标记。对于 Map 类型的端口，`name` 字段不再代表单一物理端口，而是作为一个占位符。增加 `prefix` 字段用于输出端口的命名空间约束。
-*   **Runtime 层 (`kernel_tools.py`)**:
-    *   **Input Map**: 运行时计算 `set(inputs.keys()) - set(static_port_names)`，返回剩余输入的字典。
-    *   **Output Map**: 返回一个 `DynamicOutputMap` 代理对象，拦截 `__setitem__` 操作，验证前缀并写入底层的 `outputs` 字典。
+*   **Bleacher 重构**: `Bleacher` 的核心职责是将杂乱的输入（数据、资源、信号）清洗为纯净的 Worker Input。通过 `io.args`，我们能获取所有非静态定义的输入 Token，然后结合 `node.input_ports` 元数据进行分类处理。这保持了逻辑的灵活性，同时规范了接口访问。
+*   **Allocator 重构**: 利用 `Port.MapOutput(prefix="gnt_for_")`，我们在 Spec 层面显式声明了“动态授权”的存在。Kernel 代码使用 `io.grants["gnt_for_x"] = token` 进行赋值，`IOWrapper` 会自动校验前缀，从而增强了安全性。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/std #comp/interfaces #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/kernel-infra #task/action/upgrade #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/std #comp/interfaces #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/kernel-refactor #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 升级核心定义 (The Core Laws)
+#### Acts 1: 更新 Triad Specs
 
-修改 `core.py`，为 `PortDef` 增加动态属性，并添加 `MapInput` / `MapOutput` 工厂方法。
+为 `BleacherSpec` 添加动态输入映射。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/physics/core.py
+packages/cascade-std/src/cascade/std/specs/triad.py
 ~~~~~
 ~~~~~python.old
-class PortDef:
+class BleacherSpec(PhysicsSpec):
     """
-    Descriptor for defining a port on a PhysicsSpec.
-    Acts as the definition of a single interface point on a physical node.
+    Contract for the Pre-process Node (F_pre).
+    Inputs are dynamic (based on Task arguments), so they are not exhaustively listed here.
     """
-    def __init__(
-        self,
-        name: str,
-        direction: PortDirection,
-        role: PortRole = PortRole.DATA,
-        type_hint: Any = PortType.Any
-    ):
-        self.name = name
-        self.direction = direction
-        self.role = role
-        self.type_hint = type_hint
-
-    def __set_name__(self, owner, name):
-        # We allow the attribute name to act as a fallback or strict mapping validation later.
-        pass
-
-    def __repr__(self):
-        return f"PortDef(name='{self.name}', dir={self.direction}, role={self.role})"
-
-
-class Port:
-    """
-    Namespace factory for defining ports in a declarative style.
-    Example:
-        data_in = Port.Input("data_in")
-    """
-    
-    @staticmethod
-    def Input(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        return PortDef(name, PortDirection.INPUT, role, type)
-
-    @staticmethod
-    def Output(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        return PortDef(name, PortDirection.OUTPUT, role, type)
+    # Outputs
+    worker_input = Port.Output("worker_input", role=PortRole.DATA, type="Dict")
 ~~~~~
 ~~~~~python.new
-class PortDef:
+class BleacherSpec(PhysicsSpec):
     """
-    Descriptor for defining a port on a PhysicsSpec.
-    Acts as the definition of a single interface point on a physical node.
+    Contract for the Pre-process Node (F_pre).
+    Inputs are dynamic (based on Task arguments), so they are not exhaustively listed here.
     """
-    def __init__(
-        self,
-        name: str,
-        direction: PortDirection,
-        role: PortRole = PortRole.DATA,
-        type_hint: Any = PortType.Any,
-        is_map: bool = False,
-        prefix: str = ""
-    ):
-        self.name = name
-        self.direction = direction
-        self.role = role
-        self.type_hint = type_hint
-        self.is_map = is_map
-        self.prefix = prefix
+    # Inputs (Dynamic)
+    # Collects all inputs not matched by other static input definitions.
+    args = Port.MapInput(role=PortRole.DATA)
 
-    def __set_name__(self, owner, name):
-        # We allow the attribute name to act as a fallback or strict mapping validation later.
-        pass
-
-    def __repr__(self):
-        return f"PortDef(name='{self.name}', dir={self.direction}, role={self.role}, map={self.is_map})"
-
-
-class Port:
-    """
-    Namespace factory for defining ports in a declarative style.
-    Example:
-        data_in = Port.Input("data_in")
-    """
-    
-    @staticmethod
-    def Input(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        return PortDef(name, PortDirection.INPUT, role, type)
-
-    @staticmethod
-    def Output(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        return PortDef(name, PortDirection.OUTPUT, role, type)
-
-    @staticmethod
-    def MapInput(role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        """
-        Defines a dynamic dictionary of input ports. 
-        It captures all inputs that are NOT matched by static Port.Inputs.
-        """
-        return PortDef("*", PortDirection.INPUT, role, type, is_map=True)
-
-    @staticmethod
-    def MapOutput(prefix: str = "", role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        """
-        Defines a dynamic dictionary of output ports.
-        Allows writing to any port name starting with the given prefix.
-        """
-        return PortDef("*", PortDirection.OUTPUT, role, type, is_map=True, prefix=prefix)
+    # Outputs
+    worker_input = Port.Output("worker_input", role=PortRole.DATA, type="Dict")
 ~~~~~
 
-#### Acts 2: 升级运行时工具 (The Runtime Tools)
+#### Acts 2: 更新 Resource Specs
 
-修改 `kernel_tools.py`，实现 `DynamicOutputMap` 并在 `IOWrapper` 中处理 Map 逻辑。
+为 `DiscreteAllocatorSpec` 添加动态输出映射。
 
 ~~~~~act
-write_file
-packages/cascade-std/src/cascade/std/kernel_tools.py
+patch_file
+packages/cascade-std/src/cascade/std/specs/resource.py
 ~~~~~
-~~~~~python
-from functools import wraps
-from typing import Dict, Any, Type, TypeVar, MutableMapping
-from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.spec.physics import PhysicsSpec, PortDirection
-
-T = TypeVar("T", bound=PhysicsSpec)
-
-
-class DynamicOutputMap(MutableMapping):
-    """
-    Proxy for writing to dynamic output ports with prefix validation.
-    """
-    def __init__(self, target_dict: Dict[str, Token], prefix: str):
-        self._target = target_dict
-        self._prefix = prefix
-
-    def __setitem__(self, key: str, value: Token) -> None:
-        if not key.startswith(self._prefix):
-             raise ValueError(f"Dynamic port '{key}' does not match required prefix '{self._prefix}'")
-        self._target[key] = value
-
-    def __getitem__(self, key: str) -> Token:
-        return self._target[key]
-
-    def __delitem__(self, key: str) -> None:
-        del self._target[key]
-
-    def __iter__(self):
-        return iter(self._target)
-
-    def __len__(self):
-        return len(self._target)
-
-
-class IOWrapper:
-    """
-    A zero-copy view over the input and output dictionaries.
-    Translates attribute access to dictionary lookups based on the Spec.
-    Supports "Static First, Dynamic Fallback" for map ports.
-    """
-    __slots__ = ("_inputs", "_outputs", "_spec")
-
-    def __init__(self, inputs: Dict[str, Token], outputs: Dict[str, Token], spec: Type[PhysicsSpec]):
-        self._inputs = inputs
-        self._outputs = outputs
-        self._spec = spec
-
-    def __getattr__(self, name: str) -> Any:
-        # 1. Check Input Ports
-        if name in self._spec.input_ports:
-            port_def = self._spec.input_ports[name]
-            
-            # Case A: Dynamic Map Input
-            if port_def.is_map:
-                # Collect all inputs that are NOT associated with a static port
-                static_names = {
-                    p.name for p in self._spec.input_ports.values() 
-                    if not p.is_map
-                }
-                return {
-                    k: v for k, v in self._inputs.items() 
-                    if k not in static_names
-                }
-            
-            # Case B: Static Input
-            port_name = port_def.name
-            return self._inputs.get(port_name)
-        
-        # 2. Check Output Ports
-        if name in self._spec.output_ports:
-             port_def = self._spec.output_ports[name]
-             
-             # Case C: Dynamic Map Output
-             if port_def.is_map:
-                 return DynamicOutputMap(self._outputs, port_def.prefix)
-
-             # Case D: Static Output (Reading back what we wrote)
-             port_name = port_def.name
-             return self._outputs.get(port_name)
-
-        raise AttributeError(f"'{self._spec.__name__}' IO has no port mapping for '{name}'")
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name in ("_inputs", "_outputs", "_spec"):
-            super().__setattr__(name, value)
-            return
-
-        # Check Output Ports
-        if name in self._spec.output_ports:
-            port_def = self._spec.output_ports[name]
-            
-            # Direct assignment to a Map property is not allowed (must use item assignment)
-            if port_def.is_map:
-                raise AttributeError(
-                    f"Cannot assign to map port '{name}' directly. Use indexing (io.{name}['key'] = val)."
-                )
-
-            port_name = port_def.name
-            self._outputs[port_name] = value
-            return
-
-        raise AttributeError(f"'{self._spec.__name__}' IO has no output port mapping for '{name}'")
-
-
-def implements(spec: Type[PhysicsSpec]):
-    """
-    Decorator that adapts a kernel function to use the typed IO interface.
+~~~~~python.old
+    # Note: The main grant output. Dynamic dedicated ports (gnt_for_X) may also exist.
+    gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE, type=PortType.Token)
+    # Output for requests that cannot be satisfied immediately
+    req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
+~~~~~
+~~~~~python.new
+    # Note: The main grant output. Dynamic dedicated ports (gnt_for_X) may also exist.
+    gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE, type=PortType.Token)
     
-    Transforms:
-        def my_kernel(inputs, node, resources) -> Dict
-    Into:
-        def my_kernel(io, node, resources) -> None
-        
-    The wrapper handles the creation of the outputs dictionary and returns it.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:
-            outputs: Dict[str, Token] = {}
-            io = IOWrapper(inputs, outputs, spec)
-            
-            # Call the inner function. It is expected to set attributes on 'io' (populating 'outputs')
-            # and return None.
-            func(io, node, resources)
-            
-            return outputs
-        
-        # Attach spec metadata for introspection/docs
-        wrapper.__spec__ = spec
-        return wrapper
-    return decorator
+    # Dynamic Grant Outputs
+    # Allows writing to 'gnt_for_{requestor_id}'
+    grants = Port.MapOutput(prefix="gnt_for_", role=PortRole.RESOURCE, type=PortType.Token)
+
+    # Output for requests that cannot be satisfied immediately
+    req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
+~~~~~
+
+#### Acts 3: 重构 Bleacher Kernel
+
+使用 `@implements(BleacherSpec)` 和 `io.args` 重构 `standard_bleacher`。
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+~~~~~
+~~~~~python.old
+from typing import Dict, Any, List
+import time
+
+from cascade.spec import EventIR, EventType, EventState, EventContext
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.triad import BleachNode
+from cascade.spec.physical.ports import PortRole
+
+
+def standard_bleacher(
+    inputs: Dict[str, Token], node: BleachNode, resources: Any
+) -> Dict[str, Token]:
+    worker_payload: Dict[str, Any] = {}
+    trace_payload: Dict[str, Any] = {}
+    held_resources: List[str] = []
+
+    # 1. Extract payloads and merge traces from all inputs
+    for port_name, input_token in inputs.items():
+        port_def = node.input_ports[port_name]
+
+        if port_def.role == PortRole.DATA:
+            worker_payload[port_name] = input_token.payload
+        elif port_def.role == PortRole.RESOURCE:
+            # It's a GNT token.
+            held_resources.append(port_name)
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
+
+        trace_payload.update(input_token.trace)
+
+    # 2. Capture metadata
+    start_ts = time.time()  # Use wall clock for IR
+    mono_ts = time.monotonic()  # Use monotonic for internal duration calc
+
+    logical_id = node.id.replace(".bleach", "")
+
+    # Heuristic: Extract task_name from physical name "Bleach(MyTask)"
+    task_name = "unknown"
+    if node.name.startswith("Bleach(") and node.name.endswith(")"):
+        task_name = node.name[7:-1]
+
+    trace_payload["start_ts"] = mono_ts
+    trace_payload["id"] = logical_id
+    if held_resources:
+        trace_payload["held_resources"] = held_resources
+
+    # 3. Construct EventIR (The Hologram)
+    ctx: EventContext = {}
+    if "rid" in trace_payload:
+        ctx["rid"] = trace_payload["rid"]
+
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": start_ts,
+        "ctx": ctx,
+        "phy": {"nid": node.id},
+        "data": {
+            "state": EventState.RUNNING,
+            "task_id": logical_id,
+            "task_name": task_name,
+        },
+    }
+
+    # 4. Create the output tokens
+    worker_token = Token(payload=worker_payload, trace=trace_payload)
+    trace_token = Token(payload=trace_payload)
+    # The context payload IS the worker payload (the input refs)
+    context_token = Token(payload=worker_payload, trace=trace_payload)
+    # obs_output now carries the IR as payload
+    obs_token = Token(payload=ir, trace=trace_payload)
+
+    return {
+        "worker_input": worker_token,
+        "trace_output": trace_token,
+        "context_output": context_token,
+        "obs_output": obs_token,
+    }
+~~~~~
+~~~~~python.new
+from typing import Dict, Any, List
+import time
+
+from cascade.spec import EventIR, EventType, EventState, EventContext
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.triad import BleachNode
+from cascade.spec.physical.ports import PortRole
+from cascade.std.specs import BleacherSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(BleacherSpec)
+def standard_bleacher(
+    io: BleacherSpec.IO, node: BleachNode, resources: Any
+) -> None:
+    worker_payload: Dict[str, Any] = {}
+    trace_payload: Dict[str, Any] = {}
+    held_resources: List[str] = []
+
+    # 1. Extract payloads and merge traces from all inputs
+    # Use io.args to get all dynamic inputs
+    for port_name, input_token in io.args.items():
+        # Even though we use IO wrapper, we still rely on Node metadata for roles
+        port_def = node.input_ports[port_name]
+
+        if port_def.role == PortRole.DATA:
+            worker_payload[port_name] = input_token.payload
+        elif port_def.role == PortRole.RESOURCE:
+            # It's a GNT token.
+            held_resources.append(port_name)
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
+
+        trace_payload.update(input_token.trace)
+
+    # 2. Capture metadata
+    start_ts = time.time()  # Use wall clock for IR
+    mono_ts = time.monotonic()  # Use monotonic for internal duration calc
+
+    logical_id = node.id.replace(".bleach", "")
+
+    # Heuristic: Extract task_name from physical name "Bleach(MyTask)"
+    task_name = "unknown"
+    if node.name.startswith("Bleach(") and node.name.endswith(")"):
+        task_name = node.name[7:-1]
+
+    trace_payload["start_ts"] = mono_ts
+    trace_payload["id"] = logical_id
+    if held_resources:
+        trace_payload["held_resources"] = held_resources
+
+    # 3. Construct EventIR (The Hologram)
+    ctx: EventContext = {}
+    if "rid" in trace_payload:
+        ctx["rid"] = trace_payload["rid"]
+
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": start_ts,
+        "ctx": ctx,
+        "phy": {"nid": node.id},
+        "data": {
+            "state": EventState.RUNNING,
+            "task_id": logical_id,
+            "task_name": task_name,
+        },
+    }
+
+    # 4. Create the output tokens
+    worker_token = Token(payload=worker_payload, trace=trace_payload)
+    trace_token = Token(payload=trace_payload)
+    # The context payload IS the worker payload (the input refs)
+    context_token = Token(payload=worker_payload, trace=trace_payload)
+    # obs_output now carries the IR as payload
+    obs_token = Token(payload=ir, trace=trace_payload)
+
+    # 5. Set outputs via IO wrapper
+    io.worker_input = worker_token
+    io.trace_output = trace_token
+    io.context_output = context_token
+    io.obs_output = obs_token
+~~~~~
+
+#### Acts 4: 重构 Discrete Resource Kernels
+
+使用 `@implements(DiscreteAllocatorSpec)` 和 `@implements(DiscreteReclaimerSpec)` 重构 `discrete.py`。
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/resource/discrete.py
+~~~~~
+~~~~~python.old
+from typing import Dict, Any, Union
+from dataclasses import dataclass
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.physical.object import Ref
+from cascade.spec.physical.ports import PortName
+
+
+@dataclass
+class DiscreteLedger:
+    total: int
+    available: int
+
+
+def _extract_scalar(payload: Any) -> Union[int, float]:
+    if isinstance(payload, Ref):
+        # v3.1: Try to get hoisted scalar
+        if "scalar_value" in payload.meta:
+            return payload.meta["scalar_value"]
+        # If not hoisted, we technically can't read it in Kernel.
+        # But for now we fail gracefully or return 0?
+        # Raising error is better to catch missing hoisting.
+        raise ValueError(
+            f"Ref {payload.uri} missing 'scalar_value' metadata for Kernel access."
+        )
+    return payload
+
+
+def discrete_allocator(
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
+) -> Dict[str, Token]:
+    ledger_token = inputs["ledger_in"]
+    ledger_data = ledger_token.payload
+
+    # Extract Ledger (Handle Ref if ledger itself is ref-based in future, currently payload is obj)
+    # For now ledger payload is passed as-is (PhysicsDataNode initial_payload)
+    if isinstance(ledger_data, dict):
+        ledger = DiscreteLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    req_token = inputs["req_in"]
+    req_amount = int(_extract_scalar(req_token.payload))
+
+    outputs: Dict[str, Token] = {}
+
+    if ledger.available >= req_amount:
+        # Grant
+        ledger.available -= req_amount
+
+        # Sovereignty Routing: Determine output port based on requestor_id in trace
+        requestor_id = req_token.trace.get("requestor_id")
+        if requestor_id:
+            # The Builder constructs the port name as f"gnt_for_{requestor_id}"
+            out_port = f"gnt_for_{requestor_id}"
+            outputs[out_port] = Token(payload=req_amount, trace=req_token.trace)
+        else:
+            # Fallback for legacy/testing
+            outputs["gnt_out"] = Token(payload=req_amount, trace=req_token.trace)
+    else:
+        # Reject & Park
+        outputs[PortName.REQ_PARKED] = req_token
+
+    outputs["ledger_out"] = Token(payload=ledger)
+    return outputs
+
+
+def discrete_reclaimer(
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
+) -> Dict[str, Token]:
+    ledger_token = inputs["ledger_in"]
+    ledger_data = ledger_token.payload
+    if isinstance(ledger_data, dict):
+        ledger = DiscreteLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    rel_token = inputs["rel_in"]
+    release_amount = int(_extract_scalar(rel_token.payload))
+
+    # Replenish
+    ledger.available = min(ledger.total, ledger.available + release_amount)
+
+    outputs = {"ledger_out": Token(payload=ledger)}
+    # Emit wake-up signal
+    outputs[PortName.SIGNAL_OUT] = Token(payload=None, trace=rel_token.trace)
+
+    return outputs
+~~~~~
+~~~~~python.new
+from typing import Any, Union
+from dataclasses import dataclass
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.physical.object import Ref
+from cascade.std.specs import DiscreteAllocatorSpec, DiscreteReclaimerSpec
+from cascade.std.kernel_tools import implements
+
+
+@dataclass
+class DiscreteLedger:
+    total: int
+    available: int
+
+
+def _extract_scalar(payload: Any) -> Union[int, float]:
+    if isinstance(payload, Ref):
+        # v3.1: Try to get hoisted scalar
+        if "scalar_value" in payload.meta:
+            return payload.meta["scalar_value"]
+        # If not hoisted, we technically can't read it in Kernel.
+        # But for now we fail gracefully or return 0?
+        # Raising error is better to catch missing hoisting.
+        raise ValueError(
+            f"Ref {payload.uri} missing 'scalar_value' metadata for Kernel access."
+        )
+    return payload
+
+
+@implements(DiscreteAllocatorSpec)
+def discrete_allocator(
+    io: DiscreteAllocatorSpec.IO, node: PhysicsNode, resources: Any
+) -> None:
+    ledger_token = io.ledger_in
+    ledger_data = ledger_token.payload
+
+    # Extract Ledger (Handle Ref if ledger itself is ref-based in future, currently payload is obj)
+    # For now ledger payload is passed as-is (PhysicsDataNode initial_payload)
+    if isinstance(ledger_data, dict):
+        ledger = DiscreteLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    req_token = io.req_in
+    req_amount = int(_extract_scalar(req_token.payload))
+
+    if ledger.available >= req_amount:
+        # Grant
+        ledger.available -= req_amount
+
+        # Sovereignty Routing: Determine output port based on requestor_id in trace
+        requestor_id = req_token.trace.get("requestor_id")
+        if requestor_id:
+            # The Builder constructs the port name as f"gnt_for_{requestor_id}"
+            out_port = f"gnt_for_{requestor_id}"
+            # Use dynamic output map
+            io.grants[out_port] = Token(payload=req_amount, trace=req_token.trace)
+        else:
+            # Fallback for legacy/testing
+            io.gnt_out = Token(payload=req_amount, trace=req_token.trace)
+    else:
+        # Reject & Park
+        io.req_parked = req_token
+
+    io.ledger_out = Token(payload=ledger)
+
+
+@implements(DiscreteReclaimerSpec)
+def discrete_reclaimer(
+    io: DiscreteReclaimerSpec.IO, node: PhysicsNode, resources: Any
+) -> None:
+    ledger_token = io.ledger_in
+    ledger_data = ledger_token.payload
+    if isinstance(ledger_data, dict):
+        ledger = DiscreteLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    rel_token = io.rel_in
+    release_amount = int(_extract_scalar(rel_token.payload))
+
+    # Replenish
+    ledger.available = min(ledger.total, ledger.available + release_amount)
+
+    io.ledger_out = Token(payload=ledger)
+    # Emit wake-up signal
+    io.signal_out = Token(payload=None, trace=rel_token.trace)
 ~~~~~
 
 ### 下一步建议
-基础设施升级完毕。现在我们可以生成一个新的计划，利用这些新能力来重构 `Bleacher` 和 `DiscreteAllocator`。
+我们已经完成了核心 Kernel 的重构。请运行测试以验证修改是否正确。
 
-接下来的步骤：
-1.  修改 `cascade.std.specs.triad.BleacherSpec` 使用 `Port.MapInput`。
-2.  修改 `cascade.std.specs.resource.DiscreteAllocatorSpec` 使用 `Port.MapOutput`。
-3.  重构 `standard_bleacher` 和 `discrete_allocator` 内核函数。
+接下来的 **阶段四：Compiler 连线重构 (The Wiring)** 将利用我们定义的 Specs 来消除 Compiler 中的硬编码字符串。具体来说，我们将修改 `cascade.compiler.backend.wiring.policies` 中的逻辑，使其引用 `Spec.port.name` 而不是字面量。这将闭合 PIDL 的环路。

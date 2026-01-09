@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: PIDL 基础设施升级 - 支持动态端口映射", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767945420.822955, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实施 PIDL 阶段三 - 重构 Bleacher 与 Resource Kernels", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767945542.3055444, "duration_ms": 0}}

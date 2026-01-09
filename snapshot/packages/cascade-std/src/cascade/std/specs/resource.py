@@ -14,6 +14,11 @@ class DiscreteAllocatorSpec(PhysicsSpec):
     ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
     # Note: The main grant output. Dynamic dedicated ports (gnt_for_X) may also exist.
     gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE, type=PortType.Token)
+    
+    # Dynamic Grant Outputs
+    # Allows writing to 'gnt_for_{requestor_id}'
+    grants = Port.MapOutput(prefix="gnt_for_", role=PortRole.RESOURCE, type=PortType.Token)
+
     # Output for requests that cannot be satisfied immediately
     req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
 

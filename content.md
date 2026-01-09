@@ -1,114 +1,181 @@
-好的，我们继续执行路线图，现在是 `1.2` 阶段。
+好的，我们来执行路线图的 `1.3` 阶段，重构 `Builder`。
 
-此计划旨在创建 `ExpansionPolicy` 协议，为所有“节点创建”逻辑建立一个正式的、统一的接口。这是将节点创建（Materialization）与节点连接（Wiring）职责分离的核心步骤。
+这个计划将对编译器 `Builder` 的核心执行流程进行手术刀式的改造，将其从一个单遍循环重构为职责清晰的“物理实化”和“拓扑连接”两个阶段。
 
-## [WIP] feat(compiler): 定义 ExpansionPolicy 协议以分离节点创建职责
+## [WIP] refactor(compiler): 将 Builder 重构为两阶段编译模型
 
 ### 用户需求
 
-根据架构路线图 1.2，需要创建 `ExpansionPolicy` 协议。此协议将作为所有节点创建（物理实化）逻辑的统一接口，并为后续从 `WiringPolicy` 中迁移代码提供一个清晰的契约。
+根据架构路线图 1.3，需要重构 `cascade/compiler/backend/builder.py` 文件。目标是修改 `Builder` 的 `build` 方法，使其支持一个两阶段的编译流程：第一阶段进行节点创建（Materialization），第二阶段进行节点连接（Wiring）。
 
 ### 评论
 
-这是奠定新架构基石的一步。通过定义一个严格的 `ExpansionPolicy` 协议，我们正在构建一个架构级的“护栏”，从根本上杜绝节点创建和节点连接的职责混淆。这确保了编译器后端的各个阶段都遵循单一职责原则，使得整个编译流程更加清晰、可预测和易于维护。
+这是整个重构计划中承上启下的关键一步。我们在此前已经定义了新的数据容器 (`SubGraph`) 和行为契约 (`ExpansionPolicy`)，现在则是要搭建能够驱动它们的执行引擎。将 `Builder` 改造为两阶段模型，是将“关注点分离”这一架构原则从理论落实到代码的关键，它为后续所有 `Policy` 的迁移铺平了道路，并能从根本上保证编译过程的确定性和可维护性。
 
 ### 目标
 
-1.  创建新的目录结构: `packages/cascade-compiler/src/cascade/compiler/backend/expansion/`。
-2.  在该目录中创建 `__init__.py`，使其成为一个 Python 包。
-3.  创建 `context.py` 文件，并定义一个临时的 `ExpansionContext`，为协议提供必要的类型提示。
-4.  创建 `protocol.py` 文件，并在其中定义 `ExpansionPolicy` 协议，包含一个 `expand` 方法。
+1.  修改 `packages/cascade-compiler/src/cascade/compiler/backend/builder.py` 文件。
+2.  导入新创建的 `ExpansionPolicy` 协议和 `ExpansionContext`。
+3.  将 `Builder` 内部的策略列表 `_policies` 拆分为 `_expansion_policies` 和 `_wiring_policies` 两个独立的列表。
+4.  重构 `build` 方法，将原有的单次循环拆分为两个独立的循环，分别对应 Materialization 和 Wiring 阶段。
 
 ### 基本原理
 
-为了实现“扩展流水线”模式，我们必须首先形式化地定义流水线中每个阶段的契约。`ExpansionPolicy` 协议就是“物理实化”阶段的契约。
+当前的 `Builder` 采用单遍编译模型，在一次循环中同时进行节点创建和连接。这种混合模式是导致 `WiringPolicy` 职责不清的根源。
 
-所有实现此协议的策略，其唯一职责就是向 `SubGraph` 容器中添加物理节点（`add_node`），但**严禁**进行跨越 `SubGraph` 边界的连接（`connect`）。这强制性地将编译过程分解为两个独立的、确定性的阶段，为后续重构和功能扩展提供了坚实的基础。
+通过引入两阶段编译模型，我们强制实施了架构上的约束：
+1.  **第一阶段 (Materialization)**：只允许 `ExpansionPolicy` 运行，其唯一职责是创建物理节点并将其注册到 `SubGraph` 中。此阶段结束后，一个逻辑任务的所有物理实体都已“存在”，但彼此隔离。
+2.  **第二阶段 (Wiring)**：只允许 `WiringPolicy` 运行，其唯一职责是连接已存在的节点。由于所有节点都已在第一阶段创建完毕，`WiringPolicy` 不再需要（也不被允许）创建任何新节点。
+
+这种明确的分离使得每一阶段的输入和输出都变得确定，极大地降低了系统的复杂性。
 
 ### 标签
 
-#intent/architect #flow/ready #priority/high #task/domain/compiler #task/object/expansion-policy #task/action/implementation #task/state/continue #scope/core #scope/api #ai/instruct
+#intent/refine #flow/ready #priority/high #task/domain/compiler #task/object/builder #task/action/refactor #task/state/continue #scope/core #ai/instruct
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `expansion` 包目录结构
+#### Acts 1: 重写 `builder.py` 以实现两阶段编译
 
-我们首先创建新的 `expansion` 目录和空的 `__init__.py` 文件。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p packages/cascade-compiler/src/cascade/compiler/backend/expansion
-touch packages/cascade-compiler/src/cascade/compiler/backend/expansion/__init__.py
-~~~~~
-
-#### Acts 2: 定义 `ExpansionContext`
-
-为了让 `ExpansionPolicy` 协议的类型提示完整，我们先创建一个 `ExpansionContext`。目前，它的结构将与 `WiringContext` 类似，后续会根据需要进行调整。
+我们将使用 `write_file` 完整覆盖 `builder.py`。新的实现将包含分离的策略列表和两阶段的 `build` 方法。`_expansion_policies` 列表暂时为空，等待后续步骤迁移策略进来。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
 ~~~~~
 ~~~~~python
-from dataclasses import dataclass, field
-from typing import Dict
+from typing import List
 
+from cascade.spec.ir.graph import GraphIR
 from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.ir.graph import GraphIR
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.wiring import WiringHarness
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.assembly import (
+    Assembly,
+    CompilationArtifact,
+    CompilationManifest,
+)
+from .expander import Expander
+from .validator import GraphValidator
+from .wiring import WiringHarness
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
+from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
+from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
+from cascade.compiler.backend.wiring.policies.observability import (
+    ObservabilityWiringPolicy,
+)
+from cascade.compiler.backend.wiring.policies.resource import ResourceWiringPolicy
+from cascade.compiler.backend.wiring.policies.pulse import PulseWiringPolicy
+from cascade.spec.physical.constants import NodePrefix
 
 
-@dataclass
-class ExpansionContext:
-    graph_ir: GraphIR
-    environment: EnvironmentDef
-    physical_graph: BipartiteGraph
-    wire: WiringHarness
-    subgraphs: Dict[str, SubGraph] = field(default_factory=dict)
-~~~~~
+class Builder:
+    def __init__(self):
+        self._expander = Expander()
+        self._validator = GraphValidator()
+        self._expansion_policies: List[ExpansionPolicy] = []
+        self._wiring_policies: List[WiringPolicy] = [
+            ResourceWiringPolicy(),
+            ObservabilityWiringPolicy(),
+            ParameterWiringPolicy(),
+            ControlFlowWiringPolicy(),
+            PulseWiringPolicy(),
+        ]
 
-#### Acts 3: 定义 `ExpansionPolicy` 协议
+    def build(
+        self, graph_ir: GraphIR, environment: EnvironmentDef
+    ) -> CompilationArtifact:
+        # 1. Initialize Context
+        physical_graph = BipartiteGraph()
+        wire = WiringHarness(physical_graph)
+        # For now, ExpansionContext and WiringContext are identical.
+        # We use a single context object for both phases.
+        ctx = WiringContext(
+            graph_ir=graph_ir,
+            environment=environment,
+            physical_graph=physical_graph,
+            wire=wire,
+        )
+        symbol_table = {}
 
-现在，我们创建 `protocol.py` 并定义核心的 `ExpansionPolicy` 协议。
+        # 2. Phase 0: Setup Global Infrastructure (for wiring policies)
+        for policy in self._wiring_policies:
+            policy.setup_globals(ctx)
 
-~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/backend/expansion/protocol.py
-~~~~~
-~~~~~python
-from typing import Protocol
-from cascade.spec.ir.graph import NodeIR
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.expansion.context import ExpansionContext
+        # 3. Phase 1: Materialization (Expansion)
+        # Create all nodes for all subgraphs, but do not connect them across boundaries.
+        for node_ir in graph_ir.nodes:
+            # 3.1 Expand core triad
+            subgraph = self._expander.expand_node(node_ir)
+            ctx.register_subgraph(node_ir.current_node_instance_hash, subgraph)
 
+            # 3.2 Populate Symbol Table from core triad
+            if subgraph.worker:
+                canonical_hash = node_ir.task.fingerprint[
+                    "canonical_code_structure_hash"
+                ]
+                symbol_table[subgraph.worker.id] = canonical_hash
 
-class ExpansionPolicy(Protocol):
-    def expand(
-        self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph
-    ) -> None:
-        """
-        Expands a logical node by creating and adding new physical nodes
-        to its corresponding subgraph.
+            # 3.3 Apply expansion policies to create auxiliary nodes
+            for policy in self._expansion_policies:
+                policy.expand(ctx, node_ir, subgraph)
 
-        This phase is strictly for MATERIALIZATION. Implementations of this
-        protocol are FORBIDDEN from creating channels between different
-        subgraphs.
-        """
-        ...
+        # 4. Phase 2: Wiring
+        # Connect all the created nodes together.
+        for node_ir in graph_ir.nodes:
+            subgraph = ctx.get_subgraph(node_ir.current_node_instance_hash)
+            for policy in self._wiring_policies:
+                policy.apply(ctx, node_ir, subgraph)
+
+        # 5. Final Validation
+        self._validator.validate(physical_graph, graph_ir)
+
+        # 6. Generate Manifest
+        logical_to_physical_map = {}
+        for node_ir in graph_ir.nodes:
+            if node_ir.logical_id:
+                logical_to_physical_map[node_ir.logical_id] = (
+                    node_ir.current_node_instance_hash
+                )
+
+        assembly = Assembly(
+            graph=physical_graph,
+            symbol_table=symbol_table,
+            metadata={"compiler": "cascade-compiler-v0.1.0"},
+        )
+        entry_points = [
+            node_id
+            for node_id, node in physical_graph.nodes.items()
+            if isinstance(node, PhysicsDataNode)
+            and (
+                node_id.startswith(f"{NodePrefix.CONST}.")
+                or node_id.startswith(f"{NodePrefix.PULSE}.")
+            )
+        ]
+        exit_points = {
+            node.id.split(".")[1]: node.id
+            for node in physical_graph.nodes.values()
+            if isinstance(node, PhysicsDataNode)
+            and node.id.startswith(f"{NodePrefix.EGRESS}.")
+        }
+
+        manifest = CompilationManifest(
+            logical_to_physical_map=logical_to_physical_map,
+            entry_points=sorted(entry_points),
+            exit_points=exit_points,
+        )
+
+        return CompilationArtifact(assembly=assembly, manifest=manifest)
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功定义了 `ExpansionPolicy` 协议，为节点创建逻辑建立了清晰的契约。
+我们已经成功地将 `Builder` 重构为两阶段编译模型。现在，我们拥有了支持新架构的基础设施，但 `_expansion_policies` 列表还是空的，而 `_wiring_policies` 仍在承担着节点创建的职责。
 
-路线图的下一步 (`1.3`) 是**改造 `Builder` 的执行流程**。我们需要修改 `Builder` 来消费这个新协议，并将其 `build` 方法重构为两个独立的阶段：
-1.  **Materialization**: 运行所有 `ExpansionPolicy` 来创建节点。
-2.  **Wiring**: 运行所有 `WiringPolicy` 来连接节点。
+路线图的下一步是**阶段二：简单策略迁移**，从 `2.1 迁移 ParameterWiringPolicy` 开始。这将是我们第一次在新架构上进行代码迁移，验证其是否按预期工作。
 
-如果你同意，我将生成执行此 `Builder` 重构的计划。
+如果你同意，我将开始制定迁移 `ParameterWiringPolicy` 的计划。

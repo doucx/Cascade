@@ -1,89 +1,76 @@
-You are absolutely correct. My previous refactoring was incomplete. I removed the `PortName` class but failed to update the unit test that depended on it, causing the build to break. This is a critical oversight.
+好的，既然所有测试已经通过，我们现在完成了 **Cascade 物理接口定义层 (PIDL)** 路线图的全部四个阶段。
 
-I will now generate a plan to fix the broken test file.
+这是一个重大的架构升级，它确立了物理层接口的强类型契约，消除了系统中的魔法字符串。
 
-## [WIP] fix(compiler): 修复因移除 PortName 导致的测试失败
-
-### 错误分析
-测试 `packages/cascade-compiler/tests/unit/backend/test_builder.py` 失败，原因是 `ImportError: cannot import name 'PortName'`。在上一批次的重构中，我删除了 `PortName` 类，但忘记更新此测试文件以移除对它的依赖。该文件仍在使用 `PortName.PULSE` 来验证脉冲连线逻辑。
+## [COMMIT] feat: Implement Physical Interface Definition Layer (PIDL) across Spec, Std, and Compiler
 
 ### 用户需求
-修复 `test_builder.py`，使其不再依赖已删除的 `PortName` 类，恢复测试套件的正常运行。
+实施完整的 PIDL 路线图，消除物理层中的硬编码端口名，建立强类型的单一事实来源 (SSoT) 契约体系。
 
 ### 评论
-这是一个典型的重构疏忽，未能同步更新测试用例。修复此问题是验证上一批次重构是否真正成功的必要步骤，也是维护 TDD 流程完整性的关键。
+PIDL 的实施彻底解决了“接口漂移”问题。通过将物理定律（PhysicsSpec）、标准契约（Std Specs）和执行逻辑（Kernels）统一到同一个声明式框架下，我们让 Cascade 的架构达到了“物理上正确”的高度。Compiler 现在不再是盲目地拼接字符串，而是根据明确定义的契约来构建物理世界的拓扑结构。
 
 ### 目标
-1.  修改 `packages/cascade-compiler/tests/unit/backend/test_builder.py`。
-2.  移除对 `PortName` 的导入。
-3.  改为导入 `cascade.std.specs.BleacherSpec`。
-4.  将所有 `PortName.PULSE` 的引用替换为 `BleacherSpec.pulse.name`。
+1.  **建立物理法则**: 在 `cascade-spec` 中实现了 `PhysicsSpec` 和 `Port` 体系，支持静态和动态端口定义。
+2.  **标准化契约**: 在 `cascade-std` 中定义了所有核心 IC（Bleacher, Worker, Stainer, Allocator, Egress 等）的 Specs。
+3.  **重构内核**: 引入了 `@implements(Spec)` 装饰器和高性能的 `IOWrapper` 视图，实现了内核函数的零拷贝、类型化访问。
+4.  **重构编译器**: 全面重构了编译器的 `Wiring Policies` 和 `Expander`，移除 `PortName` 类，所有连线均引用自 Spec。
 
 ### 基本原理
-测试代码也应遵循与生产代码相同的架构原则。通过在测试中断言 Spec 定义，我们不仅修复了错误，还提高了测试用例的健壮性和可读性，使其与 PIDL 策略保持一致。
+我们采用了“类声明式 Spec 模式”，利用 Python 元类自动提取端口定义。这使得接口既是可执行的代码，也是自文档化的定义。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/compiler #comp/tests #scope/core #task/domain/compiler #task/object/wiring-policy #task/action/refactor #task/state/continue
+#intent/build #flow/ready #priority/high #comp/spec #comp/std #comp/compiler #scope/core #ai/delegate #task/domain/architecture #task/object/pidl-roadmap #task/action/implementation #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修正测试文件的导入
-将 `PortName` 的导入替换为 `BleacherSpec`。
+#### Acts 1: 提交 PIDL 完整实施内容
+
+我们将把涉及 Spec 定义、标准库契约、内核重构以及编译器连线修改的所有文件添加到暂存区。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/physics/
+packages/cascade-spec/src/cascade/spec/physical/ports.py
+packages/cascade-std/src/cascade/std/specs/
+packages/cascade-std/src/cascade/std/kernel_tools.py
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-std/src/cascade/std/resource/discrete.py
+packages/cascade-std/src/cascade/std/resource/requestor.py
+packages/cascade-std/src/cascade/std/system/egress.py
+packages/cascade-std/src/cascade/std/system/gate.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/pulse.py
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/observability.py
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/control.py
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py
 packages/cascade-compiler/tests/unit/backend/test_builder.py
 ~~~~~
-~~~~~python.old
-from cascade.reflection import PhysicalIdGenerator
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.ports import PortName
-~~~~~
-~~~~~python.new
-from cascade.reflection import PhysicalIdGenerator
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.std.specs import BleacherSpec
-~~~~~
-
-#### Acts 2: 更新测试断言
-使用 `BleacherSpec.pulse.name` 替换 `PortName.PULSE`。
 
 ~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/backend/test_builder.py
+git_commit
 ~~~~~
-~~~~~python.old
-    # 2. Assert Bleacher port definition
-    bleacher_id = "source_node.bleach"
-    bleacher_node = graph.nodes[bleacher_id]
-    assert PortName.PULSE in bleacher_node.input_ports
+~~~~~text
+feat: Implement Physical Interface Definition Layer (PIDL)
 
-    # 3. Assert Connection: D_pulse -> F_bleach
-    pulse_channel = next(
-        c
-        for c in graph.channels
-        if c.source_node_id == pulse_id and c.target_node_id == bleacher_id
-    )
-    assert pulse_channel is not None
-    assert pulse_channel.target_port == PortName.PULSE
-~~~~~
-~~~~~python.new
-    # 2. Assert Bleacher port definition
-    bleacher_id = "source_node.bleach"
-    bleacher_node = graph.nodes[bleacher_id]
-    assert BleacherSpec.pulse.name in bleacher_node.input_ports
+This architectural milestone eliminates "magic strings" in the physical layer by establishing a strong-typed, single source of truth (SSoT) for physical node interfaces.
 
-    # 3. Assert Connection: D_pulse -> F_bleach
-    pulse_channel = next(
-        c
-        for c in graph.channels
-        if c.source_node_id == pulse_id and c.target_node_id == bleacher_id
-    )
-    assert pulse_channel is not None
-    assert pulse_channel.target_port == BleacherSpec.pulse.name
+Key Achievements:
+1.  **PhysicsSpec (cascade.spec.physics)**: Introduced a declarative DSL for defining physical port contracts. Supports Port.Input, Port.Output, MapInput, and MapOutput with prefix-based dynamic routing.
+2.  **Standard Contracts (cascade.std.specs)**: Formalized interfaces for all core components (Triad, Resource Brokers, System ICs) using PhysicsSpec, decoupling topology from implementation.
+3.  **Kernel Evolution (@implements)**: Refactored kernel functions in cascade-std to use the @implements decorator. It utilizes a zero-copy IOWrapper to provide typed attribute access (io.port_name) to underlying token dictionaries, ensuring runtime compliance with Specs.
+4.  **Compiler Rewiring**: Updated all Wiring Policies (Pulse, Observability, ControlFlow, Parameter, Resource) to depend exclusively on Spec attributes.
+5.  **Axiom Enforcement**: Deleted the deprecated PortName constant class, forcing all future development to adhere to the PIDL contract system.
+
+This transition ensures that the physical world (compiled graph) is an exact, verifiable projection of the logical intent, drastically reducing protocol drift and enhancing system observability.
 ~~~~~
 
 ### 下一步建议
-测试修复后，PIDL 阶段四的所有任务都已完成。我建议运行完整的测试套件 (`pytest packages/`) 以确保没有其他回归问题。确认通过后，我们可以将这个系列的工作标记为 `[COMMIT]` 并进行提交。
+我们已经完成了 PIDL 的基础建设。由于物理图现在是完全同构且结构清晰的，下一步建议开启 **阶段五：物理层优化 (Physics Optimization)**，包括：
+- **算子融合 (Node Fusion)**: 利用 Spec 信息自动合并简单的 F-D-F 链路。
+- **常量折叠 (Constant Folding)**: 在编译时预填已知常量的 D 节点。
+- **JIT 调度优化**: 减少 Reactor 在处理高频、无副作用节点时的调度开销。

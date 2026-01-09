@@ -31,6 +31,7 @@ def discrete_allocator(
     io: DiscreteAllocatorSpec.IO, node: PhysicsNode, resources: Any
 ) -> None:
     ledger_token = io.ledger_in
+    assert ledger_token is not None, "Ledger token missing"
     ledger_data = ledger_token.payload
 
     # Extract Ledger (Handle Ref if ledger itself is ref-based in future, currently payload is obj)
@@ -41,6 +42,7 @@ def discrete_allocator(
         ledger = ledger_data
 
     req_token = io.req_in
+    assert req_token is not None, "Request token missing"
     req_amount = int(_extract_scalar(req_token.payload))
 
     if ledger.available >= req_amount:
@@ -69,6 +71,7 @@ def discrete_reclaimer(
     io: DiscreteReclaimerSpec.IO, node: PhysicsNode, resources: Any
 ) -> None:
     ledger_token = io.ledger_in
+    assert ledger_token is not None, "Ledger token missing"
     ledger_data = ledger_token.payload
     if isinstance(ledger_data, dict):
         ledger = DiscreteLedger(**ledger_data)
@@ -76,6 +79,7 @@ def discrete_reclaimer(
         ledger = ledger_data
 
     rel_token = io.rel_in
+    assert rel_token is not None, "Release token missing"
     release_amount = int(_extract_scalar(rel_token.payload))
 
     # Replenish

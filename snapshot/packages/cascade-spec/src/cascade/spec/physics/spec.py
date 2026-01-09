@@ -42,14 +42,3 @@ class PhysicsSpecMeta(type):
 class PhysicsSpec(metaclass=PhysicsSpecMeta):
     input_ports: ClassVar[Dict[str, PortDef]]
     output_ports: ClassVar[Dict[str, PortDef]]
-
-    class IO(Protocol):
-        """
-        Protocol stub for Kernel function type hinting.
-
-        In the future, `@implements(Spec)` will use this Protocol to enforce
-        that the kernel function accepts an 'io' object with attributes matching
-        the Spec's ports.
-        """
-
-        pass

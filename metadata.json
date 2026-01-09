@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 补全 PIDL 类型提示以修复 Pyright 静态检查错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767947572.1770232, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 PIDL 实现中的 Optional 类型访问和协议覆盖错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767947681.790772, "duration_ms": 0}}

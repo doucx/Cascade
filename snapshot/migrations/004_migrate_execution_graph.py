@@ -28,15 +28,11 @@ def upgrade(spec: MigrationSpec):
     # ==========================================
     # Move individual logic files to a new 'logic' subdirectory
     spec.add(
-        Move(
-            runtime_base / "legacy/processor.py", graph_base / "logic/processor.py"
-        )
+        Move(runtime_base / "legacy/processor.py", graph_base / "logic/processor.py")
     )
     spec.add(Move(runtime_base / "legacy/flow.py", graph_base / "logic/flow.py"))
     spec.add(
-        Move(
-            runtime_base / "legacy/resolvers.py", graph_base / "logic/resolvers.py"
-        )
+        Move(runtime_base / "legacy/resolvers.py", graph_base / "logic/resolvers.py")
     )
 
     # ==========================================

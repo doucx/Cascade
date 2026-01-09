@@ -1,6 +1,6 @@
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.ports import PortName
+from cascade.std.specs import BleacherSpec
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.backend.wiring.context import WiringContext
@@ -34,4 +34,4 @@ class PulseWiringPolicy(WiringPolicy):
                 initial_tokens=1,
             )
             ctx.wire.add_node(d_pulse)
-            ctx.wire.connect(d_pulse_id, "out", subgraph.bleacher.id, PortName.PULSE)
+            ctx.wire.connect(d_pulse_id, "out", subgraph.bleacher.id, BleacherSpec.pulse.name)

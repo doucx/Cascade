@@ -9,12 +9,24 @@ class BleacherSpec(PhysicsSpec):
     # Inputs (Dynamic)
     # Collects all inputs not matched by other static input definitions.
     args = Port.MapInput(role=PortRole.DATA)
+    
+    # Conditional Execution
+    condition = Port.Input("condition", role=PortRole.SIGNAL, type="Bool")
+    # Startup Pulse
+    pulse = Port.Input("__pulse__", role=PortRole.SIGNAL)
 
     # Outputs
     worker_input = Port.Output("worker_input", role=PortRole.DATA, type="Dict")
     trace_output = Port.Output("trace_output", role=PortRole.DATA, type="TraceCtx")
     context_output = Port.Output("context_output", role=PortRole.DATA, type="Dict")
     obs_output = Port.Output("obs_output", role=PortRole.OBSERVABILITY, type="Event")
+
+
+class ObservabilitySpec(PhysicsSpec):
+    """
+    Contract for the Sidecar Observer (F_obs).
+    """
+    event_token = Port.Input("event_token", role=PortRole.OBSERVABILITY, type="Event")
 
 
 class WorkerSpec(PhysicsSpec):

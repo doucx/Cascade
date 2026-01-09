@@ -1,6 +1,8 @@
-from typing import Dict, Any
+from typing import Any
 from dataclasses import dataclass
 from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.std.specs import ContinuousAllocatorSpec, ContinuousReclaimerSpec
+from cascade.std.kernel_tools import implements
 
 
 @dataclass
@@ -9,44 +11,52 @@ class ContinuousLedger:
     available: float
 
 
+@implements(ContinuousAllocatorSpec)
 def continuous_allocator(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
+    io: ContinuousAllocatorSpec.IO, node: PhysicsNode, resources: Any
+) -> None:
+    ledger_token = io.ledger_in
+    req_token = io.req_in
+
+    assert ledger_token is not None, "Ledger token for allocator is missing"
+    assert req_token is not None, "Request token for allocator is missing"
+
     ledger_data = ledger_token.payload
     if isinstance(ledger_data, dict):
         ledger = ContinuousLedger(**ledger_data)
     else:
         ledger = ledger_data
 
-    req_token = inputs["req_in"]
     req_amount = float(req_token.payload)
-
-    outputs: Dict[str, Token] = {}
 
     if ledger.available >= req_amount:
         ledger.available -= req_amount
         # Sovereignty: In the future, we should use trace-based routing here like discrete.py
         # For now, just remove the tag to fix the crash.
-        outputs["gnt_out"] = Token(payload=req_amount, trace=req_token.trace)
+        io.gnt_out = Token(payload=req_amount, trace=req_token.trace)
     else:
-        outputs["req_out"] = req_token
+        io.req_out = req_token
 
-    outputs["ledger_out"] = Token(payload=ledger)
-    return outputs
+    io.ledger_out = Token(payload=ledger)
 
 
+@implements(ContinuousReclaimerSpec)
 def continuous_reclaimer(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
+    io: ContinuousReclaimerSpec.IO, node: PhysicsNode, resources: Any
+) -> None:
+    ledger_token = io.ledger_in
+    rel_token = io.rel_in
+
+    assert ledger_token is not None, "Ledger token for reclaimer is missing"
+    assert rel_token is not None, "Release token for reclaimer is missing"
+
     ledger_data = ledger_token.payload
     if isinstance(ledger_data, dict):
         ledger = ContinuousLedger(**ledger_data)
     else:
         ledger = ledger_data
 
-    release_amount = float(inputs["rel_in"].payload)
+    release_amount = float(rel_token.payload)
     ledger.available = min(ledger.total, ledger.available + release_amount)
 
-    return {"ledger_out": Token(payload=ledger)}
+    io.ledger_out = Token(payload=ledger)

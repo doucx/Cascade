@@ -61,3 +61,31 @@ class DiscreteReclaimerSpec(PhysicsSpec):
         # Outputs
         ledger_out: Token
         signal_out: Token
+
+
+class ContinuousAllocatorSpec(PhysicsSpec):
+    ledger_in = Port.Input("ledger_in", role=PortRole.DATA, type=PortType.Ledger)
+    req_in = Port.Input("req_in", role=PortRole.DATA)
+
+    ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
+    gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE)
+    req_out = Port.Output("req_out", role=PortRole.DATA)  # For failed/parked requests
+
+    class IO(Protocol):
+        ledger_in: Optional[Token]
+        req_in: Optional[Token]
+        ledger_out: Token
+        gnt_out: Token
+        req_out: Token
+
+
+class ContinuousReclaimerSpec(PhysicsSpec):
+    ledger_in = Port.Input("ledger_in", role=PortRole.DATA, type=PortType.Ledger)
+    rel_in = Port.Input("rel_in", role=PortRole.DATA)
+
+    ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
+
+    class IO(Protocol):
+        ledger_in: Optional[Token]
+        rel_in: Optional[Token]
+        ledger_out: Token

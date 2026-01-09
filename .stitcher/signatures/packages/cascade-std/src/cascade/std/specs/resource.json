@@ -1,4 +1,14 @@
 {
+  "ContinuousAllocatorSpec": {},
+  "ContinuousAllocatorSpec.gnt_out": {},
+  "ContinuousAllocatorSpec.ledger_in": {},
+  "ContinuousAllocatorSpec.ledger_out": {},
+  "ContinuousAllocatorSpec.req_in": {},
+  "ContinuousAllocatorSpec.req_out": {},
+  "ContinuousReclaimerSpec": {},
+  "ContinuousReclaimerSpec.ledger_in": {},
+  "ContinuousReclaimerSpec.ledger_out": {},
+  "ContinuousReclaimerSpec.rel_in": {},
   "DiscreteAllocatorSpec": {
     "baseline_yaml_content_hash": "1ca52b52159cd56311f4d5c3a17a1162df3a2c60d796eaf4e7c3fe50137e6d0e"
   },

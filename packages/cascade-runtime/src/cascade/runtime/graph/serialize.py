@@ -253,7 +253,6 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             current_node_instance_hash=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="map",
-            mapping_factory=_load_func_from_path(data.get("mapping_factory")),
             retry_policy=retry_policy,
             cache_policy=None,  # Serialization of cache policy not implemented yet
             constraints=constraints,

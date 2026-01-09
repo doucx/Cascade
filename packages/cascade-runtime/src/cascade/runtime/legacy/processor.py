@@ -12,6 +12,7 @@ from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints.manager import ConstraintManager
 from cascade.runtime.legacy.resolvers import ArgumentResolver, ConstraintResolver
+from cascade.spec import EventState
 from cascade.runtime.services.observability.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
@@ -199,7 +200,7 @@ class NodeProcessor:
                 run_id=run_id,
                 task_id=node.current_node_instance_hash,
                 task_name=node.name,
-                status="Succeeded",
+                status=EventState.SUCCEEDED,
                 duration=duration,
                 result_preview=None,
             )
@@ -240,7 +241,7 @@ class NodeProcessor:
                     run_id=run_id,
                     task_id=node.current_node_instance_hash,
                     task_name=node.name,
-                    status="Failed",
+                    status=EventState.FAILED,
                     duration=duration,
                     error=f"{type(exception).__name__}: {exception}",
                 )

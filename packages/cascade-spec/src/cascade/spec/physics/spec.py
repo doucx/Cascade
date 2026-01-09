@@ -1,8 +1,11 @@
-from typing import Dict, Protocol
+from typing import Dict, ClassVar
 from .core import PortDef, PortDirection
 
 
 class PhysicsSpecMeta(type):
+    input_ports: Dict[str, PortDef]
+    output_ports: Dict[str, PortDef]
+
     def __new__(mcs, name, bases, namespace):
         # 1. Create the class
         cls = super().__new__(mcs, name, bases, namespace)
@@ -37,16 +40,5 @@ class PhysicsSpecMeta(type):
 
 
 class PhysicsSpec(metaclass=PhysicsSpecMeta):
-    input_ports: Dict[str, PortDef]
-    output_ports: Dict[str, PortDef]
-
-    class IO(Protocol):
-        """
-        Protocol stub for Kernel function type hinting.
-
-        In the future, `@implements(Spec)` will use this Protocol to enforce
-        that the kernel function accepts an 'io' object with attributes matching
-        the Spec's ports.
-        """
-
-        pass
+    input_ports: ClassVar[Dict[str, PortDef]]
+    output_ports: ClassVar[Dict[str, PortDef]]

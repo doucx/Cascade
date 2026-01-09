@@ -5,7 +5,7 @@ from cascade.compiler.backend.builder import Builder
 from cascade.spec.physical.environment import EnvironmentDef
 from cascade.reflection import PhysicalIdGenerator
 from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.ports import PortName
+from cascade.std.specs import BleacherSpec
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ def test_builder_creates_pulse_for_source_node(source_only_graph_ir):
     # 2. Assert Bleacher port definition
     bleacher_id = "source_node.bleach"
     bleacher_node = graph.nodes[bleacher_id]
-    assert PortName.PULSE in bleacher_node.input_ports
+    assert BleacherSpec.pulse.name in bleacher_node.input_ports
 
     # 3. Assert Connection: D_pulse -> F_bleach
     pulse_channel = next(
@@ -128,4 +128,4 @@ def test_builder_creates_pulse_for_source_node(source_only_graph_ir):
         if c.source_node_id == pulse_id and c.target_node_id == bleacher_id
     )
     assert pulse_channel is not None
-    assert pulse_channel.target_port == PortName.PULSE
+    assert pulse_channel.target_port == BleacherSpec.pulse.name

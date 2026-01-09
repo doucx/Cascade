@@ -1,7 +1,7 @@
 {
   "gate_passthrough": {
-    "baseline_code_signature_text": "def gate_passthrough(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "1e8af7737af6e5d70cee378e546caf8a62af117f6526349238bad07a9a4b7047",
+    "baseline_code_signature_text": "def gate_passthrough(io: GateSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+    "baseline_code_structure_hash": "2c5ec9ef5af2118fc25ee9e2f5aeb728fab01d7867a0bf9c27d469a374af4587",
     "baseline_yaml_content_hash": "ae8aa10ce7f9227bc2ec2526c63144d8d926c1cdad545e19b362e22142bea8ad"
   }
 }

@@ -1,0 +1,30 @@
+{
+  "BleacherSpec": {
+    "baseline_yaml_content_hash": "79a8d61f436814c12e98e24bb86dabd73baf87709b5e49d2ed029243a057f700"
+  },
+  "BleacherSpec.args": {},
+  "BleacherSpec.condition": {},
+  "BleacherSpec.context_output": {},
+  "BleacherSpec.obs_output": {},
+  "BleacherSpec.pulse": {},
+  "BleacherSpec.trace_output": {},
+  "BleacherSpec.worker_input": {},
+  "ObservabilitySpec": {
+    "baseline_yaml_content_hash": "f19754b3695f829d3d99ebdb402349cddabf58d4e328fac51d9afe0dbdd8fa18"
+  },
+  "ObservabilitySpec.event_token": {},
+  "StainerSpec": {
+    "baseline_yaml_content_hash": "465ae581137d4c2d6dc17cd281182c3f11fee04e3f31528345ec25598db616a0"
+  },
+  "StainerSpec.context_input": {},
+  "StainerSpec.obs_output": {},
+  "StainerSpec.output_default": {},
+  "StainerSpec.output_error": {},
+  "StainerSpec.trace_input": {},
+  "StainerSpec.worker_result": {},
+  "WorkerSpec": {
+    "baseline_yaml_content_hash": "3d106ded2c35e86f3a29c31b419d052ef546aded806fc49926275c32c690d9cf"
+  },
+  "WorkerSpec.worker_input": {},
+  "WorkerSpec.worker_result": {}
+}

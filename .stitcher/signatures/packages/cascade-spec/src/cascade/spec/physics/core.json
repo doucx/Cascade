@@ -1,0 +1,55 @@
+{
+  "Port": {
+    "baseline_yaml_content_hash": "9f674d5b4243265fe0d64ba6086829e71cefcda895b20171e3b37de5319b1c4f"
+  },
+  "Port.Input": {
+    "baseline_code_signature_text": "def Input(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:",
+    "baseline_code_structure_hash": "f0ed10874bdd28771aa512e607fe0eb7e2b3008b271e5eed9a04cef1bfe9230f"
+  },
+  "Port.MapInput": {
+    "baseline_code_signature_text": "def MapInput(role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:",
+    "baseline_code_structure_hash": "d59f82e3e1acfb896644e5c656622de818702ba80c9d367a2b53a333c36adf6a",
+    "baseline_yaml_content_hash": "375995f688c9c04a6295fa735bfee004d1a31d0e835fcea80a292038e7368242"
+  },
+  "Port.MapOutput": {
+    "baseline_code_signature_text": "def MapOutput(prefix: str = '', role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:",
+    "baseline_code_structure_hash": "0b34719f64683cc3b13c05b1773a3cb539637e10ea025db222db92496928f69b",
+    "baseline_yaml_content_hash": "aa4bcbad8d2e6a50799eb868e15a84761a1a6c33ce2d72db855463c0cbcf9cfa"
+  },
+  "Port.Output": {
+    "baseline_code_signature_text": "def Output(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:",
+    "baseline_code_structure_hash": "96b8fb625949e5819507c3fac792d7fc8746e854fbe08c76c83d2dc62347895b"
+  },
+  "PortDef": {
+    "baseline_yaml_content_hash": "4776b9d879ffe67bcdb11f127599a7329f005062614fc4158c797032abd5d9b7"
+  },
+  "PortDef.__init__": {
+    "baseline_code_signature_text": "def __init__(self, name: str, direction: PortDirection, role: PortRole = PortRole.DATA, type_hint: Any = PortType.Any, is_map: bool = False, prefix: str = ''):",
+    "baseline_code_structure_hash": "e2d6c6e10f84598515e4757606c784c409939c24e754f01109704f048b531e28"
+  },
+  "PortDef.__repr__": {
+    "baseline_code_signature_text": "def __repr__(self):",
+    "baseline_code_structure_hash": "383221bb82433f1b2631e268430b5d2a01c9ca111a0fb45f7b938de2bbe279fd"
+  },
+  "PortDef.__set_name__": {
+    "baseline_code_signature_text": "def __set_name__(self, owner, name):",
+    "baseline_code_structure_hash": "6c66a60646946aa73d168791bcca8995848e60d7c0e83cbda4940944a44b363b"
+  },
+  "PortDef.direction": {},
+  "PortDef.is_map": {},
+  "PortDef.name": {},
+  "PortDef.prefix": {},
+  "PortDef.role": {},
+  "PortDef.type_hint": {},
+  "PortDirection": {
+    "baseline_yaml_content_hash": "b285fd0b35c26061057958f0b732cbebf596034f191f4a5e30b666ce4e76780e"
+  },
+  "PortDirection.INPUT": {},
+  "PortDirection.OUTPUT": {},
+  "PortType": {
+    "baseline_yaml_content_hash": "fed6b5895df5e9056b112300bdd666207e886160580fdb5da6391cc6730a59d4"
+  },
+  "PortType.Any": {},
+  "PortType.Ledger": {},
+  "PortType.Token": {}
+}

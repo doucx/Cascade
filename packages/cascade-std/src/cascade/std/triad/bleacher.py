@@ -5,17 +5,20 @@ from cascade.spec import EventIR, EventType, EventState, EventContext
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.triad import BleachNode
 from cascade.spec.physical.ports import PortRole
+from cascade.std.specs import BleacherSpec
+from cascade.std.kernel_tools import implements
 
 
-def standard_bleacher(
-    inputs: Dict[str, Token], node: BleachNode, resources: Any
-) -> Dict[str, Token]:
+@implements(BleacherSpec)
+def standard_bleacher(io: BleacherSpec.IO, node: BleachNode, resources: Any) -> None:
     worker_payload: Dict[str, Any] = {}
     trace_payload: Dict[str, Any] = {}
     held_resources: List[str] = []
 
     # 1. Extract payloads and merge traces from all inputs
-    for port_name, input_token in inputs.items():
+    # Use io.args to get all dynamic inputs
+    for port_name, input_token in io.args.items():
+        # Even though we use IO wrapper, we still rely on Node metadata for roles
         port_def = node.input_ports[port_name]
 
         if port_def.role == PortRole.DATA:
@@ -71,9 +74,8 @@ def standard_bleacher(
     # obs_output now carries the IR as payload
     obs_token = Token(payload=ir, trace=trace_payload)
 
-    return {
-        "worker_input": worker_token,
-        "trace_output": trace_token,
-        "context_output": context_token,
-        "obs_output": obs_token,
-    }
+    # 5. Set outputs via IO wrapper
+    io.worker_input = worker_token
+    io.trace_output = trace_token
+    io.context_output = context_token
+    io.obs_output = obs_token

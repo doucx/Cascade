@@ -3,6 +3,7 @@ from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.triad import ObservabilityNode
 from cascade.spec.physical.ports import PortRole, PortDef
+from cascade.std.specs import ObservabilitySpec, BleacherSpec, StainerSpec
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.backend.wiring.context import WiringContext
@@ -18,18 +19,23 @@ class ObservabilityWiringPolicy(WiringPolicy):
         d_life = PhysicsDataNode(
             id=d_life_id, name="LifecycleBus", capacity=sys.maxsize
         )
+
+        # Use Spec to define ports
+        spec = ObservabilitySpec
         f_obs = ObservabilityNode(
             id=f_obs_id,
             name="LifecycleObserver",
             input_ports={
-                "event_token": PortDef("event_token", PortRole.OBSERVABILITY, "Event")
+                spec.event_token.name: PortDef(
+                    spec.event_token.name, PortRole.OBSERVABILITY, "Event"
+                )
             },
             output_ports={},  # Observer emits to the outside world, not back into the graph
         )
         ctx.wire.add_node(d_life)
         ctx.wire.add_node(f_obs)
 
-        ctx.wire.connect(d_life_id, "out", f_obs_id, "event_token")
+        ctx.wire.connect(d_life_id, "out", f_obs_id, spec.event_token.name)
 
     def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:
         assert subgraph.bleacher is not None
@@ -38,5 +44,9 @@ class ObservabilityWiringPolicy(WiringPolicy):
         d_life_id = PhysicalIdGenerator.observability_bus()
 
         # Wire task observability TO the sidecar bus
-        ctx.wire.connect(subgraph.bleacher.id, "obs_output", d_life_id, "in")
-        ctx.wire.connect(subgraph.stainer.id, "obs_output", d_life_id, "in")
+        ctx.wire.connect(
+            subgraph.bleacher.id, BleacherSpec.obs_output.name, d_life_id, "in"
+        )
+        ctx.wire.connect(
+            subgraph.stainer.id, StainerSpec.obs_output.name, d_life_id, "in"
+        )

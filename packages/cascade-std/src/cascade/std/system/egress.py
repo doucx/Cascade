@@ -1,24 +1,21 @@
-from typing import Dict, Any
-from cascade.spec.physical.nodes import Token, PhysicsNode
+from typing import Any
+from cascade.spec.physical.nodes import PhysicsNode
+from cascade.std.specs import EgressSpec
+from cascade.std.kernel_tools import implements
 
 
-def standard_egress(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    # 1. Get the Egress Queue from system resources
-    # This must be registered by the Strategy during startup.
+@implements(EgressSpec)
+def standard_egress(io: EgressSpec.IO, node: PhysicsNode, resources: Any) -> None:
+    # 1. Get the Egress Queue
     queue = resources.get("system.egress_queue")
 
     # 2. Consume the token
-    # Phase 3.3 of the roadmap defines the input port as 'in'.
-    token = inputs.get("in")
+    # Spec mapping: io.input_token -> inputs["in"]
+    token = io.input_token
 
     if token:
         # 3. Export
-        # We wrap the token with the node ID so the Strategy knows which egress node it came from.
-        # This allows handling multiple egress points (e.g. for different task results).
         queue.put_nowait((node.id, token))
 
     # 4. Return empty (Evaporate)
-    # No tokens are returned to the graph. The energy leaves the system here.
-    return {}
+    # Implicitly returns the empty 'outputs' dict created by @implements

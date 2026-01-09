@@ -1,0 +1,8 @@
+"EgressSpec": |-
+  Contract for the Egress Node.
+  Acts as a sink for graph results.
+"GateSpec": |-
+  Contract for a Control Gate.
+  Passes req_in to req_out only when signal_in receives a token.
+"SleepSpec": |-
+  Contract for the Time Delay Node.

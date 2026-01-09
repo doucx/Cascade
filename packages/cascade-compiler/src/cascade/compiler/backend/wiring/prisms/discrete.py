@@ -3,7 +3,13 @@ from typing import Any
 from cascade.spec.physical.environment import ResourceDef
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.ports import PortDef, PortRole, PortName
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.std.specs import (
+    DiscreteAllocatorSpec,
+    DiscreteReclaimerSpec,
+    ResourceRequestorSpec,
+    GateSpec,
+)
 from cascade.std.resource.discrete import DiscreteLedger
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
@@ -16,6 +22,11 @@ class DiscreteResourcePrism(ResourcePrism):
         allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
         reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
         ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
+
+        # Specs shortcuts
+        alloc = DiscreteAllocatorSpec
+        reclaim = DiscreteReclaimerSpec
+        gate = GateSpec
 
         # D_ledger
         initial_ledger = DiscreteLedger(
@@ -35,12 +46,16 @@ class DiscreteResourcePrism(ResourcePrism):
             id=reclaimer_id,
             name=f"Reclaimer({res_def.name})",
             input_ports={
-                PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                reclaim.ledger_in.name: PortDef(reclaim.ledger_in.name, PortRole.DATA),
+                reclaim.rel_in.name: PortDef(reclaim.rel_in.name, PortRole.DATA),
             },
             output_ports={
-                PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                PortName.SIGNAL_OUT: PortDef(PortName.SIGNAL_OUT, PortRole.SIGNAL),
+                reclaim.ledger_out.name: PortDef(
+                    reclaim.ledger_out.name, PortRole.DATA
+                ),
+                reclaim.signal_out.name: PortDef(
+                    reclaim.signal_out.name, PortRole.SIGNAL
+                ),
             },
         )
         ctx.wire.add_node(f_reclaimer)
@@ -50,24 +65,24 @@ class DiscreteResourcePrism(ResourcePrism):
             id=allocator_id,
             name=f"Allocator({res_def.name})",
             input_ports={
-                PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
+                alloc.ledger_in.name: PortDef(alloc.ledger_in.name, PortRole.DATA),
+                alloc.req_in.name: PortDef(alloc.req_in.name, PortRole.DATA),
             },
             output_ports={
-                PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
-                PortName.REQ_PARKED: PortDef(PortName.REQ_PARKED, PortRole.DATA),
+                alloc.ledger_out.name: PortDef(alloc.ledger_out.name, PortRole.DATA),
+                alloc.gnt_out.name: PortDef(alloc.gnt_out.name, PortRole.RESOURCE),
+                alloc.req_parked.name: PortDef(alloc.req_parked.name, PortRole.DATA),
             },
         )
         ctx.wire.add_node(f_allocator)
 
         # Wiring: Ledger <-> Allocator
-        ctx.wire.connect(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
-        ctx.wire.connect(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
+        ctx.wire.connect(ledger_id, "out", allocator_id, alloc.ledger_in.name)
+        ctx.wire.connect(allocator_id, alloc.ledger_out.name, ledger_id, "in")
 
         # Wiring: Ledger <-> Reclaimer
-        ctx.wire.connect(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
-        ctx.wire.connect(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
+        ctx.wire.connect(ledger_id, "out", reclaimer_id, reclaim.ledger_in.name)
+        ctx.wire.connect(reclaimer_id, reclaim.ledger_out.name, ledger_id, "in")
 
         # Request Buffer
         d_req_buffer_id = f"buffer.req.{res_def.name}"
@@ -77,7 +92,7 @@ class DiscreteResourcePrism(ResourcePrism):
         ctx.wire.add_node(d_req_buffer)
 
         # Buffer -> Allocator
-        ctx.wire.connect(d_req_buffer_id, "out", allocator_id, PortName.REQ)
+        ctx.wire.connect(d_req_buffer_id, "out", allocator_id, alloc.req_in.name)
 
         # --- Parking & Wake-up Mechanism ---
         # 1. New Nodes
@@ -98,23 +113,23 @@ class DiscreteResourcePrism(ResourcePrism):
             id=f_gate_id,
             name=f"Gate({res_def.name})",
             input_ports={
-                "req_in": PortDef("req_in", PortRole.DATA),
-                "signal_in": PortDef("signal_in", PortRole.SIGNAL),
+                gate.req_in.name: PortDef(gate.req_in.name, PortRole.DATA),
+                gate.signal_in.name: PortDef(gate.signal_in.name, PortRole.SIGNAL),
             },
-            output_ports={"req_out": PortDef("req_out", PortRole.DATA)},
+            output_ports={gate.req_out.name: PortDef(gate.req_out.name, PortRole.DATA)},
         )
         ctx.wire.add_node(f_gate)
 
         # 2. New Wiring
         # Allocator parks rejected requests
-        ctx.wire.connect(allocator_id, PortName.REQ_PARKED, d_parked_id, "in")
+        ctx.wire.connect(allocator_id, alloc.req_parked.name, d_parked_id, "in")
         # Reclaimer sends wake-up signal
-        ctx.wire.connect(reclaimer_id, PortName.SIGNAL_OUT, d_signal_id, "in")
+        ctx.wire.connect(reclaimer_id, reclaim.signal_out.name, d_signal_id, "in")
         # Gate is triggered by parked request and signal
-        ctx.wire.connect(d_parked_id, "out", f_gate_id, "req_in")
-        ctx.wire.connect(d_signal_id, "out", f_gate_id, "signal_in")
+        ctx.wire.connect(d_parked_id, "out", f_gate_id, gate.req_in.name)
+        ctx.wire.connect(d_signal_id, "out", f_gate_id, gate.signal_in.name)
         # Gate sends request back to the main buffer for retry
-        ctx.wire.connect(f_gate_id, "req_out", d_req_buffer_id, "in")
+        ctx.wire.connect(f_gate_id, gate.req_out.name, d_req_buffer_id, "in")
 
         # Release Buffer
         rel_buffer_id = f"buffer.rel.{res_def.name}"
@@ -124,7 +139,7 @@ class DiscreteResourcePrism(ResourcePrism):
         ctx.wire.add_node(d_rel_buffer)
 
         # Buffer -> Reclaimer
-        ctx.wire.connect(rel_buffer_id, "out", reclaimer_id, PortName.REL)
+        ctx.wire.connect(rel_buffer_id, "out", reclaimer_id, reclaim.rel_in.name)
 
     def connect_task(
         self,
@@ -137,6 +152,9 @@ class DiscreteResourcePrism(ResourcePrism):
         allocator_id = PhysicalIdGenerator.global_allocator(res_name)
         req_buffer_id = f"buffer.req.{res_name}"
         rel_buffer_id = f"buffer.rel.{res_name}"
+
+        # Spec shortcuts
+        req = ResourceRequestorSpec
 
         # --- A. Request Chain ---
         # 1. D_const (Amount)
@@ -159,20 +177,22 @@ class DiscreteResourcePrism(ResourcePrism):
         f_req = PhysicsFuncNode(
             id=f_req_id,
             name=f"Req({res_name})",
-            input_ports={"amount": PortDef("amount", PortRole.DATA)},
-            output_ports={PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)},
+            input_ports={req.amount.name: PortDef(req.amount.name, PortRole.DATA)},
+            output_ports={req.req_out.name: PortDef(req.req_out.name, PortRole.DATA)},
         )
         ctx.wire.add_node(f_req)
 
         # 3. Wiring
         # D_amt -> F_req (Direct connection)
-        ctx.wire.connect(d_amt_id, "out", f_req_id, "amount")
+        ctx.wire.connect(d_amt_id, "out", f_req_id, req.amount.name)
 
         # F_req -> D_req_buffer
-        ctx.wire.connect(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
+        ctx.wire.connect(f_req_id, req.req_out.name, req_buffer_id, "in")
 
         # --- B. Grant Wiring (Sovereign Ports) ---
-        gnt_port_name = f"gnt_for_{f_req_id}"
+        # Use prefix from Spec for dynamic port name
+        spec = DiscreteAllocatorSpec
+        gnt_port_name = f"{spec.grants.prefix}{f_req_id}"
 
         # Add this port to the Allocator definition
         allocator_node = ctx.physical_graph.nodes[allocator_id]

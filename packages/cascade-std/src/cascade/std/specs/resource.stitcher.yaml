@@ -1,0 +1,9 @@
+"DiscreteAllocatorSpec": |-
+  Contract for a Discrete Resource Allocator.
+  Manages the distribution of countable resource units from a ledger.
+"DiscreteReclaimerSpec": |-
+  Contract for a Discrete Resource Reclaimer.
+  Handles the return of resource units to the ledger.
+"ResourceRequestorSpec": |-
+  Contract for the Resource Requestor Node (F_req).
+  Converts a static amount into a request token tagged with the requestor ID.

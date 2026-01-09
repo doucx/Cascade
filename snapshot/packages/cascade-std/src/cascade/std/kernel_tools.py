@@ -117,7 +117,7 @@ def implements(spec: Type[PhysicsSpec]):
             return outputs
 
         # Attach spec metadata for introspection/docs
-        wrapper.__spec__ = spec
+        setattr(wrapper, "__spec__", spec)
         return wrapper
 
     return decorator

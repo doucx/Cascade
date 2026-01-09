@@ -1,4 +1,6 @@
+from typing import Protocol, MutableMapping, Optional
 from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
+from cascade.spec.physical.nodes import Token
 
 
 class DiscreteAllocatorSpec(PhysicsSpec):
@@ -20,10 +22,25 @@ class DiscreteAllocatorSpec(PhysicsSpec):
     # Output for requests that cannot be satisfied immediately
     req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
 
+    class IO(Protocol):
+        # Inputs
+        ledger_in: Optional[Token]
+        req_in: Optional[Token]
+
+        # Outputs
+        ledger_out: Token
+        gnt_out: Token
+        grants: MutableMapping[str, Token]
+        req_parked: Token
+
 
 class ResourceRequestorSpec(PhysicsSpec):
     amount = Port.Input("amount", role=PortRole.DATA, type="int")
     req_out = Port.Output("req_out", role=PortRole.DATA, type=PortType.Token)
+
+    class IO(Protocol):
+        amount: Optional[Token]
+        req_out: Token
 
 
 class DiscreteReclaimerSpec(PhysicsSpec):
@@ -35,3 +52,12 @@ class DiscreteReclaimerSpec(PhysicsSpec):
     ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
     # Signal emitted to wake up parked requests
     signal_out = Port.Output("signal_out", role=PortRole.SIGNAL, type=PortType.Token)
+
+    class IO(Protocol):
+        # Inputs
+        ledger_in: Optional[Token]
+        rel_in: Optional[Token]
+
+        # Outputs
+        ledger_out: Token
+        signal_out: Token

@@ -1,171 +1,147 @@
-## [WIP] fix: Update imports after migration
+好的，我明白了。迁移操作破坏了 `cascade-sdk` 包的公共 API 导出映射，导致所有试图通过 `cascade` 顶层包访问这些移动后模块的测试都失败了。
+
+我们需要更新 `cascade-sdk` 中的 `_IMPORT_MAP` 和类型检查块，以指向 `cascade-execution-graph` 中的新位置。
+
+## [WIP] fix: Update SDK import map after module migration
+
+### 错误分析
+
+在执行 `stitcher refactor apply` 迁移 `cascade-runtime` 的模块到 `cascade-execution-graph` 后，`cascade-sdk` 包中的符号懒加载映射 (`_IMPORT_MAP`) 和类型检查导入 (`if TYPE_CHECKING:`) 并未自动更新。
+
+这导致 `cascade` 的公共 API 表面被破坏，所有依赖 `import cascade as cs` 并访问 `cs.DependencyMissingError`, `cs.NativeSolver`, `cs.to_json` 等移动后符号的代码都因 `AttributeError` 而失败。
 
 ### 用户需求
 
-修复因代码迁移导致的 `ImportError`、`ModuleNotFoundError` 和 `AttributeError`。具体包括：
-1.  更新测试文件中的导入路径，使其指向 `cascade-execution-graph` 包中的新位置。
-2.  确保新包的 `__init__.py` 文件正确导出了必要的类（如 `StaticGraphError`）。
+修复 `cascade-sdk/src/cascade/sdk.py` 文件，更新其中的导入路径，使其正确指向 `cascade-execution-graph` 包中的新模块位置。
 
 ### 评论
 
-这是迁移工作后的标准清理步骤。由于我们将代码物理移动到了新的包结构中，所有引用旧路径的代码（主要是测试代码）都需要更新。此外，为了保持模块的封装性，我们需要在新的 `__init__.py` 文件中显式导出公共 API。
+这是一个预料之中的、必要的修复步骤。`stitcher` 能够重构消费者代码的导入，但无法修改像 `_IMPORT_MAP` 这样的字符串数据结构。手动修正这个映射表是恢复 SDK 功能、让测试套件重新变绿的关键。
 
 ### 目标
 
-1.  修复 `test_engine_control_flow.py`：从 `cascade.execution.graph.errors` 导入 `DependencyMissingError`。
-2.  修复 `test_solver_csp.py`：更新 monkeypatch 的目标模块路径。
-3.  更新 `cascade.execution.graph.model.__init__.py`：导出 `StaticGraphError`。
-4.  修复 `test_static_integrity.py`：从正确的模块导入 `StaticGraphError`。
+1.  定位 `packages/cascade-sdk/src/cascade/sdk.py` 文件。
+2.  修改 `_IMPORT_MAP` 字典，更新 `DependencyMissingError`, `NativeSolver`, `to_json`, `from_json` 等条目的模块路径。
+3.  同步修改 `if TYPE_CHECKING:` 块中的静态导入路径，以保证类型检查器的正常工作。
 
 ### 基本原理
 
-通过显式更新测试中的导入路径，我们解耦了测试对旧 `runtime` 结构的依赖，验证了新包结构的正确性。在 `__init__.py` 中导出异常类是 Python 包开发的最佳实践，它简化了使用者的导入语句。
+`cascade-sdk` 作为项目的公共 API 门面，其内部的懒加载机制依赖于一个包含模块路径字符串的字典。在源模块被物理移动后，我们必须手动更新这些字符串路径，以重新建立符号的正确链接。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/tests #comp/build #scope/core #ai/instruct #task/domain/runtime #task/object/imports #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/build #scope/api #scope/dx #ai/instruct #task/domain/runtime #task/object/sdk-api #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `test_engine_control_flow.py`
+#### Acts 1: 修复 `sdk.py` 中的导入路径
 
-更新导入路径，不再依赖 `cascade` 顶层包导出 `DependencyMissingError`，而是直接从其新家导入。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/tests/integration/test_engine_control_flow.py
-~~~~~
-~~~~~python.old
-import pytest
-import cascade as cs
-from cascade.runtime import EventBus
-from cascade.runtime.host.instance import Engine
-from cascade.runtime.services.observability.events import TaskSkipped
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.test_utils.helpers import SpySubscriber
-~~~~~
-~~~~~python.new
-import pytest
-import cascade as cs
-from cascade.runtime import EventBus
-from cascade.runtime.host.instance import Engine
-from cascade.runtime.services.observability.events import TaskSkipped
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.execution.graph.errors import DependencyMissingError
-from cascade.test_utils.helpers import SpySubscriber
-~~~~~
+我们将一次性更新 `_IMPORT_MAP` 和 `TYPE_CHECKING` 块中所有因迁移而失效的路径。
 
 ~~~~~act
 patch_file
-packages/cascade-runtime/tests/integration/test_engine_control_flow.py
+packages/cascade-sdk/src/cascade/sdk.py
 ~~~~~
 ~~~~~python.old
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
+    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
+    "Event": ("cascade.runtime.services.observability.events", "Event"),
+    "DependencyMissingError": ("cascade.runtime.errors", "DependencyMissingError"),
+    "sequence": ("cascade.flow", "sequence"),
+    "pipeline": ("cascade.flow", "pipeline"),
+    # Adapters & Protocols
+    "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
+    "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
+    "Connector": ("cascade.spec.runtime.interfaces", "Connector"),
+    "StateBackend": ("cascade.spec.runtime.interfaces", "StateBackend"),
+    # Tools & Utilities
+    "to_json": ("cascade.runtime.graph.serialize", "to_json"),
+    "from_json": ("cascade.runtime.graph.serialize", "from_json"),
+    "override_resource": ("cascade.test_utils.helpers", "override_resource"),
+    "ControllerTestApp": ("cascade.test_utils.helpers", "ControllerTestApp"),
+    "create_cli": ("cascade.tools.cli", "create_cli"),
+}
 
-    # Now asserts DependencyMissingError instead of KeyError
-    with pytest.raises(cs.DependencyMissingError):
-        await engine.run(flow)
+# --- Type Checking Imports ---
+if TYPE_CHECKING:
+    from cascade.spec.dsl.task import task
+    from cascade.spec.dsl.fluent import LazyResult
+    from cascade.spec.dsl.routing import Router
+    from cascade.spec.dsl.jump import Jump
+    from cascade.spec.dsl.resources import resource, inject
+    from cascade.spec.dsl.constraint import with_constraints
+    from cascade.common.context import get_current_context
 
-    # Verify Skip Event using the new helper
+    from cascade.control_flow import select_jump, bind
+
+    from cascade.runtime.host.instance import Engine
+    from cascade.runtime.services.observability.bus import EventBus
+    from cascade.runtime.services.observability.events import Event
+    from cascade.execution.graph.errors import DependencyMissingError
+    from cascade.flow import sequence, pipeline
+
+    from cascade.execution.graph.solvers.native import NativeSolver
+    from cascade.runtime.io.executors.local import LocalExecutor
+    from cascade.spec.runtime.interfaces import Connector, StateBackend
+
+    from cascade.execution.graph.model.serialize import to_json, from_json
+    from cascade.test_utils.helpers import override_resource, ControllerTestApp
+    from cascade.tools.cli import create_cli
 ~~~~~
 ~~~~~python.new
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
+    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
+    "Event": ("cascade.runtime.services.observability.events", "Event"),
+    "DependencyMissingError": (
+        "cascade.execution.graph.errors",
+        "DependencyMissingError",
+    ),
+    "sequence": ("cascade.flow", "sequence"),
+    "pipeline": ("cascade.flow", "pipeline"),
+    # Adapters & Protocols
+    "NativeSolver": ("cascade.execution.graph.solvers.native", "NativeSolver"),
+    "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
+    "Connector": ("cascade.spec.runtime.interfaces", "Connector"),
+    "StateBackend": ("cascade.spec.runtime.interfaces", "StateBackend"),
+    # Tools & Utilities
+    "to_json": ("cascade.execution.graph.model.serialize", "to_json"),
+    "from_json": ("cascade.execution.graph.model.serialize", "from_json"),
+    "override_resource": ("cascade.test_utils.helpers", "override_resource"),
+    "ControllerTestApp": ("cascade.test_utils.helpers", "ControllerTestApp"),
+    "create_cli": ("cascade.tools.cli", "create_cli"),
+}
 
-    # Now asserts DependencyMissingError instead of KeyError
-    with pytest.raises(DependencyMissingError):
-        await engine.run(flow)
+# --- Type Checking Imports ---
+if TYPE_CHECKING:
+    from cascade.spec.dsl.task import task
+    from cascade.spec.dsl.fluent import LazyResult
+    from cascade.spec.dsl.routing import Router
+    from cascade.spec.dsl.jump import Jump
+    from cascade.spec.dsl.resources import resource, inject
+    from cascade.spec.dsl.constraint import with_constraints
+    from cascade.common.context import get_current_context
 
-    # Verify Skip Event using the new helper
-~~~~~
+    from cascade.control_flow import select_jump, bind
 
-~~~~~act
-patch_file
-packages/cascade-runtime/tests/integration/test_engine_control_flow.py
-~~~~~
-~~~~~python.old
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    from cascade.runtime.host.instance import Engine
+    from cascade.runtime.services.observability.bus import EventBus
+    from cascade.runtime.services.observability.events import Event
+    from cascade.execution.graph.errors import DependencyMissingError
+    from cascade.flow import sequence, pipeline
 
-    # Now asserts DependencyMissingError instead of KeyError
-    with pytest.raises(cs.DependencyMissingError):
-        await engine.run(res_b)
+    from cascade.execution.graph.solvers.native import NativeSolver
+    from cascade.runtime.io.executors.local import LocalExecutor
+    from cascade.spec.runtime.interfaces import Connector, StateBackend
 
-    skip_events = spy.events_of_type(TaskSkipped)
-~~~~~
-~~~~~python.new
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
-
-    # Now asserts DependencyMissingError instead of KeyError
-    with pytest.raises(DependencyMissingError):
-        await engine.run(res_b)
-
-    skip_events = spy.events_of_type(TaskSkipped)
-~~~~~
-
-#### Acts 2: 修复 `test_solver_csp.py`
-
-更新动态导入的路径以匹配新的包结构。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/tests/unit/test_solver_csp.py
-~~~~~
-~~~~~python.old
-def test_csp_solver_missing_dependency(monkeypatch):
-    import cascade.runtime.kernel.solvers.csp as csp_module
-
-    # Simulate missing dependency by setting constraint to None
-~~~~~
-~~~~~python.new
-def test_csp_solver_missing_dependency(monkeypatch):
-    import cascade.execution.graph.solvers.csp as csp_module
-
-    # Simulate missing dependency by setting constraint to None
-~~~~~
-
-#### Acts 3: 导出 `StaticGraphError`
-
-在 `cascade-execution-graph` 的模型包中导出异常类，以便其他模块可以导入它。
-
-~~~~~act
-write_file
-packages/cascade-execution-graph/src/cascade/execution/graph/model/__init__.py
-~~~~~
-~~~~~python
-from .exceptions import StaticGraphError, CascadeGraphError
-
-__all__ = ["StaticGraphError", "CascadeGraphError"]
-~~~~~
-
-#### Acts 4: 修复 `test_static_integrity.py`
-
-更新导入语句以反映 `StaticGraphError` 的新位置（现在可以通过包导入了）。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/tests/legacy_graph/integration/test_static_integrity.py
-~~~~~
-~~~~~python.old
-import pytest
-import cascade as cs
-from cascade.execution.graph.model import StaticGraphError
-from cascade.runtime import Engine, EventBus
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
-~~~~~
-~~~~~python.new
-import pytest
-import cascade as cs
-from cascade.execution.graph.model.exceptions import StaticGraphError
-from cascade.runtime import Engine, EventBus
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
+    from cascade.execution.graph.model.serialize import to_json, from_json
+    from cascade.test_utils.helpers import override_resource, ControllerTestApp
+    from cascade.tools.cli import create_cli
 ~~~~~
 
 ### 下一步建议
 
-执行完这些修复后，请再次运行测试套件。如果一切顺利，这些测试应该能够通过。
-之后，我们可以继续 Phase 3: Engine Decoupling，开始修改 `Engine` 以移除对图执行策略的硬编码依赖。
+导入路径修复完成。请再次运行 `pytest`。这次应该能解决所有 `AttributeError`，并让我们看到迁移后是否存在更深层次的逻辑问题。
+
+如果测试通过，我们就可以进入 **Phase 3: 引擎解耦 (Engine Decoupling)**。

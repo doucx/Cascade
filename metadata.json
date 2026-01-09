@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: Update imports after migration", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767966965.2713912, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: Update SDK import map after module migration", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767967181.3250966, "duration_ms": 0}}

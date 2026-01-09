@@ -1,39 +1,146 @@
 简要回答
-我们将创建 `@implements` 装饰器，并使用它重构 `standard_egress` 和 `gate_passthrough` 函数，使其通过 `Spec.IO` 接口访问数据，从而验证 PIDL 在实现层的可行性。
+我们将升级 `cascade-spec` 和 `cascade-std` 中的基础设施，引入 `Port.Map` 概念和相应的运行时支持，以处理动态端口（如 Bleacher 的参数和 Allocator 的 Grant）。
 
-## [WIP] feat: 实施 PIDL 阶段三 - Kernel 实现重构试点
+## [WIP] feat: PIDL 基础设施升级 - 支持动态端口映射
 
 ### 用户需求
-验证 PIDL 在 Kernel 实现层的应用。具体任务：
-1.  在 `cascade.std` 中创建一个工具模块，提供 `@implements` 装饰器和 `IO` 包装器。
-2.  重构 `gate.py` 中的 `gate_passthrough` 函数，使其遵循 `GateSpec`。
-3.  重构 `egress.py` 中的 `standard_egress` 函数，使其遵循 `EgressSpec`。
-4.  确保现有测试通过。
+1.  修改 `PortDef` 和 `Port` 工厂，支持定义动态端口映射 (`MapInput`, `MapOutput`)。
+2.  升级 `IOWrapper`，使其在访问 Map 类型的端口时，能够动态收集未匹配的输入或提供支持前缀校验的输出代理。
 
 ### 评论
-这是“物理法则”与“物理实体”的第一次接触。我们的目标是引入强类型接口而不牺牲运行时性能。通过引入一个轻量级的 `IO` 代理对象，我们可以让 Kernel 函数的代码看起来像是在操作属性（`io.req_in`），而底层实际上是在高效地访问字典（`inputs["req_in"]`）。
+引入 "Static First, Dynamic Fallback" 策略是对 PIDL 的重要补充。它不仅解决了 `Bleacher` 和 `Allocator` 的燃眉之急，也为未来任何需要灵活接口的 IC 提供了标准模式。这种模式在保持核心契约强类型的同时，保留了必要的动态灵活性。
 
 ### 目标
-1.  创建 `packages/cascade-std/src/cascade/std/kernel_tools.py`。
-2.  修改 `gate.py` 和 `egress.py` 以使用新的模式。
+1.  更新 `packages/cascade-spec/src/cascade/spec/physics/core.py`。
+2.  更新 `packages/cascade-std/src/cascade/std/kernel_tools.py`。
 
 ### 基本原理
-*   **`@implements(Spec)`**: 这个装饰器将负责在运行时将传统的 `(inputs, node, resources)` 签名适配为新的 `(io, node, resources)` 签名。
-*   **Zero-Copy IO Wrapper**: 为了性能，`IO` 对象不会复制数据。它只是 `inputs` 字典的一个视图。
-    *   `getattr(io, "req_in")` -> `inputs["req_in"]`
-    *   `setattr(io, "req_out", val)` -> `outputs["req_out"] = val`
-*   **向后兼容**: 在这个过渡阶段，我们保持装饰器的逻辑尽可能简单，确保它能无缝替换现有的字典操作代码，同时为未来的静态检查打下基础。
+*   **Schema 层 (`core.py`)**: 增加 `is_map` 标记。对于 Map 类型的端口，`name` 字段不再代表单一物理端口，而是作为一个占位符。增加 `prefix` 字段用于输出端口的命名空间约束。
+*   **Runtime 层 (`kernel_tools.py`)**:
+    *   **Input Map**: 运行时计算 `set(inputs.keys()) - set(static_port_names)`，返回剩余输入的字典。
+    *   **Output Map**: 返回一个 `DynamicOutputMap` 代理对象，拦截 `__setitem__` 操作，验证前缀并写入底层的 `outputs` 字典。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/std #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/kernel #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/std #comp/interfaces #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/kernel-infra #task/action/upgrade #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Kernel 工具模块
+#### Acts 1: 升级核心定义 (The Core Laws)
 
-我们首先实现基础设施：`@implements` 装饰器和一个基于 `__slots__` 的高性能 `IO` 代理。
+修改 `core.py`，为 `PortDef` 增加动态属性，并添加 `MapInput` / `MapOutput` 工厂方法。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/physics/core.py
+~~~~~
+~~~~~python.old
+class PortDef:
+    """
+    Descriptor for defining a port on a PhysicsSpec.
+    Acts as the definition of a single interface point on a physical node.
+    """
+    def __init__(
+        self,
+        name: str,
+        direction: PortDirection,
+        role: PortRole = PortRole.DATA,
+        type_hint: Any = PortType.Any
+    ):
+        self.name = name
+        self.direction = direction
+        self.role = role
+        self.type_hint = type_hint
+
+    def __set_name__(self, owner, name):
+        # We allow the attribute name to act as a fallback or strict mapping validation later.
+        pass
+
+    def __repr__(self):
+        return f"PortDef(name='{self.name}', dir={self.direction}, role={self.role})"
+
+
+class Port:
+    """
+    Namespace factory for defining ports in a declarative style.
+    Example:
+        data_in = Port.Input("data_in")
+    """
+    
+    @staticmethod
+    def Input(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
+        return PortDef(name, PortDirection.INPUT, role, type)
+
+    @staticmethod
+    def Output(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
+        return PortDef(name, PortDirection.OUTPUT, role, type)
+~~~~~
+~~~~~python.new
+class PortDef:
+    """
+    Descriptor for defining a port on a PhysicsSpec.
+    Acts as the definition of a single interface point on a physical node.
+    """
+    def __init__(
+        self,
+        name: str,
+        direction: PortDirection,
+        role: PortRole = PortRole.DATA,
+        type_hint: Any = PortType.Any,
+        is_map: bool = False,
+        prefix: str = ""
+    ):
+        self.name = name
+        self.direction = direction
+        self.role = role
+        self.type_hint = type_hint
+        self.is_map = is_map
+        self.prefix = prefix
+
+    def __set_name__(self, owner, name):
+        # We allow the attribute name to act as a fallback or strict mapping validation later.
+        pass
+
+    def __repr__(self):
+        return f"PortDef(name='{self.name}', dir={self.direction}, role={self.role}, map={self.is_map})"
+
+
+class Port:
+    """
+    Namespace factory for defining ports in a declarative style.
+    Example:
+        data_in = Port.Input("data_in")
+    """
+    
+    @staticmethod
+    def Input(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
+        return PortDef(name, PortDirection.INPUT, role, type)
+
+    @staticmethod
+    def Output(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
+        return PortDef(name, PortDirection.OUTPUT, role, type)
+
+    @staticmethod
+    def MapInput(role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
+        """
+        Defines a dynamic dictionary of input ports. 
+        It captures all inputs that are NOT matched by static Port.Inputs.
+        """
+        return PortDef("*", PortDirection.INPUT, role, type, is_map=True)
+
+    @staticmethod
+    def MapOutput(prefix: str = "", role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
+        """
+        Defines a dynamic dictionary of output ports.
+        Allows writing to any port name starting with the given prefix.
+        """
+        return PortDef("*", PortDirection.OUTPUT, role, type, is_map=True, prefix=prefix)
+~~~~~
+
+#### Acts 2: 升级运行时工具 (The Runtime Tools)
+
+修改 `kernel_tools.py`，实现 `DynamicOutputMap` 并在 `IOWrapper` 中处理 Map 逻辑。
 
 ~~~~~act
 write_file
@@ -41,17 +148,44 @@ packages/cascade-std/src/cascade/std/kernel_tools.py
 ~~~~~
 ~~~~~python
 from functools import wraps
-from typing import Dict, Any, Type, TypeVar
+from typing import Dict, Any, Type, TypeVar, MutableMapping
 from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.spec.physics import PhysicsSpec
+from cascade.spec.physics import PhysicsSpec, PortDirection
 
 T = TypeVar("T", bound=PhysicsSpec)
+
+
+class DynamicOutputMap(MutableMapping):
+    """
+    Proxy for writing to dynamic output ports with prefix validation.
+    """
+    def __init__(self, target_dict: Dict[str, Token], prefix: str):
+        self._target = target_dict
+        self._prefix = prefix
+
+    def __setitem__(self, key: str, value: Token) -> None:
+        if not key.startswith(self._prefix):
+             raise ValueError(f"Dynamic port '{key}' does not match required prefix '{self._prefix}'")
+        self._target[key] = value
+
+    def __getitem__(self, key: str) -> Token:
+        return self._target[key]
+
+    def __delitem__(self, key: str) -> None:
+        del self._target[key]
+
+    def __iter__(self):
+        return iter(self._target)
+
+    def __len__(self):
+        return len(self._target)
 
 
 class IOWrapper:
     """
     A zero-copy view over the input and output dictionaries.
     Translates attribute access to dictionary lookups based on the Spec.
+    Supports "Static First, Dynamic Fallback" for map ports.
     """
     __slots__ = ("_inputs", "_outputs", "_spec")
 
@@ -63,14 +197,34 @@ class IOWrapper:
     def __getattr__(self, name: str) -> Any:
         # 1. Check Input Ports
         if name in self._spec.input_ports:
-            port_name = self._spec.input_ports[name].name
-            # If the port is not in inputs, it means no token arrived (optional input).
-            # We return None in that case, or raise? For now, None seems safer for "Gate" logic.
+            port_def = self._spec.input_ports[name]
+            
+            # Case A: Dynamic Map Input
+            if port_def.is_map:
+                # Collect all inputs that are NOT associated with a static port
+                static_names = {
+                    p.name for p in self._spec.input_ports.values() 
+                    if not p.is_map
+                }
+                return {
+                    k: v for k, v in self._inputs.items() 
+                    if k not in static_names
+                }
+            
+            # Case B: Static Input
+            port_name = port_def.name
             return self._inputs.get(port_name)
         
-        # 2. Check Output Ports (for reading back what we wrote? Uncommon but possible)
+        # 2. Check Output Ports
         if name in self._spec.output_ports:
-             port_name = self._spec.output_ports[name].name
+             port_def = self._spec.output_ports[name]
+             
+             # Case C: Dynamic Map Output
+             if port_def.is_map:
+                 return DynamicOutputMap(self._outputs, port_def.prefix)
+
+             # Case D: Static Output (Reading back what we wrote)
+             port_name = port_def.name
              return self._outputs.get(port_name)
 
         raise AttributeError(f"'{self._spec.__name__}' IO has no port mapping for '{name}'")
@@ -82,7 +236,15 @@ class IOWrapper:
 
         # Check Output Ports
         if name in self._spec.output_ports:
-            port_name = self._spec.output_ports[name].name
+            port_def = self._spec.output_ports[name]
+            
+            # Direct assignment to a Map property is not allowed (must use item assignment)
+            if port_def.is_map:
+                raise AttributeError(
+                    f"Cannot assign to map port '{name}' directly. Use indexing (io.{name}['key'] = val)."
+                )
+
+            port_name = port_def.name
             self._outputs[port_name] = value
             return
 
@@ -118,115 +280,10 @@ def implements(spec: Type[PhysicsSpec]):
     return decorator
 ~~~~~
 
-#### Acts 2: 重构 Gate Kernel
-
-修改 `gate.py`，使用 `GateSpec` 和 `@implements`。
-
-~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/system/gate.py
-~~~~~
-~~~~~python.old
-from typing import Dict, Any
-from cascade.spec.physical.nodes import Token, PhysicsNode
-
-
-def gate_passthrough(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    # We expect 'req_in' and 'signal_in' ports
-    req_token = inputs.get("req_in")
-    signal_token = inputs.get("signal_in")
-
-    if req_token and signal_token:
-        # The gate is open, pass the request token through
-        return {"req_out": req_token}
-
-    # Should not happen if wired correctly, but return empty if not fully triggered
-    return {}
-~~~~~
-~~~~~python.new
-from typing import Any
-from cascade.spec.physical.nodes import PhysicsNode
-from cascade.std.specs import GateSpec
-from cascade.std.kernel_tools import implements
-
-
-@implements(GateSpec)
-def gate_passthrough(
-    io: GateSpec.IO, node: PhysicsNode, resources: Any
-) -> None:
-    # Access inputs via Spec-defined attributes
-    # The IO wrapper maps 'io.req_in' -> inputs["req_in"]
-    if io.req_in and io.signal_in:
-        # The gate is open, pass the request token through
-        # The IO wrapper maps 'io.req_out' -> outputs["req_out"]
-        io.req_out = io.req_in
-~~~~~
-
-#### Acts 3: 重构 Egress Kernel
-
-修改 `egress.py`，使用 `EgressSpec` 和 `@implements`。注意这里的输入端口映射：`input_token` (Spec属性) -> `"in"` (物理端口名)。
-
-~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/system/egress.py
-~~~~~
-~~~~~python.old
-from typing import Dict, Any
-from cascade.spec.physical.nodes import Token, PhysicsNode
-
-
-def standard_egress(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    # 1. Get the Egress Queue from system resources
-    # This must be registered by the Strategy during startup.
-    queue = resources.get("system.egress_queue")
-
-    # 2. Consume the token
-    # Phase 3.3 of the roadmap defines the input port as 'in'.
-    token = inputs.get("in")
-
-    if token:
-        # 3. Export
-        # We wrap the token with the node ID so the Strategy knows which egress node it came from.
-        # This allows handling multiple egress points (e.g. for different task results).
-        queue.put_nowait((node.id, token))
-
-    # 4. Return empty (Evaporate)
-    # No tokens are returned to the graph. The energy leaves the system here.
-    return {}
-~~~~~
-~~~~~python.new
-from typing import Any
-from cascade.spec.physical.nodes import PhysicsNode
-from cascade.std.specs import EgressSpec
-from cascade.std.kernel_tools import implements
-
-
-@implements(EgressSpec)
-def standard_egress(
-    io: EgressSpec.IO, node: PhysicsNode, resources: Any
-) -> None:
-    # 1. Get the Egress Queue
-    queue = resources.get("system.egress_queue")
-
-    # 2. Consume the token
-    # Spec mapping: io.input_token -> inputs["in"]
-    token = io.input_token
-
-    if token:
-        # 3. Export
-        queue.put_nowait((node.id, token))
-    
-    # 4. Return empty (Evaporate)
-    # Implicitly returns the empty 'outputs' dict created by @implements
-~~~~~
-
 ### 下一步建议
-我们已经成功重构了两个简单的 Kernel。接下来，我建议运行测试以确保我们没有破坏任何东西。如果一切正常，我们可以继续重构更复杂的 `DiscreteAllocator` 和 `Bleacher`。
+基础设施升级完毕。现在我们可以生成一个新的计划，利用这些新能力来重构 `Bleacher` 和 `DiscreteAllocator`。
 
-特别注意：`Bleacher` 的重构会比较复杂，因为它的输入端口是动态的，而 Spec 目前主要关注静态契约。我们可能需要扩展 `IOWrapper` 来支持动态属性访问，或者在 `Bleacher` 中混合使用 `io` 和原始 `inputs`（虽然我们应尽量避免混合）。对于 `DiscreteAllocator`，挑战在于处理动态的 `gnt_for_X` 输出端口。
-
-请确认是否运行测试。
+接下来的步骤：
+1.  修改 `cascade.std.specs.triad.BleacherSpec` 使用 `Port.MapInput`。
+2.  修改 `cascade.std.specs.resource.DiscreteAllocatorSpec` 使用 `Port.MapOutput`。
+3.  重构 `standard_bleacher` 和 `discrete_allocator` 内核函数。

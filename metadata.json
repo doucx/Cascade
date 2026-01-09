@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 实施 PIDL 阶段二 - 标准化物理契约", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767945118.835246, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实施 PIDL 阶段三 - Kernel 实现重构试点", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767945207.014613, "duration_ms": 0}}

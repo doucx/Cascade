@@ -1,17 +1,16 @@
-from typing import Dict, Any
-from cascade.spec.physical.nodes import Token, PhysicsNode
+from typing import Any
+from cascade.spec.physical.nodes import PhysicsNode
+from cascade.std.specs import GateSpec
+from cascade.std.kernel_tools import implements
 
 
+@implements(GateSpec)
 def gate_passthrough(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    # We expect 'req_in' and 'signal_in' ports
-    req_token = inputs.get("req_in")
-    signal_token = inputs.get("signal_in")
-
-    if req_token and signal_token:
+    io: GateSpec.IO, node: PhysicsNode, resources: Any
+) -> None:
+    # Access inputs via Spec-defined attributes
+    # The IO wrapper maps 'io.req_in' -> inputs["req_in"]
+    if io.req_in and io.signal_in:
         # The gate is open, pass the request token through
-        return {"req_out": req_token}
-
-    # Should not happen if wired correctly, but return empty if not fully triggered
-    return {}
+        # The IO wrapper maps 'io.req_out' -> outputs["req_out"]
+        io.req_out = io.req_in

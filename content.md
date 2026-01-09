@@ -1,208 +1,232 @@
 简要回答
-我们将在 `cascade-std` 包中创建 `specs` 模块，并基于 `PhysicsSpec` 实现 Resource、Triad 和 System 三类集成电路 (IC) 的标准物理契约，显式化现有的隐式端口定义。
+我们将创建 `@implements` 装饰器，并使用它重构 `standard_egress` 和 `gate_passthrough` 函数，使其通过 `Spec.IO` 接口访问数据，从而验证 PIDL 在实现层的可行性。
 
-## [WIP] feat: 实施 PIDL 阶段二 - 标准化物理契约
+## [WIP] feat: 实施 PIDL 阶段三 - Kernel 实现重构试点
 
 ### 用户需求
-在 `cascade-std` 包中标准化现有的物理节点契约。具体包括：
-1.  创建 `cascade.std.specs` 包结构。
-2.  **Resource Specs**: 定义 `DiscreteAllocatorSpec` 和 `DiscreteReclaimerSpec`。
-3.  **Triad Specs**: 定义 `BleacherSpec`, `WorkerSpec`, `StainerSpec`。
-4.  **System Specs**: 定义 `EgressSpec`, `GateSpec`, `SleepSpec`。
+验证 PIDL 在 Kernel 实现层的应用。具体任务：
+1.  在 `cascade.std` 中创建一个工具模块，提供 `@implements` 装饰器和 `IO` 包装器。
+2.  重构 `gate.py` 中的 `gate_passthrough` 函数，使其遵循 `GateSpec`。
+3.  重构 `egress.py` 中的 `standard_egress` 函数，使其遵循 `EgressSpec`。
+4.  确保现有测试通过。
 
 ### 评论
-这是将 PIDL 付诸实践的第一步。通过这些 Spec 类，我们不仅记录了当前 Kernel 函数的输入输出接口，还为后续的 Kernel 重构（使用 `@implements(Spec)`）和 Compiler 连线策略（引用 `Spec.port.name`）提供了唯一的真理来源 (SSoT)。这也解决了 Python 关键字冲突的问题（如 Egress 的输入端口名为 `in`，但在 Spec 类中可以绑定到 `input_token` 属性）。
+这是“物理法则”与“物理实体”的第一次接触。我们的目标是引入强类型接口而不牺牲运行时性能。通过引入一个轻量级的 `IO` 代理对象，我们可以让 Kernel 函数的代码看起来像是在操作属性（`io.req_in`），而底层实际上是在高效地访问字典（`inputs["req_in"]`）。
 
 ### 目标
-在 `packages/cascade-std/src/cascade/std/specs/` 目录下完成 `resource.py`, `triad.py`, `system.py` 和 `__init__.py` 的创建。
+1.  创建 `packages/cascade-std/src/cascade/std/kernel_tools.py`。
+2.  修改 `gate.py` 和 `egress.py` 以使用新的模式。
 
 ### 基本原理
-我们将使用阶段一定义的 `cascade.spec.physics` 原语。
-*   **属性命名与端口命名分离**: 利用 `PortDef` 的特性，类属性名（如 `input_token`）用于代码引用，而传递给 `Port.Input("in")` 的字符串才是物理层实际使用的端口名。这优雅地处理了 `in` 等保留字问题。
-*   **类型提示**: 虽然 Python 运行时不强制类型，但在 Spec 中明确 `type=PortType.Ledger` 等信息，为未来的静态分析和可视化提供了语义基础。
+*   **`@implements(Spec)`**: 这个装饰器将负责在运行时将传统的 `(inputs, node, resources)` 签名适配为新的 `(io, node, resources)` 签名。
+*   **Zero-Copy IO Wrapper**: 为了性能，`IO` 对象不会复制数据。它只是 `inputs` 字典的一个视图。
+    *   `getattr(io, "req_in")` -> `inputs["req_in"]`
+    *   `setattr(io, "req_out", val)` -> `outputs["req_out"] = val`
+*   **向后兼容**: 在这个过渡阶段，我们保持装饰器的逻辑尽可能简单，确保它能无缝替换现有的字典操作代码，同时为未来的静态检查打下基础。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/std #comp/interfaces #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/std-specs #task/action/standardization #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/std #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/kernel #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Specs 目录
+#### Acts 1: 创建 Kernel 工具模块
 
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p packages/cascade-std/src/cascade/std/specs
-~~~~~
-
-#### Acts 2: 定义资源类契约 (Resource Specs)
-
-创建 `resource.py`，定义离散资源分配器和回收器的端口契约。
+我们首先实现基础设施：`@implements` 装饰器和一个基于 `__slots__` 的高性能 `IO` 代理。
 
 ~~~~~act
 write_file
-packages/cascade-std/src/cascade/std/specs/resource.py
+packages/cascade-std/src/cascade/std/kernel_tools.py
 ~~~~~
 ~~~~~python
-from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
+from functools import wraps
+from typing import Dict, Any, Type, TypeVar
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.physics import PhysicsSpec
+
+T = TypeVar("T", bound=PhysicsSpec)
 
 
-class DiscreteAllocatorSpec(PhysicsSpec):
+class IOWrapper:
     """
-    Contract for a Discrete Resource Allocator.
-    Manages the distribution of countable resource units from a ledger.
+    A zero-copy view over the input and output dictionaries.
+    Translates attribute access to dictionary lookups based on the Spec.
     """
-    # Inputs
-    ledger_in = Port.Input("ledger_in", role=PortRole.DATA, type=PortType.Ledger)
-    req_in = Port.Input("req_in", role=PortRole.DATA, type=PortType.Token)
+    __slots__ = ("_inputs", "_outputs", "_spec")
 
-    # Outputs
-    ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
-    # Note: The main grant output. Dynamic dedicated ports (gnt_for_X) may also exist.
-    gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE, type=PortType.Token)
-    # Output for requests that cannot be satisfied immediately
-    req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
+    def __init__(self, inputs: Dict[str, Token], outputs: Dict[str, Token], spec: Type[PhysicsSpec]):
+        self._inputs = inputs
+        self._outputs = outputs
+        self._spec = spec
+
+    def __getattr__(self, name: str) -> Any:
+        # 1. Check Input Ports
+        if name in self._spec.input_ports:
+            port_name = self._spec.input_ports[name].name
+            # If the port is not in inputs, it means no token arrived (optional input).
+            # We return None in that case, or raise? For now, None seems safer for "Gate" logic.
+            return self._inputs.get(port_name)
+        
+        # 2. Check Output Ports (for reading back what we wrote? Uncommon but possible)
+        if name in self._spec.output_ports:
+             port_name = self._spec.output_ports[name].name
+             return self._outputs.get(port_name)
+
+        raise AttributeError(f"'{self._spec.__name__}' IO has no port mapping for '{name}'")
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in ("_inputs", "_outputs", "_spec"):
+            super().__setattr__(name, value)
+            return
+
+        # Check Output Ports
+        if name in self._spec.output_ports:
+            port_name = self._spec.output_ports[name].name
+            self._outputs[port_name] = value
+            return
+
+        raise AttributeError(f"'{self._spec.__name__}' IO has no output port mapping for '{name}'")
 
 
-class DiscreteReclaimerSpec(PhysicsSpec):
+def implements(spec: Type[PhysicsSpec]):
     """
-    Contract for a Discrete Resource Reclaimer.
-    Handles the return of resource units to the ledger.
-    """
-    # Inputs
-    ledger_in = Port.Input("ledger_in", role=PortRole.DATA, type=PortType.Ledger)
-    rel_in = Port.Input("rel_in", role=PortRole.DATA, type=PortType.Token)
-
-    # Outputs
-    ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
-    # Signal emitted to wake up parked requests
-    signal_out = Port.Output("signal_out", role=PortRole.SIGNAL, type=PortType.Token)
-~~~~~
-
-#### Acts 3: 定义三连体契约 (Triad Specs)
-
-创建 `triad.py`，定义 Bleacher, Worker 和 Stainer 的契约。注意 Bleacher 的输入端口是动态生成的，因此 Spec 主要定义其固定的输出接口。
-
-~~~~~act
-write_file
-packages/cascade-std/src/cascade/std/specs/triad.py
-~~~~~
-~~~~~python
-from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
-
-
-class BleacherSpec(PhysicsSpec):
-    """
-    Contract for the Pre-process Node (F_pre).
-    Inputs are dynamic (based on Task arguments), so they are not exhaustively listed here.
-    """
-    # Outputs
-    worker_input = Port.Output("worker_input", role=PortRole.DATA, type="Dict")
-    trace_output = Port.Output("trace_output", role=PortRole.DATA, type="TraceCtx")
-    context_output = Port.Output("context_output", role=PortRole.DATA, type="Dict")
-    obs_output = Port.Output("obs_output", role=PortRole.OBSERVABILITY, type="Event")
-
-
-class WorkerSpec(PhysicsSpec):
-    """
-    Contract for the Execution Node (F_exec).
-    Pure business logic execution.
-    """
-    # Inputs
-    worker_input = Port.Input("worker_input", role=PortRole.DATA, type="Dict")
-
-    # Outputs
-    worker_result = Port.Output("worker_result", role=PortRole.DATA, type=PortType.Any)
-
-
-class StainerSpec(PhysicsSpec):
-    """
-    Contract for the Post-process Node (F_post).
-    Wraps results and handles routing.
-    """
-    # Inputs
-    worker_result = Port.Input("worker_result", role=PortRole.DATA, type=PortType.Any)
-    trace_input = Port.Input("trace_input", role=PortRole.DATA, type="TraceCtx")
-    context_input = Port.Input("context_input", role=PortRole.DATA, type="Dict")
-
-    # Outputs
-    output_default = Port.Output("output_default", role=PortRole.DATA, type=PortType.Token)
-    output_error = Port.Output("output_error", role=PortRole.DATA, type=PortType.Token)
-    obs_output = Port.Output("obs_output", role=PortRole.OBSERVABILITY, type="Event")
-    # Resource returns are dynamic
-~~~~~
-
-#### Acts 4: 定义系统类契约 (System Specs)
-
-创建 `system.py`，定义 Egress, Gate 和 Sleep 等控制节点的契约。
-
-~~~~~act
-write_file
-packages/cascade-std/src/cascade/std/specs/system.py
-~~~~~
-~~~~~python
-from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
-
-
-class EgressSpec(PhysicsSpec):
-    """
-    Contract for the Egress Node.
-    Acts as a sink for graph results.
-    """
-    # The physical port name is "in" (reserved keyword in Python).
-    # We map it to the attribute 'input_token'.
-    input_token = Port.Input("in", role=PortRole.DATA, type=PortType.Token)
-
-
-class GateSpec(PhysicsSpec):
-    """
-    Contract for a Control Gate.
-    Passes req_in to req_out only when signal_in receives a token.
-    """
-    req_in = Port.Input("req_in", role=PortRole.DATA)
-    signal_in = Port.Input("signal_in", role=PortRole.SIGNAL)
+    Decorator that adapts a kernel function to use the typed IO interface.
     
-    req_out = Port.Output("req_out", role=PortRole.DATA)
-
-
-class SleepSpec(PhysicsSpec):
+    Transforms:
+        def my_kernel(inputs, node, resources) -> Dict
+    Into:
+        def my_kernel(io, node, resources) -> None
+        
+    The wrapper handles the creation of the outputs dictionary and returns it.
     """
-    Contract for the Time Delay Node.
-    """
-    delay_in = Port.Input("delay_in", role=PortRole.DATA, type="float")
-    data_in = Port.Input("data_in", role=PortRole.DATA, type=PortType.Token)
-    # No outputs (Void) - flow resumes via ChronosService injection
+    def decorator(func):
+        @wraps(func)
+        def wrapper(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:
+            outputs: Dict[str, Token] = {}
+            io = IOWrapper(inputs, outputs, spec)
+            
+            # Call the inner function. It is expected to set attributes on 'io' (populating 'outputs')
+            # and return None.
+            func(io, node, resources)
+            
+            return outputs
+        
+        # Attach spec metadata for introspection/docs
+        wrapper.__spec__ = spec
+        return wrapper
+    return decorator
 ~~~~~
 
-#### Acts 5: 导出所有 Specs
+#### Acts 2: 重构 Gate Kernel
+
+修改 `gate.py`，使用 `GateSpec` 和 `@implements`。
 
 ~~~~~act
-write_file
-packages/cascade-std/src/cascade/std/specs/__init__.py
+patch_file
+packages/cascade-std/src/cascade/std/system/gate.py
 ~~~~~
-~~~~~python
-from .resource import DiscreteAllocatorSpec, DiscreteReclaimerSpec
-from .triad import BleacherSpec, WorkerSpec, StainerSpec
-from .system import EgressSpec, GateSpec, SleepSpec
+~~~~~python.old
+from typing import Dict, Any
+from cascade.spec.physical.nodes import Token, PhysicsNode
 
-__all__ = [
-    "DiscreteAllocatorSpec",
-    "DiscreteReclaimerSpec",
-    "BleacherSpec",
-    "WorkerSpec",
-    "StainerSpec",
-    "EgressSpec",
-    "GateSpec",
-    "SleepSpec",
-]
+
+def gate_passthrough(
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
+) -> Dict[str, Token]:
+    # We expect 'req_in' and 'signal_in' ports
+    req_token = inputs.get("req_in")
+    signal_token = inputs.get("signal_in")
+
+    if req_token and signal_token:
+        # The gate is open, pass the request token through
+        return {"req_out": req_token}
+
+    # Should not happen if wired correctly, but return empty if not fully triggered
+    return {}
+~~~~~
+~~~~~python.new
+from typing import Any
+from cascade.spec.physical.nodes import PhysicsNode
+from cascade.std.specs import GateSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(GateSpec)
+def gate_passthrough(
+    io: GateSpec.IO, node: PhysicsNode, resources: Any
+) -> None:
+    # Access inputs via Spec-defined attributes
+    # The IO wrapper maps 'io.req_in' -> inputs["req_in"]
+    if io.req_in and io.signal_in:
+        # The gate is open, pass the request token through
+        # The IO wrapper maps 'io.req_out' -> outputs["req_out"]
+        io.req_out = io.req_in
+~~~~~
+
+#### Acts 3: 重构 Egress Kernel
+
+修改 `egress.py`，使用 `EgressSpec` 和 `@implements`。注意这里的输入端口映射：`input_token` (Spec属性) -> `"in"` (物理端口名)。
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/system/egress.py
+~~~~~
+~~~~~python.old
+from typing import Dict, Any
+from cascade.spec.physical.nodes import Token, PhysicsNode
+
+
+def standard_egress(
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
+) -> Dict[str, Token]:
+    # 1. Get the Egress Queue from system resources
+    # This must be registered by the Strategy during startup.
+    queue = resources.get("system.egress_queue")
+
+    # 2. Consume the token
+    # Phase 3.3 of the roadmap defines the input port as 'in'.
+    token = inputs.get("in")
+
+    if token:
+        # 3. Export
+        # We wrap the token with the node ID so the Strategy knows which egress node it came from.
+        # This allows handling multiple egress points (e.g. for different task results).
+        queue.put_nowait((node.id, token))
+
+    # 4. Return empty (Evaporate)
+    # No tokens are returned to the graph. The energy leaves the system here.
+    return {}
+~~~~~
+~~~~~python.new
+from typing import Any
+from cascade.spec.physical.nodes import PhysicsNode
+from cascade.std.specs import EgressSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(EgressSpec)
+def standard_egress(
+    io: EgressSpec.IO, node: PhysicsNode, resources: Any
+) -> None:
+    # 1. Get the Egress Queue
+    queue = resources.get("system.egress_queue")
+
+    # 2. Consume the token
+    # Spec mapping: io.input_token -> inputs["in"]
+    token = io.input_token
+
+    if token:
+        # 3. Export
+        queue.put_nowait((node.id, token))
+    
+    # 4. Return empty (Evaporate)
+    # Implicitly returns the empty 'outputs' dict created by @implements
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 Spec 的定义。接下来的 **阶段三：Kernel 实现重构 (The Implementation)** 是最具挑战性的部分。我们需要：
-1.  在 `cascade.std` 中引入装饰器（如 `@implements` 或简单的类型检查工具）。
-2.  修改 Kernel 函数，使其签名与我们刚刚定义的 Spec 保持一致（或通过装饰器适配）。
-3.  确保修改后的 Kernel 依然能通过现有的测试。
+我们已经成功重构了两个简单的 Kernel。接下来，我建议运行测试以确保我们没有破坏任何东西。如果一切正常，我们可以继续重构更复杂的 `DiscreteAllocator` 和 `Bleacher`。
 
-建议先从最简单的 `Egress` 或 `Gate` 开始进行重构试点。
+特别注意：`Bleacher` 的重构会比较复杂，因为它的输入端口是动态的，而 Spec 目前主要关注静态契约。我们可能需要扩展 `IOWrapper` 来支持动态属性访问，或者在 `Bleacher` 中混合使用 `io` 和原始 `inputs`（虽然我们应尽量避免混合）。对于 `DiscreteAllocator`，挑战在于处理动态的 `gnt_for_X` 输出端口。
+
+请确认是否运行测试。

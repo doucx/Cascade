@@ -10,5 +10,7 @@
   "PhysicsSpecMeta.__new__": {
     "baseline_code_signature_text": "def __new__(mcs, name, bases, namespace):",
     "baseline_code_structure_hash": "d1bff72e23b0e3b4cec3f4b380f36e3db19be535143852182f40aae3ece814c0"
-  }
+  },
+  "PhysicsSpecMeta.input_ports": {},
+  "PhysicsSpecMeta.output_ports": {}
 }

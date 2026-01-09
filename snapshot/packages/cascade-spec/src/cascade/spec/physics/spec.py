@@ -1,4 +1,4 @@
-from typing import Dict, Protocol, ClassVar
+from typing import Dict, ClassVar
 from .core import PortDef, PortDirection
 
 

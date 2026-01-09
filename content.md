@@ -1,262 +1,114 @@
-好的，我们开始执行路线图的第一步。
+好的，我们继续执行路线图，现在是 `1.2` 阶段。
 
-这是实施 `1.1 重构 SubGraph 容器` 的计划。此计划将 `SubGraph` 从一个简单的三联体包装器重构为一个全面的组件容器，为后续的策略迁移奠定数据结构基础。
+此计划旨在创建 `ExpansionPolicy` 协议，为所有“节点创建”逻辑建立一个正式的、统一的接口。这是将节点创建（Materialization）与节点连接（Wiring）职责分离的核心步骤。
 
-## [WIP] refactor(compiler): 将 SubGraph 重构为组件容器
+## [WIP] feat(compiler): 定义 ExpansionPolicy 协议以分离节点创建职责
 
 ### 用户需求
 
-根据架构重构路线图 1.1，需要重构 `cascade/compiler/backend/expander.py` 文件中的 `SubGraph` 数据类。目标是将其扩展为一个结构化的容器，以便能够分类存储除核心三联体之外的所有辅助物理节点（如常量、资源和控制流节点）。
+根据架构路线图 1.2，需要创建 `ExpansionPolicy` 协议。此协议将作为所有节点创建（物理实化）逻辑的统一接口，并为后续从 `WiringPolicy` 中迁移代码提供一个清晰的契约。
 
 ### 评论
 
-这是整个重构工作的关键第一步。通过预先定义好一个能够容纳所有权的、结构清晰的 `SubGraph`，我们为后续从 `WiringPolicy` 剥离出来的 `ExpansionPolicy` 提供了明确的“交付目标”。此举直接解决了审计报告中指出的“物理身份割裂”的核心问题，确保了一个逻辑任务所对应的所有物理节点都能被统一追踪和管理。
+这是奠定新架构基石的一步。通过定义一个严格的 `ExpansionPolicy` 协议，我们正在构建一个架构级的“护栏”，从根本上杜绝节点创建和节点连接的职责混淆。这确保了编译器后端的各个阶段都遵循单一职责原则，使得整个编译流程更加清晰、可预测和易于维护。
 
 ### 目标
 
-1.  修改 `packages/cascade-compiler/src/cascade/compiler/backend/expander.py` 文件。
-2.  重构 `SubGraph` dataclass 的字段定义和顺序，使其逻辑更清晰。
-3.  新增 `constants`, `resources`, 和 `controls` 字典字段，用于分别存储参数、资源和控制流相关的辅助节点。
-4.  将核心三联体（`bleacher`, `worker`, `stainer`）的定义放在类的最前面，以突显其核心地位。
+1.  创建新的目录结构: `packages/cascade-compiler/src/cascade/compiler/backend/expansion/`。
+2.  在该目录中创建 `__init__.py`，使其成为一个 Python 包。
+3.  创建 `context.py` 文件，并定义一个临时的 `ExpansionContext`，为协议提供必要的类型提示。
+4.  创建 `protocol.py` 文件，并在其中定义 `ExpansionPolicy` 协议，包含一个 `expand` 方法。
 
 ### 基本原理
 
-当前的 `SubGraph` 是一个“贫血”模型，只知道核心三联体。所有由 `WiringPolicy` 创建的辅助节点都直接散落在全局物理图中，导致 `SubGraph` 对象在策略执行后立即变得“不完整”和“过时”。
+为了实现“扩展流水线”模式，我们必须首先形式化地定义流水线中每个阶段的契约。`ExpansionPolicy` 协议就是“物理实化”阶段的契约。
 
-本次重构将 `SubGraph` 提升为一个“富集”模型。它将成为一个逻辑任务其物理形态的**完整清单**。`Expander` 的职责将变为填充这个清单，而 `WiringPolicy` 则利用这个清单进行连接。这种所有权的明确化是实现“关注点分离”和保证架构长期健康的基础。
+所有实现此协议的策略，其唯一职责就是向 `SubGraph` 容器中添加物理节点（`add_node`），但**严禁**进行跨越 `SubGraph` 边界的连接（`connect`）。这强制性地将编译过程分解为两个独立的、确定性的阶段，为后续重构和功能扩展提供了坚实的基础。
 
 ### 标签
 
-#intent/refine #flow/ready #priority/high #task/domain/compiler #task/object/subgraph #task/action/refactor #task/state/begin #scope/core #ai/instruct
+#intent/architect #flow/ready #priority/high #task/domain/compiler #task/object/expansion-policy #task/action/implementation #task/state/continue #scope/core #scope/api #ai/instruct
 
 ---
 
 ### Script
 
-#### Acts 1: 重写 `expander.py` 以更新 `SubGraph` 定义
+#### Acts 1: 创建 `expansion` 包目录结构
 
-我们将使用 `write_file` 完整覆盖 `expander.py` 文件，以引入新的 `SubGraph` 结构。除了 `SubGraph` 的定义外，文件的其余部分保持不变。
+我们首先创建新的 `expansion` 目录和空的 `__init__.py` 文件。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~
+mkdir -p packages/cascade-compiler/src/cascade/compiler/backend/expansion
+touch packages/cascade-compiler/src/cascade/compiler/backend/expansion/__init__.py
+~~~~~
+
+#### Acts 2: 定义 `ExpansionContext`
+
+为了让 `ExpansionPolicy` 协议的类型提示完整，我们先创建一个 `ExpansionContext`。目前，它的结构将与 `WiringContext` 类似，后续会根据需要进行调整。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py
 ~~~~~
 ~~~~~python
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import Dict
 
-from cascade.spec.ir.graph import NodeIR
-from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.physical.topology import Channel
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.std.specs import BleacherSpec
-from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.physical.topology import BipartiteGraph
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.ir.graph import GraphIR
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring import WiringHarness
 
 
 @dataclass
-class SubGraph:
-    # Interface pointers to the core triad
-    bleacher: Optional[BleachNode] = None
-    worker: Optional[WorkerNode] = None
-    stainer: Optional[StainNode] = None
+class ExpansionContext:
+    graph_ir: GraphIR
+    environment: EnvironmentDef
+    physical_graph: BipartiteGraph
+    wire: WiringHarness
+    subgraphs: Dict[str, SubGraph] = field(default_factory=dict)
+~~~~~
 
-    # Component storage for managed identity
-    constants: Dict[str, PhysicsDataNode] = field(default_factory=dict)
-    resources: Dict[str, List[PhysicsNode]] = field(default_factory=dict)
-    controls: Dict[str, PhysicsNode] = field(default_factory=dict)
+#### Acts 3: 定义 `ExpansionPolicy` 协议
 
-    # Global index of all nodes and channels within this subgraph
-    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
-    channels: List[Channel] = field(default_factory=list)
+现在，我们创建 `protocol.py` 并定义核心的 `ExpansionPolicy` 协议。
+
+~~~~~act
+write_file
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/protocol.py
+~~~~~
+~~~~~python
+from typing import Protocol
+from cascade.spec.ir.graph import NodeIR
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.expansion.context import ExpansionContext
 
 
-class Expander:
-    def expand_node(self, node_ir: NodeIR) -> SubGraph:
-        subgraph = SubGraph()
+class ExpansionPolicy(Protocol):
+    def expand(
+        self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph
+    ) -> None:
+        """
+        Expands a logical node by creating and adding new physical nodes
+        to its corresponding subgraph.
 
-        # 1. Generate IDs for all physical entities
-        # We use the logical node ID as a prefix to ensure uniqueness.
-        base_id = node_ir.current_node_instance_hash
-
-        f_pre_id = PhysicalIdGenerator.bleach_node(base_id)
-        d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
-        f_worker_id = PhysicalIdGenerator.worker_node(base_id)
-        d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
-        d_trace_id = PhysicalIdGenerator.trace_data(base_id)
-        f_post_id = PhysicalIdGenerator.stain_node(base_id)
-
-        # 2. Create Nodes
-
-        # F_pre: The Bleacher
-        # Inputs = Task Args + Resource Constraints
-        bleacher_inputs = {
-            arg.name: PortDef(arg.name, PortRole.DATA, "Any")
-            for arg in node_ir.task.args
-        }
-        # Add ports for resources
-        for res_name in node_ir.constraints.keys():
-            port_name = f"res_{res_name}"
-            bleacher_inputs[port_name] = PortDef(
-                port_name, PortRole.RESOURCE, "ResourceSlot"
-            )
-
-        # Add ports for implicit dependencies (SIGNAL)
-        for dep_id in node_ir.dependencies:
-            # We use a naming convention for dependency ports
-            port_name = f"wait_for_{dep_id}"
-            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Token")
-
-        # Add port for condition (SIGNAL/DATA)
-        if node_ir.condition:
-            port_name = "condition"
-            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
-
-        # If after all that, there are no inputs, it's a source node that needs a pulse.
-        if not bleacher_inputs:
-            bleacher_inputs[BleacherSpec.pulse.name] = PortDef(
-                BleacherSpec.pulse.name, PortRole.SIGNAL
-            )
-
-        f_pre = BleachNode(
-            id=f_pre_id,
-            name=f"Bleach({node_ir.name})",
-            input_ports=bleacher_inputs,
-            output_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict"),
-                "trace_output": PortDef("trace_output", PortRole.DATA, "TraceCtx"),
-                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
-            },
-        )
-
-        # D_worker_in: Holds the pure kwargs for the worker
-        d_worker_in = PhysicsDataNode(id=d_worker_in_id, name=f"In({node_ir.name})")
-
-        # F_worker: The actual execution logic
-        # It conceptually takes *args/**kwargs, but physically takes one 'worker_input' dict
-        canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]
-        f_worker = WorkerNode(
-            id=f_worker_id,
-            name=f"Exec({node_ir.name})",
-            canonical_code_structure_hash=canonical_hash,
-            input_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict")
-            },
-            output_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA, "Any")
-            },
-        )
-
-        # D_worker_out: Holds the raw result
-        d_worker_out = PhysicsDataNode(id=d_worker_out_id, name=f"Out({node_ir.name})")
-
-        # D_trace: The wormhole for metadata (start_ts, trace_id)
-        d_trace = PhysicsDataNode(id=d_trace_id, name=f"Trace({node_ir.name})")
-
-        # F_post: The Stainer
-        # Outputs = Result + Resource Returns
-        # Sovereign Ports: Explicitly define default and error paths
-        stainer_outputs = {
-            "output_default": PortDef("output_default", PortRole.DATA, "Token"),
-            "output_error": PortDef("output_error", PortRole.DATA, "Token"),
-            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
-        }
-        for res_name in node_ir.constraints.keys():
-            port_name = f"res_{res_name}"
-            stainer_outputs[port_name] = PortDef(
-                port_name, PortRole.RESOURCE, "ResourceSlot"
-            )
-
-        f_post = StainNode(
-            id=f_post_id,
-            name=f"Stain({node_ir.name})",
-            input_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA, "Any"),
-                "trace_input": PortDef("trace_input", PortRole.DATA, "TraceCtx"),
-            },
-            output_ports=stainer_outputs,
-        )
-
-        # Register nodes
-        subgraph.nodes = {
-            n.id: n
-            for n in [f_pre, d_worker_in, f_worker, d_worker_out, d_trace, f_post]
-        }
-        subgraph.bleacher = f_pre
-        subgraph.worker = f_worker
-        subgraph.stainer = f_post
-
-        # 3. Create Internal Wiring (Channels)
-
-        channels = []
-
-        # Path 1: Execution Flow
-        # F_pre -> D_worker_in
-        channels.append(
-            Channel(
-                source_node_id=f_pre_id,
-                source_port="worker_input",
-                target_node_id=d_worker_in_id,
-                target_port="in",
-            )
-        )
-        # D_worker_in -> F_worker
-        channels.append(
-            Channel(
-                source_node_id=d_worker_in_id,
-                source_port="out",
-                target_node_id=f_worker_id,
-                target_port="worker_input",
-            )
-        )
-        # F_worker -> D_worker_out
-        channels.append(
-            Channel(
-                source_node_id=f_worker_id,
-                source_port="worker_result",
-                target_node_id=d_worker_out_id,
-                target_port="in",
-            )
-        )
-        # D_worker_out -> F_post
-        channels.append(
-            Channel(
-                source_node_id=d_worker_out_id,
-                source_port="out",
-                target_node_id=f_post_id,
-                target_port="worker_result",
-            )
-        )
-
-        # Path 2: Trace Bypass
-        # F_pre -> D_trace
-        channels.append(
-            Channel(
-                source_node_id=f_pre_id,
-                source_port="trace_output",
-                target_node_id=d_trace_id,
-                target_port="in",
-            )
-        )
-        # D_trace -> F_post
-        channels.append(
-            Channel(
-                source_node_id=d_trace_id,
-                source_port="out",
-                target_node_id=f_post_id,
-                target_port="trace_input",
-            )
-        )
-
-        subgraph.channels = channels
-
-        return subgraph
+        This phase is strictly for MATERIALIZATION. Implementations of this
+        protocol are FORBIDDEN from creating channels between different
+        subgraphs.
+        """
+        ...
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功地建立了新的 `SubGraph` 数据结构。现在，`SubGraph` 已经准备好接收并管理由不同策略生成的辅助节点了。
+我们已经成功定义了 `ExpansionPolicy` 协议，为节点创建逻辑建立了清晰的契约。
 
-路线图的下一步 (`1.2`) 是**定义 `ExpansionPolicy` 协议**。这个协议将作为所有“节点创建”逻辑的统一接口，为我们后续从 `WiringPolicy` 中迁移代码提供一个清晰的契约。
+路线图的下一步 (`1.3`) 是**改造 `Builder` 的执行流程**。我们需要修改 `Builder` 来消费这个新协议，并将其 `build` 方法重构为两个独立的阶段：
+1.  **Materialization**: 运行所有 `ExpansionPolicy` 来创建节点。
+2.  **Wiring**: 运行所有 `WiringPolicy` 来连接节点。
 
-如果你同意，我将开始创建定义该协议的计划。
+如果你同意，我将生成执行此 `Builder` 重构的计划。

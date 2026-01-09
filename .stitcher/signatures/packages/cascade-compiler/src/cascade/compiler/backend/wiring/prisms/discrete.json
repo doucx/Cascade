@@ -7,5 +7,13 @@
   "DiscreteResourcePrism.ensure_globals": {
     "baseline_code_signature_text": "def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None:",
     "baseline_code_structure_hash": "549c282d25d6e9fbd39bcf4d04d3777826aff1f6767dc4a732ea9cb01018e814"
+  },
+  "DiscreteResourcePrism.expand_task": {
+    "baseline_code_signature_text": "def expand_task(self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+    "baseline_code_structure_hash": "aa40b10ff59ea5538b1ed609587e32acd355622f724dc0bc971ea16f84ab4ca4"
+  },
+  "DiscreteResourcePrism.wire_task": {
+    "baseline_code_signature_text": "def wire_task(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+    "baseline_code_structure_hash": "a4e7be0b39e4f6c0e2f6577c03810351994fb35434c98f143ad006d68c671d2c"
   }
 }

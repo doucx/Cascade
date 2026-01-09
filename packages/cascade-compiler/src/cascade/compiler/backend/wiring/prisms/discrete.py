@@ -14,6 +14,7 @@ from cascade.std.resource.discrete import DiscreteLedger
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.expansion.context import ExpansionContext
 from cascade.compiler.backend.wiring.prism import ResourcePrism
 
 
@@ -141,22 +142,17 @@ class DiscreteResourcePrism(ResourcePrism):
         # Buffer -> Reclaimer
         ctx.wire.connect(rel_buffer_id, "out", reclaimer_id, reclaim.rel_in.name)
 
-    def connect_task(
+    def expand_task(
         self,
-        ctx: WiringContext,
+        ctx: ExpansionContext,
         node_ir: NodeIR,
         subgraph: SubGraph,
         res_name: str,
         amount: Any,
     ) -> None:
-        allocator_id = PhysicalIdGenerator.global_allocator(res_name)
-        req_buffer_id = f"buffer.req.{res_name}"
-        rel_buffer_id = f"buffer.rel.{res_name}"
-
         # Spec shortcuts
         req = ResourceRequestorSpec
 
-        # --- A. Request Chain ---
         # 1. D_const (Amount)
         d_amt_id = PhysicalIdGenerator.constant(
             node_ir.current_node_instance_hash, f"req_amt_{res_name}"
@@ -182,7 +178,40 @@ class DiscreteResourcePrism(ResourcePrism):
         )
         ctx.wire.add_node(f_req)
 
-        # 3. Wiring
+        # 3. D_gnt (Grant Recipient)
+        d_gnt_id = f"gnt.to.{node_ir.current_node_instance_hash}.{res_name}"
+        d_gnt = PhysicsDataNode(id=d_gnt_id, name=f"Gnt({res_name}->{node_ir.name})")
+        ctx.wire.add_node(d_gnt)
+
+        # Register components in SubGraph
+        # We store them as a list: [D_amt, F_req, D_gnt]
+        subgraph.resources[res_name] = [d_amt, f_req, d_gnt]
+        subgraph.nodes[d_amt_id] = d_amt
+        subgraph.nodes[f_req_id] = f_req
+        subgraph.nodes[d_gnt_id] = d_gnt
+
+    def wire_task(
+        self,
+        ctx: WiringContext,
+        node_ir: NodeIR,
+        subgraph: SubGraph,
+        res_name: str,
+        amount: Any,
+    ) -> None:
+        allocator_id = PhysicalIdGenerator.global_allocator(res_name)
+        req_buffer_id = f"buffer.req.{res_name}"
+        rel_buffer_id = f"buffer.rel.{res_name}"
+
+        # Spec shortcuts
+        req = ResourceRequestorSpec
+
+        # Retrieve components from SubGraph
+        d_amt, f_req, d_gnt = subgraph.resources[res_name]
+        d_amt_id = d_amt.id
+        f_req_id = f_req.id
+        d_gnt_id = d_gnt.id
+
+        # --- A. Request Chain ---
         # D_amt -> F_req (Direct connection)
         ctx.wire.connect(d_amt_id, "out", f_req_id, req.amount.name)
 
@@ -195,16 +224,13 @@ class DiscreteResourcePrism(ResourcePrism):
         gnt_port_name = f"{spec.grants.prefix}{f_req_id}"
 
         # Add this port to the Allocator definition
+        # Note: In a pure HFEA approach, ports should ideally be defined in Expansion phase too,
+        # but dynamic ports on global nodes are tricky. We allow this modification in Wiring phase for now.
         allocator_node = ctx.physical_graph.nodes[allocator_id]
         assert isinstance(allocator_node, PhysicsFuncNode)
         allocator_node.output_ports[gnt_port_name] = PortDef(
             gnt_port_name, PortRole.RESOURCE
         )
-
-        # Create a dedicated intermediate DataNode for this grant
-        d_gnt_id = f"gnt.to.{node_ir.current_node_instance_hash}.{res_name}"
-        d_gnt = PhysicsDataNode(id=d_gnt_id, name=f"Gnt({res_name}->{node_ir.name})")
-        ctx.wire.add_node(d_gnt)
 
         # Allocator -> Dedicated DataNode
         ctx.wire.connect(allocator_id, gnt_port_name, d_gnt_id, "in")

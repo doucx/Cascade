@@ -14,6 +14,17 @@ from .validator import GraphValidator
 from .wiring import WiringHarness
 from cascade.compiler.backend.wiring.context import WiringContext
 from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
+from cascade.compiler.backend.expansion.policies.parameter import (
+    ParameterExpansionPolicy,
+)
+from cascade.compiler.backend.expansion.policies.control import (
+    ControlFlowExpansionPolicy,
+)
+from cascade.compiler.backend.expansion.policies.pulse import PulseExpansionPolicy
+from cascade.compiler.backend.expansion.policies.resource import (
+    ResourceExpansionPolicy,
+)
 from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
 from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
 from cascade.compiler.backend.wiring.policies.observability import (
@@ -28,8 +39,21 @@ class Builder:
     def __init__(self):
         self._expander = Expander()
         self._validator = GraphValidator()
-        self._policies: List[WiringPolicy] = [
-            ResourceWiringPolicy(),
+
+        # Instantiate policies to share prism instances
+        resource_wiring_policy = ResourceWiringPolicy()
+        resource_expansion_policy = ResourceExpansionPolicy()
+        # A bit of a hack to share. A proper DI system would be better.
+        resource_expansion_policy._prisms = resource_wiring_policy._prisms
+
+        self._expansion_policies: List[ExpansionPolicy] = [
+            resource_expansion_policy,
+            ParameterExpansionPolicy(),
+            ControlFlowExpansionPolicy(),
+            PulseExpansionPolicy(),
+        ]
+        self._wiring_policies: List[WiringPolicy] = [
+            resource_wiring_policy,
             ObservabilityWiringPolicy(),
             ParameterWiringPolicy(),
             ControlFlowWiringPolicy(),
@@ -42,6 +66,8 @@ class Builder:
         # 1. Initialize Context
         physical_graph = BipartiteGraph()
         wire = WiringHarness(physical_graph)
+        # For now, ExpansionContext and WiringContext are identical.
+        # We use a single context object for both phases.
         ctx = WiringContext(
             graph_ir=graph_ir,
             environment=environment,
@@ -50,32 +76,42 @@ class Builder:
         )
         symbol_table = {}
 
-        # 2. Phase 0: Setup Global Infrastructure
-        for policy in self._policies:
+        # 2. Phase 0: Setup Global Infrastructure (for wiring policies)
+        for policy in self._wiring_policies:
             policy.setup_globals(ctx)
 
-        # 3. Phase 1: Expand and Wire Nodes
+        # 3. Phase 1: Materialization (Expansion)
+        # Create all nodes for all subgraphs, but do not connect them across boundaries.
         for node_ir in graph_ir.nodes:
-            # 3.1 Expand triad
+            # 3.1 Expand core triad
             subgraph = self._expander.expand_node(node_ir)
             ctx.register_subgraph(node_ir.current_node_instance_hash, subgraph)
 
-            # 3.1.b Populate Symbol Table
-            # Map the physical worker ID to the canonical code structure hash
+            # 3.2 Populate Symbol Table from core triad
             if subgraph.worker:
                 canonical_hash = node_ir.task.fingerprint[
                     "canonical_code_structure_hash"
                 ]
                 symbol_table[subgraph.worker.id] = canonical_hash
 
-            # 3.2 Apply wiring policies
-            for policy in self._policies:
+            # 3.3 Apply expansion policies to create auxiliary nodes
+            for policy in self._expansion_policies:
+                policy.expand(ctx, node_ir, subgraph)
+
+        # --- Phase Transition: Lock down the graph structure ---
+        wire.lock()
+
+        # 4. Phase 2: Wiring
+        # Connect all the created nodes together.
+        for node_ir in graph_ir.nodes:
+            subgraph = ctx.get_subgraph(node_ir.current_node_instance_hash)
+            for policy in self._wiring_policies:
                 policy.apply(ctx, node_ir, subgraph)
 
-        # 4. Final Validation
+        # 5. Final Validation
         self._validator.validate(physical_graph, graph_ir)
 
-        # 5. Generate Manifest
+        # 6. Generate Manifest
         logical_to_physical_map = {}
         for node_ir in graph_ir.nodes:
             if node_ir.logical_id:

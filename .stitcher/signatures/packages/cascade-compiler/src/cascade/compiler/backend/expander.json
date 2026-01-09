@@ -8,11 +8,20 @@
     "baseline_yaml_content_hash": "054ea16e2bb5b0e0ccafc437b5eb19ae6d547adbc858c5fd89f6d29d0b028d3f"
   },
   "SubGraph": {
-    "baseline_yaml_content_hash": "cd79c04bf827e1f5e8125bba52727294d715fe909aa228200e66c4129f202e12"
+    "baseline_yaml_content_hash": "8ecd9f5fdcd9e7094e9570a8ba641fd3f812145bcafc21f46e8c45884d161b26"
   },
   "SubGraph.bleacher": {},
   "SubGraph.channels": {},
+  "SubGraph.constants": {
+    "baseline_yaml_content_hash": "74fa170475b5788247e094c12ad611c4cfa63bbb6dab48103ae7e93fc04a05e3"
+  },
+  "SubGraph.controls": {
+    "baseline_yaml_content_hash": "29d28a06f54d0faa61c3fca56b3f25b79054ab710499c35ddc626e0a285d2f9d"
+  },
   "SubGraph.nodes": {},
+  "SubGraph.resources": {
+    "baseline_yaml_content_hash": "db0f424e96e092518ab0e294e6770e2329c9622daea118fdcd1c2e7c951dafba"
+  },
   "SubGraph.stainer": {},
   "SubGraph.worker": {}
 }

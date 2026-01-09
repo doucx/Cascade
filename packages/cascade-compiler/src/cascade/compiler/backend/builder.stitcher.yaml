@@ -1,4 +1,15 @@
 "Builder": |-
   The master assembler for the physical graph.
-  It takes a logical GraphIR, expands each node into a Triad,
-  and then wires them together along with observability sidecars.
+
+  It orchestrates the compilation process in two distinct phases:
+
+  1. **Phase 1: Materialization (Expansion)**
+     - The `Expander` creates the core Triad for each task.
+     - `ExpansionPolicies` create all auxiliary nodes (constants, resource requestors, etc.).
+     - No connections are allowed between subgraphs in this phase.
+
+  2. **Phase 2: Wiring**
+     - The `WiringHarness` is locked to prevent new node creation.
+     - `WiringPolicies` connect the pre-existing nodes within and between subgraphs.
+"Builder.build": |-
+  Executes the compilation pipeline: Setup -> Materialization -> Wiring -> Validation -> Manifest Generation.

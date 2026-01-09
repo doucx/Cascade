@@ -9,3 +9,5 @@
   Registers all nodes and channels from a subgraph.
 "WiringHarness.connect": |-
   Creates a channel between two nodes with strict validation.
+"WiringHarness.lock": |-
+  Locks the harness, preventing any further node additions.

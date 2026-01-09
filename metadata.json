@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(std): 将剩余 IC 迁移到类型化的 PhysicsSpec 接口", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767948089.338235, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "好的，我们继续完成剩余的任务。", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767948158.8324926, "duration_ms": 0}}

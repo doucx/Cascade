@@ -1,21 +1,22 @@
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
-from cascade.spec.physical.nodes import Token
-from cascade.spec.physical.triad import WorkerNode
 from cascade.spec.physical.object import Ref
-from cascade.vm.compute import ComputeRequest
+from cascade.spec.physical.triad import WorkerNode
 from cascade.reflection import PhysicalIdGenerator
+from cascade.vm.compute import ComputeRequest
+from cascade.std.specs import WorkerSpec
+from cascade.std.kernel_tools import implements
 
 logger = logging.getLogger(__name__)
 
 
-def standard_dispatcher(
-    inputs: Dict[str, Token], node: WorkerNode, resources: Any
-) -> Dict[str, Token]:
+@implements(WorkerSpec)
+def standard_dispatcher(io: WorkerSpec.IO, node: WorkerNode, resources: Any) -> None:
     # 1. Extract input refs from the token prepared by the Bleacher.
     # The payload of the 'worker_input' token is expected to be a Dict[str, Ref].
-    worker_input_token = inputs["worker_input"]
+    worker_input_token = io.worker_input
+    assert worker_input_token is not None, "Worker input token is missing"
     input_refs: Dict[str, Ref] = worker_input_token.payload
 
     # 2. Deterministically calculate the reply-to address (the downstream DataNode).
@@ -54,7 +55,7 @@ def standard_dispatcher(
         logger.exception(f"Failed to dispatch compute request for node {node.id}")
         raise
 
-    # 7. Return an empty dictionary to "evaporate" the energy in this branch.
+    # 7. Return nothing to "evaporate" the energy in this branch.
     # The flow will resume when the ComputeService places the result token
     # into the `reply_to_nid` data node.
-    return {}
+    # The @implements decorator handles returning the empty output dict.

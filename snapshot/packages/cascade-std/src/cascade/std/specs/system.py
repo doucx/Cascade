@@ -33,3 +33,36 @@ class SleepSpec(PhysicsSpec):
     class IO(Protocol):
         delay_in: Optional[Token]
         data_in: Optional[Token]
+
+
+class RetrySpec(PhysicsSpec):
+    error_in = Port.Input("error_in", role=PortRole.DATA)
+    context_in = Port.Input("context_in", role=PortRole.DATA)
+
+    retry_out = Port.Output("retry_out", role=PortRole.DATA)
+    fail_out = Port.Output("fail_out", role=PortRole.DATA)
+
+    class IO(Protocol):
+        error_in: Optional[Token]
+        context_in: Optional[Token]
+        retry_out: Token
+        fail_out: Token
+
+
+class TerminatorSpec(PhysicsSpec):
+    # Typically triggerless, but can have an optional input
+    trigger = Port.Input("in", role=PortRole.SIGNAL)
+    out = Port.Output("out", role=PortRole.DATA)
+
+    class IO(Protocol):
+        trigger: Optional[Token]
+        out: Token
+
+
+class DrainerSpec(PhysicsSpec):
+    trigger = Port.Input("in", role=PortRole.SIGNAL)
+    out = Port.Output("out", role=PortRole.DATA)
+
+    class IO(Protocol):
+        trigger: Optional[Token]
+        out: Token

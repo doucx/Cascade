@@ -1,14 +1,17 @@
-from typing import Dict, Any
+from typing import Any
 
 from cascade.spec import RetryNode
-from cascade.spec.physical.nodes import Token
+from cascade.std.specs import RetrySpec
+from cascade.std.kernel_tools import implements
 
 
-def standard_retry_logic(
-    inputs: Dict[str, Token], node: RetryNode, resources: Any
-) -> Dict[str, Token]:
-    error_token = inputs["error_in"]
-    context_token = inputs["context_in"]
+@implements(RetrySpec)
+def standard_retry_logic(io: RetrySpec.IO, node: RetryNode, resources: Any) -> None:
+    error_token = io.error_in
+    context_token = io.context_in
+
+    assert context_token is not None, "Context token for retry is missing"
+    assert error_token is not None, "Error token for retry is missing"
 
     # State is in the token trace
     trace = context_token.trace
@@ -21,7 +24,7 @@ def standard_retry_logic(
     if retry_count < max_attempts:
         # Retry: update state and route context token back
         trace["retry_count"] = retry_count
-        return {"retry_out": context_token}
+        io.retry_out = context_token
     else:
         # Fail permanently: route error token to the failure output port
-        return {"fail_out": error_token}
+        io.fail_out = error_token

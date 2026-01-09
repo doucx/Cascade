@@ -12,13 +12,19 @@ from cascade.reflection import PhysicalIdGenerator
 
 @dataclass
 class SubGraph:
-    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
-    channels: List[Channel] = field(default_factory=list)
-
-    # Interface pointers
+    # Interface pointers to the core triad
     bleacher: Optional[BleachNode] = None
     worker: Optional[WorkerNode] = None
     stainer: Optional[StainNode] = None
+
+    # Component storage for managed identity
+    constants: Dict[str, PhysicsDataNode] = field(default_factory=dict)
+    resources: Dict[str, List[PhysicsNode]] = field(default_factory=dict)
+    controls: Dict[str, PhysicsNode] = field(default_factory=dict)
+
+    # Global index of all nodes and channels within this subgraph
+    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
+    channels: List[Channel] = field(default_factory=list)
 
 
 class Expander:

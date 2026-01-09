@@ -18,6 +18,9 @@ from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
 from cascade.compiler.backend.expansion.policies.parameter import (
     ParameterExpansionPolicy,
 )
+from cascade.compiler.backend.expansion.policies.control import (
+    ControlFlowExpansionPolicy,
+)
 from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
 from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
 from cascade.compiler.backend.wiring.policies.observability import (
@@ -34,6 +37,7 @@ class Builder:
         self._validator = GraphValidator()
         self._expansion_policies: List[ExpansionPolicy] = [
             ParameterExpansionPolicy(),
+            ControlFlowExpansionPolicy(),
         ]
         self._wiring_policies: List[WiringPolicy] = [
             ResourceWiringPolicy(),

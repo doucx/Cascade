@@ -19,14 +19,16 @@ class ObservabilityWiringPolicy(WiringPolicy):
         d_life = PhysicsDataNode(
             id=d_life_id, name="LifecycleBus", capacity=sys.maxsize
         )
-        
+
         # Use Spec to define ports
         spec = ObservabilitySpec
         f_obs = ObservabilityNode(
             id=f_obs_id,
             name="LifecycleObserver",
             input_ports={
-                spec.event_token.name: PortDef(spec.event_token.name, PortRole.OBSERVABILITY, "Event")
+                spec.event_token.name: PortDef(
+                    spec.event_token.name, PortRole.OBSERVABILITY, "Event"
+                )
             },
             output_ports={},  # Observer emits to the outside world, not back into the graph
         )
@@ -42,5 +44,9 @@ class ObservabilityWiringPolicy(WiringPolicy):
         d_life_id = PhysicalIdGenerator.observability_bus()
 
         # Wire task observability TO the sidecar bus
-        ctx.wire.connect(subgraph.bleacher.id, BleacherSpec.obs_output.name, d_life_id, "in")
-        ctx.wire.connect(subgraph.stainer.id, StainerSpec.obs_output.name, d_life_id, "in")
+        ctx.wire.connect(
+            subgraph.bleacher.id, BleacherSpec.obs_output.name, d_life_id, "in"
+        )
+        ctx.wire.connect(
+            subgraph.stainer.id, StainerSpec.obs_output.name, d_life_id, "in"
+        )

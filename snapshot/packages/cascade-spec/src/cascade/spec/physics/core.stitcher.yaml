@@ -1,0 +1,16 @@
+"Port": |-
+  Namespace factory for defining ports in a declarative style.
+  Example:
+      data_in = Port.Input("data_in")
+"Port.MapInput": "Defines a dynamic dictionary of input ports. \nIt captures all inputs\
+  \ that are NOT matched by static Port.Inputs."
+"Port.MapOutput": |-
+  Defines a dynamic dictionary of output ports.
+  Allows writing to any port name starting with the given prefix.
+"PortDef": |-
+  Descriptor for defining a port on a PhysicsSpec.
+  Acts as the definition of a single interface point on a physical node.
+"PortDirection": |-
+  Defines the direction of flow for a port relative to the Node.
+"PortType": |-
+  Defines the semantic type of data flowing through a port.

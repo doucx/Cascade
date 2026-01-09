@@ -8,8 +8,8 @@
     "baseline_yaml_content_hash": "d4cf7c899350acfa2fc771b5e58f2e49369e9329a967c8d364326b7c3385a0f9"
   },
   "discrete_allocator": {
-    "baseline_code_signature_text": "def discrete_allocator(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "3b2a9a684b9ae230f15c7dce1e52ad7a0825e079d0f5358219c442d43fe07e78",
+    "baseline_code_signature_text": "def discrete_allocator(io: DiscreteAllocatorSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+    "baseline_code_structure_hash": "3056b45c4bd17ae5ca255cee3f50d4a1d5d92eae3636a2222070f1ac3233998a",
     "baseline_yaml_content_hash": "64ef08ebc64eab90939cb2ea428ccf853058de613da7a51ae6527caa9b386be5"
   },
   "discrete_broker": {
@@ -18,8 +18,8 @@
     "baseline_yaml_content_hash": "6ca9cbd960a65463d32ef9255a399857711c8a3133580df65d5b16daed921c2b"
   },
   "discrete_reclaimer": {
-    "baseline_code_signature_text": "def discrete_reclaimer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "afc030ee78b34e2678766a8d209d53f6c673243bf28b6552ce8fd956b43513dc",
+    "baseline_code_signature_text": "def discrete_reclaimer(io: DiscreteReclaimerSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+    "baseline_code_structure_hash": "6c76293902ac8de47754d894f5d7f8879dbf2dc2316f81b74ff16762c122340a",
     "baseline_yaml_content_hash": "2f791ca9f57d21b446c2289f831ced253cb3dd98ebf45d06265652e7bbb650fa"
   }
 }

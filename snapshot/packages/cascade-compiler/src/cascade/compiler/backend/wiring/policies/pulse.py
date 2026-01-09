@@ -34,4 +34,6 @@ class PulseWiringPolicy(WiringPolicy):
                 initial_tokens=1,
             )
             ctx.wire.add_node(d_pulse)
-            ctx.wire.connect(d_pulse_id, "out", subgraph.bleacher.id, BleacherSpec.pulse.name)
+            ctx.wire.connect(
+                d_pulse_id, "out", subgraph.bleacher.id, BleacherSpec.pulse.name
+            )

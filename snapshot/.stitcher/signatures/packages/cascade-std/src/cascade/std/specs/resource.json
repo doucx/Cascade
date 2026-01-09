@@ -1,0 +1,23 @@
+{
+  "DiscreteAllocatorSpec": {
+    "baseline_yaml_content_hash": "1ca52b52159cd56311f4d5c3a17a1162df3a2c60d796eaf4e7c3fe50137e6d0e"
+  },
+  "DiscreteAllocatorSpec.gnt_out": {},
+  "DiscreteAllocatorSpec.grants": {},
+  "DiscreteAllocatorSpec.ledger_in": {},
+  "DiscreteAllocatorSpec.ledger_out": {},
+  "DiscreteAllocatorSpec.req_in": {},
+  "DiscreteAllocatorSpec.req_parked": {},
+  "DiscreteReclaimerSpec": {
+    "baseline_yaml_content_hash": "91bf70bd358dd31842b2ce1f724ae2b3f1a8f5fd229b7beea3a27518a7611a71"
+  },
+  "DiscreteReclaimerSpec.ledger_in": {},
+  "DiscreteReclaimerSpec.ledger_out": {},
+  "DiscreteReclaimerSpec.rel_in": {},
+  "DiscreteReclaimerSpec.signal_out": {},
+  "ResourceRequestorSpec": {
+    "baseline_yaml_content_hash": "53c5cbca7ac42c1d02ce1d15c599e574f2c621cf687cbc9fa4d7ff41628fd06d"
+  },
+  "ResourceRequestorSpec.amount": {},
+  "ResourceRequestorSpec.req_out": {}
+}

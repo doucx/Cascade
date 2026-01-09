@@ -50,8 +50,12 @@ class DiscreteResourcePrism(ResourcePrism):
                 reclaim.rel_in.name: PortDef(reclaim.rel_in.name, PortRole.DATA),
             },
             output_ports={
-                reclaim.ledger_out.name: PortDef(reclaim.ledger_out.name, PortRole.DATA),
-                reclaim.signal_out.name: PortDef(reclaim.signal_out.name, PortRole.SIGNAL),
+                reclaim.ledger_out.name: PortDef(
+                    reclaim.ledger_out.name, PortRole.DATA
+                ),
+                reclaim.signal_out.name: PortDef(
+                    reclaim.signal_out.name, PortRole.SIGNAL
+                ),
             },
         )
         ctx.wire.add_node(f_reclaimer)
@@ -151,7 +155,7 @@ class DiscreteResourcePrism(ResourcePrism):
 
         # Spec shortcuts
         req = ResourceRequestorSpec
-        
+
         # --- A. Request Chain ---
         # 1. D_const (Amount)
         d_amt_id = PhysicalIdGenerator.constant(

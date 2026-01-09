@@ -10,9 +10,7 @@ from cascade.std.kernel_tools import implements
 
 
 @implements(BleacherSpec)
-def standard_bleacher(
-    io: BleacherSpec.IO, node: BleachNode, resources: Any
-) -> None:
+def standard_bleacher(io: BleacherSpec.IO, node: BleachNode, resources: Any) -> None:
     worker_payload: Dict[str, Any] = {}
     trace_payload: Dict[str, Any] = {}
     held_resources: List[str] = []

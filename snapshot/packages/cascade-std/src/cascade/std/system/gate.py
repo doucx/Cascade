@@ -5,9 +5,7 @@ from cascade.std.kernel_tools import implements
 
 
 @implements(GateSpec)
-def gate_passthrough(
-    io: GateSpec.IO, node: PhysicsNode, resources: Any
-) -> None:
+def gate_passthrough(io: GateSpec.IO, node: PhysicsNode, resources: Any) -> None:
     # Access inputs via Spec-defined attributes
     # The IO wrapper maps 'io.req_in' -> inputs["req_in"]
     if io.req_in and io.signal_in:

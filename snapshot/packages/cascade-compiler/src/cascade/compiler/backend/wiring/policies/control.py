@@ -28,7 +28,10 @@ class ControlFlowWiringPolicy(WiringPolicy):
                 ctx.wire.add_node(d_seq)
 
                 ctx.wire.connect(
-                    source_subgraph.stainer.id, StainerSpec.output_default.name, d_seq_id, "in"
+                    source_subgraph.stainer.id,
+                    StainerSpec.output_default.name,
+                    d_seq_id,
+                    "in",
                 )
                 ctx.wire.connect(d_seq_id, "out", subgraph.bleacher.id, port_name)
 
@@ -45,9 +48,14 @@ class ControlFlowWiringPolicy(WiringPolicy):
             ctx.wire.add_node(d_cond)
 
             ctx.wire.connect(
-                source_subgraph.stainer.id, StainerSpec.output_default.name, d_cond_id, "in"
+                source_subgraph.stainer.id,
+                StainerSpec.output_default.name,
+                d_cond_id,
+                "in",
             )
-            ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, BleacherSpec.condition.name)
+            ctx.wire.connect(
+                d_cond_id, "out", subgraph.bleacher.id, BleacherSpec.condition.name
+            )
 
         # 4.4 Egress for Root Nodes
         if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
@@ -60,8 +68,8 @@ class ControlFlowWiringPolicy(WiringPolicy):
             # Connect the stainer's default output to this egress node
             # Using EgressSpec.input_token.name for the target port (usually "in")
             ctx.wire.connect(
-                subgraph.stainer.id, 
-                StainerSpec.output_default.name, 
-                d_egress_id, 
-                EgressSpec.input_token.name
+                subgraph.stainer.id,
+                StainerSpec.output_default.name,
+                d_egress_id,
+                EgressSpec.input_token.name,
             )

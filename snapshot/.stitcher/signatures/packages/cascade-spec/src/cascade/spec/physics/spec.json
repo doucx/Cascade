@@ -1,0 +1,14 @@
+{
+  "PhysicsSpec": {
+    "baseline_yaml_content_hash": "df07de4f299c7754efed21bb72d653789584dddc8dc9dafca475cc91bbc37ac2"
+  },
+  "PhysicsSpec.input_ports": {},
+  "PhysicsSpec.output_ports": {},
+  "PhysicsSpecMeta": {
+    "baseline_yaml_content_hash": "16f6dedfd8201deb3744380b7124fa8798bec7b3c389b07f08d291b48d95cea7"
+  },
+  "PhysicsSpecMeta.__new__": {
+    "baseline_code_signature_text": "def __new__(mcs, name, bases, namespace):",
+    "baseline_code_structure_hash": "d1bff72e23b0e3b4cec3f4b380f36e3db19be535143852182f40aae3ece814c0"
+  }
+}

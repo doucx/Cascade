@@ -42,7 +42,10 @@ class ParameterWiringPolicy(WiringPolicy):
 
                 # Source Stainer -> D_dep (Connect from output_default)
                 ctx.wire.connect(
-                    source_subgraph.stainer.id, StainerSpec.output_default.name, d_dep_id, "in"
+                    source_subgraph.stainer.id,
+                    StainerSpec.output_default.name,
+                    d_dep_id,
+                    "in",
                 )
 
                 # D_dep -> Target Bleacher

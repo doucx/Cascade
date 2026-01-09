@@ -5,9 +5,7 @@ from cascade.std.kernel_tools import implements
 
 
 @implements(EgressSpec)
-def standard_egress(
-    io: EgressSpec.IO, node: PhysicsNode, resources: Any
-) -> None:
+def standard_egress(io: EgressSpec.IO, node: PhysicsNode, resources: Any) -> None:
     # 1. Get the Egress Queue
     queue = resources.get("system.egress_queue")
 
@@ -18,6 +16,6 @@ def standard_egress(
     if token:
         # 3. Export
         queue.put_nowait((node.id, token))
-    
+
     # 4. Return empty (Evaporate)
     # Implicitly returns the empty 'outputs' dict created by @implements

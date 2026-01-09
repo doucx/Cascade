@@ -64,7 +64,9 @@ class Expander:
 
         # If after all that, there are no inputs, it's a source node that needs a pulse.
         if not bleacher_inputs:
-            bleacher_inputs[BleacherSpec.pulse.name] = PortDef(BleacherSpec.pulse.name, PortRole.SIGNAL)
+            bleacher_inputs[BleacherSpec.pulse.name] = PortDef(
+                BleacherSpec.pulse.name, PortRole.SIGNAL
+            )
 
         f_pre = BleachNode(
             id=f_pre_id,

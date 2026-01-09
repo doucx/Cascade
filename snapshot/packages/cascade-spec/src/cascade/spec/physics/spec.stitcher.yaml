@@ -1,0 +1,8 @@
+"PhysicsSpec": |-
+  Base class for all Physical Node Specifications.
+
+  Subclasses should define ports using the `Port.Input` and `Port.Output` helpers.
+  The metaclass will automatically aggregate these into `input_ports` and `output_ports`.
+"PhysicsSpecMeta": |-
+  Metaclass that collects PortDef descriptors and registers them
+  into `input_ports` and `output_ports` dictionaries on the class.

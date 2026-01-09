@@ -1,0 +1,10 @@
+"DynamicOutputMap": |-
+  Proxy for writing to dynamic output ports with prefix validation.
+"IOWrapper": |-
+  A zero-copy view over the input and output dictionaries.
+  Translates attribute access to dictionary lookups based on the Spec.
+  Supports "Static First, Dynamic Fallback" for map ports.
+"implements": "Decorator that adapts a kernel function to use the typed IO interface.\n\
+  \nTransforms:\n    def my_kernel(inputs, node, resources) -> Dict\nInto:\n    def\
+  \ my_kernel(io, node, resources) -> None\n    \nThe wrapper handles the creation\
+  \ of the outputs dictionary and returns it."

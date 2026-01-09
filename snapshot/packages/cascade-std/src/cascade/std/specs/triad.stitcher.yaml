@@ -1,0 +1,11 @@
+"BleacherSpec": |-
+  Contract for the Pre-process Node (F_pre).
+  Inputs are dynamic (based on Task arguments), so they are not exhaustively listed here.
+"ObservabilitySpec": |-
+  Contract for the Sidecar Observer (F_obs).
+"StainerSpec": |-
+  Contract for the Post-process Node (F_post).
+  Wraps results and handles routing.
+"WorkerSpec": |-
+  Contract for the Execution Node (F_exec).
+  Pure business logic execution.

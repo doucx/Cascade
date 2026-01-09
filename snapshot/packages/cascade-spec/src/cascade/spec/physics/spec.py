@@ -1,19 +1,15 @@
-from typing import Dict, Protocol, Any
+from typing import Dict, Protocol
 from .core import PortDef, PortDirection
 
 
 class PhysicsSpecMeta(type):
-    """
-    Metaclass that collects PortDef descriptors and registers them
-    into `input_ports` and `output_ports` dictionaries on the class.
-    """
     def __new__(mcs, name, bases, namespace):
         # 1. Create the class
         cls = super().__new__(mcs, name, bases, namespace)
-        
+
         input_ports: Dict[str, PortDef] = {}
         output_ports: Dict[str, PortDef] = {}
-        
+
         # 2. Inherit ports from base classes (if any)
         # We traverse bases in reverse order so that later bases (and the class itself) override earlier ones.
         for base in reversed(bases):
@@ -32,30 +28,25 @@ class PhysicsSpecMeta(type):
                     input_ports[key] = value
                 else:
                     output_ports[key] = value
-        
+
         # 4. Register the collected ports
         cls.input_ports = input_ports
         cls.output_ports = output_ports
-        
+
         return cls
 
 
 class PhysicsSpec(metaclass=PhysicsSpecMeta):
-    """
-    Base class for all Physical Node Specifications.
-    
-    Subclasses should define ports using the `Port.Input` and `Port.Output` helpers.
-    The metaclass will automatically aggregate these into `input_ports` and `output_ports`.
-    """
     input_ports: Dict[str, PortDef]
     output_ports: Dict[str, PortDef]
 
     class IO(Protocol):
         """
         Protocol stub for Kernel function type hinting.
-        
+
         In the future, `@implements(Spec)` will use this Protocol to enforce
         that the kernel function accepts an 'io' object with attributes matching
         the Spec's ports.
         """
+
         pass

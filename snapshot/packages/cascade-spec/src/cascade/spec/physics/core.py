@@ -7,27 +7,17 @@ from cascade.spec.physical.ports import PortRole
 
 
 class PortType(str, Enum):
-    """
-    Defines the semantic type of data flowing through a port.
-    """
-    Token = "Token"      # Generic data token
-    Ledger = "Ledger"    # Resource ledger
-    Any = "Any"          # Any type
+    Token = "Token"  # Generic data token
+    Ledger = "Ledger"  # Resource ledger
+    Any = "Any"  # Any type
 
 
 class PortDirection(str, Enum):
-    """
-    Defines the direction of flow for a port relative to the Node.
-    """
     INPUT = "input"
     OUTPUT = "output"
 
 
 class PortDef:
-    """
-    Descriptor for defining a port on a PhysicsSpec.
-    Acts as the definition of a single interface point on a physical node.
-    """
     def __init__(
         self,
         name: str,
@@ -35,7 +25,7 @@ class PortDef:
         role: PortRole = PortRole.DATA,
         type_hint: Any = PortType.Any,
         is_map: bool = False,
-        prefix: str = ""
+        prefix: str = "",
     ):
         self.name = name
         self.direction = direction
@@ -53,32 +43,26 @@ class PortDef:
 
 
 class Port:
-    """
-    Namespace factory for defining ports in a declarative style.
-    Example:
-        data_in = Port.Input("data_in")
-    """
-    
     @staticmethod
-    def Input(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
+    def Input(
+        name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any
+    ) -> PortDef:
         return PortDef(name, PortDirection.INPUT, role, type)
 
     @staticmethod
-    def Output(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
+    def Output(
+        name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any
+    ) -> PortDef:
         return PortDef(name, PortDirection.OUTPUT, role, type)
 
     @staticmethod
     def MapInput(role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        """
-        Defines a dynamic dictionary of input ports. 
-        It captures all inputs that are NOT matched by static Port.Inputs.
-        """
         return PortDef("*", PortDirection.INPUT, role, type, is_map=True)
 
     @staticmethod
-    def MapOutput(prefix: str = "", role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        """
-        Defines a dynamic dictionary of output ports.
-        Allows writing to any port name starting with the given prefix.
-        """
-        return PortDef("*", PortDirection.OUTPUT, role, type, is_map=True, prefix=prefix)
+    def MapOutput(
+        prefix: str = "", role: PortRole = PortRole.DATA, type: Any = PortType.Any
+    ) -> PortDef:
+        return PortDef(
+            "*", PortDirection.OUTPUT, role, type, is_map=True, prefix=prefix
+        )

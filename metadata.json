@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(compiler): 实现两阶段“扩展流水线”物理图构建模型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767961356.9724257, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(runtime): Correct pyright type errors in runtime package", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767962355.4564848, "duration_ms": 0}}

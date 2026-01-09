@@ -182,7 +182,15 @@ def _hydrate_lifecycle(
     # Prefer logical IDs from data, fallback to physical IDs
     task_id = data.get("task_id", phy.get("nid", ""))
     task_name = data.get("task_name", "unknown")
-    state = data.get("state")
+
+    # Safely convert raw state string to EventState enum
+    state_raw = data.get("state")
+    state: Optional[EventState] = None
+    if state_raw:
+        try:
+            state = EventState(state_raw)
+        except ValueError:
+            logger.warning(f"Unknown EventState '{state_raw}' in EventIR data.")
 
     base_kwargs = {
         "timestamp": timestamp,

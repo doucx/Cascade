@@ -10,6 +10,7 @@ from cascade.spec.dsl.resources import ResourceDefinition
 from cascade.spec.dsl.constraint import GlobalConstraint
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.runtime.services.observability.bus import EventBus
+from cascade.spec import EventState
 from cascade.runtime.services.observability.events import (
     RunStarted,
     RunFinished,
@@ -221,7 +222,7 @@ class Engine:
 
             duration = time.time() - start_time
             self.bus.publish(
-                RunFinished(run_id=run_id, status="Succeeded", duration=duration)
+                RunFinished(run_id=run_id, status=EventState.SUCCEEDED, duration=duration)
             )
             return final_result
 
@@ -230,7 +231,7 @@ class Engine:
             self.bus.publish(
                 RunFinished(
                     run_id=run_id,
-                    status="Failed",
+                    status=EventState.FAILED,
                     duration=duration,
                     error=f"{type(e).__name__}: {e}",
                 )

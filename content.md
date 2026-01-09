@@ -1,213 +1,208 @@
 简要回答
-我们将在 `cascade-spec` 包中创建 `physics` 模块，并实现 `Port` 定义体系（Law of Ports）和 `PhysicsSpec` 基类（Law of Spec），为物理层建立强类型的契约基础。
+我们将在 `cascade-std` 包中创建 `specs` 模块，并基于 `PhysicsSpec` 实现 Resource、Triad 和 System 三类集成电路 (IC) 的标准物理契约，显式化现有的隐式端口定义。
 
-## [WIP] feat: 实施 PIDL 阶段一 - 定义物理法则
+## [WIP] feat: 实施 PIDL 阶段二 - 标准化物理契约
 
 ### 用户需求
-在 `cascade-spec` 包中建立物理接口定义层 (PIDL) 的基础架构。具体包括：
-1.  定义端口的元数据结构 (`PortDef`, `PortRole`, `PortType`)。
-2.  定义物理节点契约的基类 (`PhysicsSpec`) 及其元类逻辑，用于自动收集端口定义。
-3.  提供 `Port.Input` 和 `Port.Output` 等辅助工厂方法，实现类声明式的 Spec 定义风格。
+在 `cascade-std` 包中标准化现有的物理节点契约。具体包括：
+1.  创建 `cascade.std.specs` 包结构。
+2.  **Resource Specs**: 定义 `DiscreteAllocatorSpec` 和 `DiscreteReclaimerSpec`。
+3.  **Triad Specs**: 定义 `BleacherSpec`, `WorkerSpec`, `StainerSpec`。
+4.  **System Specs**: 定义 `EgressSpec`, `GateSpec`, `SleepSpec`。
 
 ### 评论
-这是 PIDL 路线图的基石。通过引入 `PhysicsSpec`，我们将物理层的“隐式约定”（比如 Kernel 函数必须接受名为 `ledger_in` 的参数）转化为“显式契约”。这不仅消除了魔法字符串，还为未来的 Kernel 类型检查、文档自动生成和更智能的 Compiler 连线提供了元数据支持。
+这是将 PIDL 付诸实践的第一步。通过这些 Spec 类，我们不仅记录了当前 Kernel 函数的输入输出接口，还为后续的 Kernel 重构（使用 `@implements(Spec)`）和 Compiler 连线策略（引用 `Spec.port.name`）提供了唯一的真理来源 (SSoT)。这也解决了 Python 关键字冲突的问题（如 Egress 的输入端口名为 `in`，但在 Spec 类中可以绑定到 `input_token` 属性）。
 
 ### 目标
-在 `packages/cascade-spec/src/cascade/spec/physics/` 目录下完成 `core.py`, `spec.py` 和 `__init__.py` 的创建。
+在 `packages/cascade-std/src/cascade/std/specs/` 目录下完成 `resource.py`, `triad.py`, `system.py` 和 `__init__.py` 的创建。
 
 ### 基本原理
-我们采用 **描述符 (Descriptor) + 元类 (Metaclass)** 的模式来实现 DSL。
-*   **`core.py`**: 定义原子概念。复用现有的 `cascade.spec.physical.ports.PortRole` 以保持语义一致性，同时引入新的 `PortType` 和 `PortDef`。
-*   **`spec.py`**: 定义结构法则。`PhysicsSpecMeta` 负责在类创建时扫描 `PortDef` 描述符，并将它们注册到 `input_ports` 和 `output_ports` 字典中，从而使得 Spec 类既是定义也是注册表。
+我们将使用阶段一定义的 `cascade.spec.physics` 原语。
+*   **属性命名与端口命名分离**: 利用 `PortDef` 的特性，类属性名（如 `input_token`）用于代码引用，而传递给 `Port.Input("in")` 的字符串才是物理层实际使用的端口名。这优雅地处理了 `in` 等保留字问题。
+*   **类型提示**: 虽然 Python 运行时不强制类型，但在 Spec 中明确 `type=PortType.Ledger` 等信息，为未来的静态分析和可视化提供了语义基础。
 
 ### 标签
-#intent/architect #flow/ready #priority/high #comp/interfaces #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/physics-spec #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/std #comp/interfaces #concept/spec #scope/core #ai/instruct #task/domain/core #task/object/std-specs #task/action/standardization #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建物理法则模块目录
-
-首先，我们为新的 `physics` 模块创建目录结构。
+#### Acts 1: 创建 Specs 目录
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-spec/src/cascade/spec/physics
+mkdir -p packages/cascade-std/src/cascade/std/specs
 ~~~~~
 
-#### Acts 2: 定义核心端口概念 (The Core Laws)
+#### Acts 2: 定义资源类契约 (Resource Specs)
 
-创建 `core.py`，定义端口的角色、类型和描述符。我们复用底层的 `PortRole` 以确保与现有物理图的兼容性。
+创建 `resource.py`，定义离散资源分配器和回收器的端口契约。
 
 ~~~~~act
 write_file
-packages/cascade-spec/src/cascade/spec/physics/core.py
+packages/cascade-std/src/cascade/std/specs/resource.py
 ~~~~~
 ~~~~~python
-from enum import Enum
-from typing import Any
-
-# Import PortRole from the existing physical layer to maintain compatibility
-# and avoid semantic drift between the "Law" (physics) and the "Matter" (physical).
-from cascade.spec.physical.ports import PortRole
+from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
 
 
-class PortType(str, Enum):
+class DiscreteAllocatorSpec(PhysicsSpec):
     """
-    Defines the semantic type of data flowing through a port.
+    Contract for a Discrete Resource Allocator.
+    Manages the distribution of countable resource units from a ledger.
     """
-    Token = "Token"      # Generic data token
-    Ledger = "Ledger"    # Resource ledger
-    Any = "Any"          # Any type
+    # Inputs
+    ledger_in = Port.Input("ledger_in", role=PortRole.DATA, type=PortType.Ledger)
+    req_in = Port.Input("req_in", role=PortRole.DATA, type=PortType.Token)
+
+    # Outputs
+    ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
+    # Note: The main grant output. Dynamic dedicated ports (gnt_for_X) may also exist.
+    gnt_out = Port.Output("gnt_out", role=PortRole.RESOURCE, type=PortType.Token)
+    # Output for requests that cannot be satisfied immediately
+    req_parked = Port.Output("req_parked", role=PortRole.DATA, type=PortType.Token)
 
 
-class PortDirection(str, Enum):
+class DiscreteReclaimerSpec(PhysicsSpec):
     """
-    Defines the direction of flow for a port relative to the Node.
+    Contract for a Discrete Resource Reclaimer.
+    Handles the return of resource units to the ledger.
     """
-    INPUT = "input"
-    OUTPUT = "output"
+    # Inputs
+    ledger_in = Port.Input("ledger_in", role=PortRole.DATA, type=PortType.Ledger)
+    rel_in = Port.Input("rel_in", role=PortRole.DATA, type=PortType.Token)
+
+    # Outputs
+    ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
+    # Signal emitted to wake up parked requests
+    signal_out = Port.Output("signal_out", role=PortRole.SIGNAL, type=PortType.Token)
+~~~~~
+
+#### Acts 3: 定义三连体契约 (Triad Specs)
+
+创建 `triad.py`，定义 Bleacher, Worker 和 Stainer 的契约。注意 Bleacher 的输入端口是动态生成的，因此 Spec 主要定义其固定的输出接口。
+
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/std/specs/triad.py
+~~~~~
+~~~~~python
+from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
 
 
-class PortDef:
+class BleacherSpec(PhysicsSpec):
     """
-    Descriptor for defining a port on a PhysicsSpec.
-    Acts as the definition of a single interface point on a physical node.
+    Contract for the Pre-process Node (F_pre).
+    Inputs are dynamic (based on Task arguments), so they are not exhaustively listed here.
     """
-    def __init__(
-        self,
-        name: str,
-        direction: PortDirection,
-        role: PortRole = PortRole.DATA,
-        type_hint: Any = PortType.Any
-    ):
-        self.name = name
-        self.direction = direction
-        self.role = role
-        self.type_hint = type_hint
-
-    def __set_name__(self, owner, name):
-        # We allow the attribute name to act as a fallback or strict mapping validation later.
-        pass
-
-    def __repr__(self):
-        return f"PortDef(name='{self.name}', dir={self.direction}, role={self.role})"
+    # Outputs
+    worker_input = Port.Output("worker_input", role=PortRole.DATA, type="Dict")
+    trace_output = Port.Output("trace_output", role=PortRole.DATA, type="TraceCtx")
+    context_output = Port.Output("context_output", role=PortRole.DATA, type="Dict")
+    obs_output = Port.Output("obs_output", role=PortRole.OBSERVABILITY, type="Event")
 
 
-class Port:
+class WorkerSpec(PhysicsSpec):
     """
-    Namespace factory for defining ports in a declarative style.
-    Example:
-        data_in = Port.Input("data_in")
+    Contract for the Execution Node (F_exec).
+    Pure business logic execution.
     """
+    # Inputs
+    worker_input = Port.Input("worker_input", role=PortRole.DATA, type="Dict")
+
+    # Outputs
+    worker_result = Port.Output("worker_result", role=PortRole.DATA, type=PortType.Any)
+
+
+class StainerSpec(PhysicsSpec):
+    """
+    Contract for the Post-process Node (F_post).
+    Wraps results and handles routing.
+    """
+    # Inputs
+    worker_result = Port.Input("worker_result", role=PortRole.DATA, type=PortType.Any)
+    trace_input = Port.Input("trace_input", role=PortRole.DATA, type="TraceCtx")
+    context_input = Port.Input("context_input", role=PortRole.DATA, type="Dict")
+
+    # Outputs
+    output_default = Port.Output("output_default", role=PortRole.DATA, type=PortType.Token)
+    output_error = Port.Output("output_error", role=PortRole.DATA, type=PortType.Token)
+    obs_output = Port.Output("obs_output", role=PortRole.OBSERVABILITY, type="Event")
+    # Resource returns are dynamic
+~~~~~
+
+#### Acts 4: 定义系统类契约 (System Specs)
+
+创建 `system.py`，定义 Egress, Gate 和 Sleep 等控制节点的契约。
+
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/std/specs/system.py
+~~~~~
+~~~~~python
+from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
+
+
+class EgressSpec(PhysicsSpec):
+    """
+    Contract for the Egress Node.
+    Acts as a sink for graph results.
+    """
+    # The physical port name is "in" (reserved keyword in Python).
+    # We map it to the attribute 'input_token'.
+    input_token = Port.Input("in", role=PortRole.DATA, type=PortType.Token)
+
+
+class GateSpec(PhysicsSpec):
+    """
+    Contract for a Control Gate.
+    Passes req_in to req_out only when signal_in receives a token.
+    """
+    req_in = Port.Input("req_in", role=PortRole.DATA)
+    signal_in = Port.Input("signal_in", role=PortRole.SIGNAL)
     
-    @staticmethod
-    def Input(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        return PortDef(name, PortDirection.INPUT, role, type)
+    req_out = Port.Output("req_out", role=PortRole.DATA)
 
-    @staticmethod
-    def Output(name: str, role: PortRole = PortRole.DATA, type: Any = PortType.Any) -> PortDef:
-        return PortDef(name, PortDirection.OUTPUT, role, type)
+
+class SleepSpec(PhysicsSpec):
+    """
+    Contract for the Time Delay Node.
+    """
+    delay_in = Port.Input("delay_in", role=PortRole.DATA, type="float")
+    data_in = Port.Input("data_in", role=PortRole.DATA, type=PortType.Token)
+    # No outputs (Void) - flow resumes via ChronosService injection
 ~~~~~
 
-#### Acts 3: 定义物理契约基类 (The Spec Laws)
-
-创建 `spec.py`，实现 `PhysicsSpec` 及其元类。这是 PIDL 的核心，它负责将声明式的 Python 类转化为可自省的端口映射表。
+#### Acts 5: 导出所有 Specs
 
 ~~~~~act
 write_file
-packages/cascade-spec/src/cascade/spec/physics/spec.py
+packages/cascade-std/src/cascade/std/specs/__init__.py
 ~~~~~
 ~~~~~python
-from typing import Dict, Protocol, Any
-from .core import PortDef, PortDirection
-
-
-class PhysicsSpecMeta(type):
-    """
-    Metaclass that collects PortDef descriptors and registers them
-    into `input_ports` and `output_ports` dictionaries on the class.
-    """
-    def __new__(mcs, name, bases, namespace):
-        # 1. Create the class
-        cls = super().__new__(mcs, name, bases, namespace)
-        
-        input_ports: Dict[str, PortDef] = {}
-        output_ports: Dict[str, PortDef] = {}
-        
-        # 2. Inherit ports from base classes (if any)
-        # We traverse bases in reverse order so that later bases (and the class itself) override earlier ones.
-        for base in reversed(bases):
-            if hasattr(base, "input_ports"):
-                input_ports.update(base.input_ports)
-            if hasattr(base, "output_ports"):
-                output_ports.update(base.output_ports)
-
-        # 3. Collect ports from the current class definition
-        for key, value in namespace.items():
-            if isinstance(value, PortDef):
-                # The key in the dict is the attribute name (e.g. 'ledger_in').
-                # The value.name is the actual string name of the port (e.g. "ledger_in").
-                # Usually they are the same, but the dict allows access by attribute name.
-                if value.direction == PortDirection.INPUT:
-                    input_ports[key] = value
-                else:
-                    output_ports[key] = value
-        
-        # 4. Register the collected ports
-        cls.input_ports = input_ports
-        cls.output_ports = output_ports
-        
-        return cls
-
-
-class PhysicsSpec(metaclass=PhysicsSpecMeta):
-    """
-    Base class for all Physical Node Specifications.
-    
-    Subclasses should define ports using the `Port.Input` and `Port.Output` helpers.
-    The metaclass will automatically aggregate these into `input_ports` and `output_ports`.
-    """
-    input_ports: Dict[str, PortDef]
-    output_ports: Dict[str, PortDef]
-
-    class IO(Protocol):
-        """
-        Protocol stub for Kernel function type hinting.
-        
-        In the future, `@implements(Spec)` will use this Protocol to enforce
-        that the kernel function accepts an 'io' object with attributes matching
-        the Spec's ports.
-        """
-        pass
-~~~~~
-
-#### Acts 4: 暴露模块接口
-
-最后，创建 `__init__.py` 以导出这些新概念。
-
-~~~~~act
-write_file
-packages/cascade-spec/src/cascade/spec/physics/__init__.py
-~~~~~
-~~~~~python
-from .core import Port, PortRole, PortType, PortDef, PortDirection
-from .spec import PhysicsSpec
+from .resource import DiscreteAllocatorSpec, DiscreteReclaimerSpec
+from .triad import BleacherSpec, WorkerSpec, StainerSpec
+from .system import EgressSpec, GateSpec, SleepSpec
 
 __all__ = [
-    "Port",
-    "PortRole",
-    "PortType",
-    "PortDef",
-    "PortDirection",
-    "PhysicsSpec",
+    "DiscreteAllocatorSpec",
+    "DiscreteReclaimerSpec",
+    "BleacherSpec",
+    "WorkerSpec",
+    "StainerSpec",
+    "EgressSpec",
+    "GateSpec",
+    "SleepSpec",
 ]
 ~~~~~
 
 ### 下一步建议
-我们已经建立了“物理法则”的基础。根据路线图，下一步是 **阶段二：标准化物理契约 (The Contracts)**。
+我们已经完成了 Spec 的定义。接下来的 **阶段三：Kernel 实现重构 (The Implementation)** 是最具挑战性的部分。我们需要：
+1.  在 `cascade.std` 中引入装饰器（如 `@implements` 或简单的类型检查工具）。
+2.  修改 Kernel 函数，使其签名与我们刚刚定义的 Spec 保持一致（或通过装饰器适配）。
+3.  确保修改后的 Kernel 依然能通过现有的测试。
 
-建议在 `cascade-std` 包中创建 `cascade.std.specs` 模块，并开始将现有的 IC（如 `DiscreteAllocator`, `Bleacher`）的隐式端口定义显式化为 `PhysicsSpec` 的子类。这将验证我们刚刚建立的 DSL 的表达能力。
+建议先从最简单的 `Egress` 或 `Gate` 开始进行重构试点。

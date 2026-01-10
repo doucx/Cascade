@@ -1,265 +1,165 @@
-[简要回答]
-测试失败的原因已从“异步错误”和“Wiring错误”转变为“运行时资源缺失”。具体来说，`RuntimeHarness` 未将 `EventBus` 注册到 VM 的资源注册表中，导致 `standard_observer` 在尝试获取 `system.event_bus` 时触发 Kernel Panic，进而导致 Machine 异常停止。
+简要回答
+你的分析是正确的。VM 执行超时（Timeout）的根本原因是物理图中的 **Egress（出口）** 节点被错误地创建为了 `DataNode`，而不是 `FuncNode`。
 
-这实际上是一个好消息，证明了上一轮关于 `asyncio` 和 `Expander` 的修复已经生效（否则代码不会运行到 Observer 执行阶段）。现在的任务是补全依赖注入。
+在当前的架构中，Egress 的工作机制是：
+1.  `Stainer` 产生结果 Token。
+2.  Token 流入 Egress Buffer (`DataNode`)。
+3.  Egress Actor (`FuncNode`) 消耗 Buffer 中的 Token。
+4.  Egress Actor (`standard_egress`) 执行，并将结果放入 `system.egress_queue`。
+5.  `VMExecutionStrategy` 从队列中读取结果并返回。
 
-## [WIP] fix: 将 EventBus 注入 VM 运行时环境
+然而，`ControlFlowExpansionPolicy` 当前的实现只创建了一个 `DataNode` 作为 Egress。这意味着 Token 会停留在该 DataNode 中，永远不会触发 `standard_egress` 函数执行，导致 `egress_queue` 永远为空，最终导致测试超时。
+
+此外，`Builder` 生成 Manifest 的逻辑也需要更新，以便正确识别新的 Egress FuncNode 作为退出点。
+
+## [WIP] fix: 修复 VM Egress 节点类型错误导致的执行死锁
 
 ### 错误分析
-`standard_observer` 内核函数依赖于名为 `system.event_bus` 的资源来发布事件。然而，当前的 `VMExecutionStrategy` 和 `RuntimeHarness` 在初始化时没有接收或注册这个组件。导致 `KeyError: "Resource 'system.event_bus' not found."`，这被 Kernel 捕获并转化为系统级错误，终止了执行。
+测试超时是因为 VM 的 Egress 机制失效。
+1.  **Expansion 错误**: `ControlFlowExpansionPolicy` 将 Egress 节点创建为 `PhysicsDataNode`。但在 Cascade v3.1 物理层中，只有 `PhysicsFuncNode` 才能执行内核函数（如 `standard_egress`）。`DataNode` 只是被动存储 Token，无法触发副作用（如推送到队列）。
+2.  **Manifest 错误**: `Builder` 在生成 `exit_points` 时，仅扫描 `PhysicsDataNode`。即使修复了 Expansion，如果 Manifest 不指向新的 FuncNode，运行时也无法正确映射结果。
 
 ### 用户需求
-使 `VMExecutionStrategy` 能够通过所有 E2E 测试，包括那些触发可观测性事件的测试。
+修复 VM 集成测试中的超时问题，确保 Egress 机制能正确地将结果传回给 Runtime Strategy。
 
 ### 评论
-这是一个典型的集成遗漏。在基于微内核的架构中，所有外部能力（如日志、事件总线）都必须显式地作为“资源”注入到内核空间。
+这是一个关键的架构修复。它不仅解决了死锁，还纠正了 Egress 作为一个“主动执行者”（FuncNode）而非“被动容器”（DataNode）的语义。
 
 ### 目标
-1.  修改 `VMExecutionStrategy` 和 `RuntimeHarness`，使其在构造时接受 `EventBus`。
-2.  在 `RuntimeHarness` 中将 `EventBus` 注册为 `system.event_bus`。
-3.  更新测试代码以匹配新的构造函数签名。
+1.  修改 `ControlFlowExpansionPolicy`：为每个 Root Logical Node 创建一个 `Egress Buffer` (DataNode) 和一个 `Egress Actor` (FuncNode)。
+2.  修改 `Builder`：更新 `exit_points` 的扫描逻辑，使其能够识别 Egress FuncNode。
 
 ### 基本原理
-通过显式的依赖注入，确保 VM 内部的 `standard_observer` 能够安全地访问宿主环境的 `EventBus`，从而打通遥测链路。
+遵循 Cascade 的二分图（Bipartite Graph）原则：数据必须流经 `DataNode` -> `FuncNode`。Stainer（Func）输出到 Egress Buffer（Data），Egress Buffer 输出到 Egress Actor（Func）。Egress Actor 执行时调用 `standard_egress` IC，将结果推送到系统队列。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #concept/observability #task/domain/core #task/object/vm-strategy #task/action/integration #task/state/end
+#intent/fix #flow/ready #priority/critical #comp/compiler #concept/executor #scope/core #ai/instruct #task/domain/compiler #task/object/egress-policy #task/action/fix
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 `VMExecutionStrategy` 和 `RuntimeHarness`
+#### Acts 1: 修复 ControlFlowExpansionPolicy
 
-我们需要在 `VMExecutionStrategy` 和 `RuntimeHarness` 的 `__init__` 方法中添加 `bus` 参数，并在 `_register_system_resources` 中进行注册。
+我们将修改扩展策略，使其能够正确地构建 `Stainer -> Buffer -> Egress(Func)` 的拓扑结构。这需要引入新的导入 (`PhysicsFuncNode`, `EgressSpec` 等) 并重写 `expand` 方法中的 Egress 创建逻辑。
 
 ~~~~~act
 patch_file
-packages/cascade-runtime/src/cascade/runtime/strategies/vm.py
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/control.py
 ~~~~~
 ~~~~~python.old
-from cascade.spec.runtime.strategies import ExecutionStrategy, ExecutionContext
-from cascade.spec.runtime.interfaces import Executor
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
-from cascade.spec.physical.assembly import CompilationArtifact
-from cascade.spec.physical.object import Ref
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.constants import NodePrefix
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.expansion.context import ExpansionContext
+from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.std.specs import EgressSpec
+from cascade.spec.physical.constants import NodePrefix
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.expansion.context import ExpansionContext
+from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/control.py
+~~~~~
+~~~~~python.old
+        # 3. Egress for Root Nodes
+        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
+            d_egress_id = f"{NodePrefix.EGRESS}.{node_ir.logical_id}"
+            d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
+            ctx.wire.add_node(d_egress)
+            subgraph.nodes[d_egress.id] = d_egress
+            subgraph.controls[f"egress_for_{node_ir.logical_id}"] = d_egress
+~~~~~
+~~~~~python.new
+        # 3. Egress for Root Nodes
+        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
+            # 3.1 D_buffer (The waiting room)
+            d_buffer_id = f"buffer.egress.{node_ir.logical_id}"
+            d_buffer = PhysicsDataNode(
+                id=d_buffer_id, name=f"BufEgress({node_ir.name})"
+            )
+            ctx.wire.add_node(d_buffer)
+            subgraph.nodes[d_buffer.id] = d_buffer
+
+            # 3.2 F_egress (The active exporter)
+            f_egress_id = f"{NodePrefix.EGRESS}.{node_ir.logical_id}"
+            f_egress = PhysicsFuncNode(
+                id=f_egress_id,
+                name=f"Egress({node_ir.name})",
+                input_ports={
+                    EgressSpec.input_token.name: PortDef(
+                        EgressSpec.input_token.name, PortRole.DATA
+                    )
+                },
+            )
+            ctx.wire.add_node(f_egress)
+            subgraph.nodes[f_egress.id] = f_egress
+
+            # 3.3 Wire Buffer -> F_egress
+            ctx.wire.connect(
+                d_buffer_id, "out", f_egress_id, EgressSpec.input_token.name
+            )
+
+            # 3.4 Expose Buffer for Wiring (Stainer -> Buffer)
+            # The Wiring Policy connects the Stainer output to this node.
+            subgraph.controls[f"egress_for_{node_ir.logical_id}"] = d_buffer
+~~~~~
+
+#### Acts 2: 修复 Builder 的 Manifest 生成逻辑
+
+现在 Egress 是一个 `PhysicsFuncNode`，我们需要更新 `Builder` 以便正确识别它并将其 ID 添加到 `manifest.exit_points` 中。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python.old
 from cascade.spec.ir.graph import GraphIR
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-
-from cascade.vm.compute import BridgedComputeService
-from cascade.vm.services.chronos import ChronosService
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.kernel import PhysicsKernel
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.linker import Linker
-
-from cascade.compiler.frontend import IRGenerator, GenerationResult
-from cascade.compiler.backend import Builder
-
-logger = logging.getLogger(__name__)
-
-
-class RuntimeHarness:
-    """
-    The 'Motherboard' for the VM instance.
-    Responsible for assembling the physical environment, buses, and peripheral services
-    required by the Machine to operate within the Runtime context.
-    """
-
-    def __init__(
-        self,
-        context: ExecutionContext,
-        executor: Executor,
-        code_registry: CodeRegistry,
-    ):
-        self.context = context
-
-        # 1. Physical Buses (Queues)
+from cascade.spec.physical.topology import BipartiteGraph
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.assembly import (
+    Assembly,
 ~~~~~
 ~~~~~python.new
-from cascade.spec.runtime.strategies import ExecutionStrategy, ExecutionContext
-from cascade.spec.runtime.interfaces import Executor
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
-from cascade.spec.physical.assembly import CompilationArtifact
-from cascade.spec.physical.object import Ref
 from cascade.spec.ir.graph import GraphIR
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-
-from cascade.vm.compute import BridgedComputeService
-from cascade.vm.services.chronos import ChronosService
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.kernel import PhysicsKernel
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.linker import Linker
-from cascade.runtime.services.observability.bus import EventBus
-
-from cascade.compiler.frontend import IRGenerator, GenerationResult
-from cascade.compiler.backend import Builder
-
-logger = logging.getLogger(__name__)
-
-
-class RuntimeHarness:
-    """
-    The 'Motherboard' for the VM instance.
-    Responsible for assembling the physical environment, buses, and peripheral services
-    required by the Machine to operate within the Runtime context.
-    """
-
-    def __init__(
-        self,
-        context: ExecutionContext,
-        executor: Executor,
-        bus: EventBus,
-        code_registry: CodeRegistry,
-    ):
-        self.context = context
-        self.bus = bus
-
-        # 1. Physical Buses (Queues)
+from cascade.spec.physical.topology import BipartiteGraph
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.physical.assembly import (
+    Assembly,
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-runtime/src/cascade/runtime/strategies/vm.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
 ~~~~~
 ~~~~~python.old
-    def _register_system_resources(self):
-        self.resource_registry.register("system.egress_queue", self.egress_queue)
-        self.resource_registry.register("system.compute_queue", self.compute_queue)
-        self.resource_registry.register("system.chronos_queue", self.chronos_queue)
-        self.resource_registry.register(
-            "system.object_store", self.context.object_store
-        )
-
-
-class VMExecutionStrategy(ExecutionStrategy):
-    """
-    The Next-Gen Execution Strategy based on the Cascade VM (Physics Engine).
-
-    It orchestrates the full lifecycle:
-    1. Compile: Logical Graph -> Physical Assembly
-    2. Link: Register executable code
-    3. Bootstrap: Assemble the Machine and Harness
-    4. Ignite: Inject initial energy
-    5. Run: Drive the Machine loop and harvest results
-    """
-
-    def __init__(self, executor: Executor):
-        self.executor = executor
-        self.compiler_frontend = IRGenerator()
-        self.compiler_backend = Builder()
-        self.linker = Linker()
-
-    async def execute(self, target: Any, context: ExecutionContext) -> Any:
-        logger.info("VMStrategy: Starting execution cycle.")
-
-        # --- Phase 1: Compilation ---
-        logger.debug("VMStrategy: Compiling logical graph...")
-        graph_ir_result = self.compiler_frontend.generate(target)
-        graph_ir = graph_ir_result.ir
-
-        # Build environment definition from IR requirements
-        env_def = self._scan_resources(graph_ir)
-
-        artifact = self.compiler_backend.build(graph_ir, environment=env_def)
-        logger.debug("VMStrategy: Compilation complete.")
-
-        # --- Phase 2: Linking ---
-        logger.debug("VMStrategy: Linking code...")
-        code_registry = self._link_code(graph_ir, graph_ir_result)
-
-        # --- Phase 3: Bootstrap ---
-        logger.debug("VMStrategy: Bootstrapping machine...")
-        harness = RuntimeHarness(context, self.executor, code_registry)
-
-        function_map = self.linker.link(artifact.assembly, code_registry)
-        kernel = PhysicsKernel(function_map, harness.resource_registry)
+        exit_points = {
+            node.id.split(".")[1]: node.id
+            for node in physical_graph.nodes.values()
+            if isinstance(node, PhysicsDataNode)
+            and node.id.startswith(f"{NodePrefix.EGRESS}.")
+        }
 ~~~~~
 ~~~~~python.new
-    def _register_system_resources(self):
-        self.resource_registry.register("system.egress_queue", self.egress_queue)
-        self.resource_registry.register("system.compute_queue", self.compute_queue)
-        self.resource_registry.register("system.chronos_queue", self.chronos_queue)
-        self.resource_registry.register(
-            "system.object_store", self.context.object_store
-        )
-        self.resource_registry.register("system.event_bus", self.bus)
-
-
-class VMExecutionStrategy(ExecutionStrategy):
-    """
-    The Next-Gen Execution Strategy based on the Cascade VM (Physics Engine).
-
-    It orchestrates the full lifecycle:
-    1. Compile: Logical Graph -> Physical Assembly
-    2. Link: Register executable code
-    3. Bootstrap: Assemble the Machine and Harness
-    4. Ignite: Inject initial energy
-    5. Run: Drive the Machine loop and harvest results
-    """
-
-    def __init__(self, executor: Executor, bus: EventBus):
-        self.executor = executor
-        self.bus = bus
-        self.compiler_frontend = IRGenerator()
-        self.compiler_backend = Builder()
-        self.linker = Linker()
-
-    async def execute(self, target: Any, context: ExecutionContext) -> Any:
-        logger.info("VMStrategy: Starting execution cycle.")
-
-        # --- Phase 1: Compilation ---
-        logger.debug("VMStrategy: Compiling logical graph...")
-        graph_ir_result = self.compiler_frontend.generate(target)
-        graph_ir = graph_ir_result.ir
-
-        # Build environment definition from IR requirements
-        env_def = self._scan_resources(graph_ir)
-
-        artifact = self.compiler_backend.build(graph_ir, environment=env_def)
-        logger.debug("VMStrategy: Compilation complete.")
-
-        # --- Phase 2: Linking ---
-        logger.debug("VMStrategy: Linking code...")
-        code_registry = self._link_code(graph_ir, graph_ir_result)
-
-        # --- Phase 3: Bootstrap ---
-        logger.debug("VMStrategy: Bootstrapping machine...")
-        harness = RuntimeHarness(context, self.executor, self.bus, code_registry)
-
-        function_map = self.linker.link(artifact.assembly, code_registry)
-        kernel = PhysicsKernel(function_map, harness.resource_registry)
-~~~~~
-
-#### Acts 2: 更新 E2E 测试中的 Fixture
-
-更新 `tests/integration/test_vm_e2e.py` 中的 `strategy` fixture，以匹配新的签名。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/tests/integration/test_vm_e2e.py
-~~~~~
-~~~~~python.old
-@pytest.fixture
-def strategy(executor):
-    return VMExecutionStrategy(executor=executor)
-~~~~~
-~~~~~python.new
-@pytest.fixture
-def strategy(executor, bus):
-    return VMExecutionStrategy(executor=executor, bus=bus)
+        exit_points = {
+            node.id.split(".")[1]: node.id
+            for node in physical_graph.nodes.values()
+            if isinstance(node, PhysicsFuncNode)
+            and node.id.startswith(f"{NodePrefix.EGRESS}.")
+        }
 ~~~~~
 
 ### 下一步建议
 
-重新运行 `test_vm_e2e.py`。我有极高的信心，这次所有测试都将通过。
-如果测试全绿，那么 `VMExecutionStrategy` 的 MVP (最小可行产品) 就正式完成了，我们可以将其视为 `beta` 状态并进行更复杂的场景测试。
+修复完成后，应立即运行 integration 测试 `packages/cascade-runtime/tests/integration/test_vm_e2e.py` 来验证修复是否生效。如果测试通过，说明 Egress 管道已打通，VM 能够正确返回执行结果。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 将 EventBus 注入 VM 运行时环境", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768018519.750822, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 VM Egress 节点类型错误导致的执行死锁", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768018949.8698056, "duration_ms": 0}}

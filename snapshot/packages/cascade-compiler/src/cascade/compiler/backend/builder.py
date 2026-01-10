@@ -3,7 +3,7 @@ from typing import List
 from cascade.spec.ir.graph import GraphIR
 from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.assembly import (
     Assembly,
     CompilationArtifact,
@@ -136,7 +136,7 @@ class Builder:
         exit_points = {
             node.id.split(".")[1]: node.id
             for node in physical_graph.nodes.values()
-            if isinstance(node, PhysicsDataNode)
+            if isinstance(node, PhysicsFuncNode)
             and node.id.startswith(f"{NodePrefix.EGRESS}.")
         }
 

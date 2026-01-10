@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: Correct resource reclaimer wiring to prevent deadlocks", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768020172.7136889, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M test_resource_contention.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768020300.6894014, "duration_ms": 0}}

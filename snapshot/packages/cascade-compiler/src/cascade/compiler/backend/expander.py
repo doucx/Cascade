@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
-from cascade.spec.ir.graph import NodeIR
+from cascade.spec.ir.graph import NodeIR, ArgumentKind
 from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
 from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.physical.topology import Channel
@@ -46,10 +46,14 @@ class Expander:
 
         # F_pre: The Bleacher
         # Inputs = Task Args + Resource Constraints
-        bleacher_inputs = {
-            arg.name: PortDef(arg.name, PortRole.DATA, "Any")
-            for arg in node_ir.task.args
-        }
+        bleacher_inputs = {}
+        for arg in node_ir.task.args:
+            # For *args, the name 'args' is a placeholder. The actual inputs are
+            # positional ('0', '1', ...), which are handled by the dynamic port
+            # creation logic below. We must skip creating a port named 'args'.
+            if arg.kind == ArgumentKind.VAR_POSITIONAL:
+                continue
+            bleacher_inputs[arg.name] = PortDef(arg.name, PortRole.DATA, "Any")
 
         # [HFEA Fix]: Variadic Args Support
         # Check for inputs in NodeIR that don't have a corresponding port definition.

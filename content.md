@@ -1,165 +1,85 @@
-简要回答
-你的分析是正确的。VM 执行超时（Timeout）的根本原因是物理图中的 **Egress（出口）** 节点被错误地创建为了 `DataNode`，而不是 `FuncNode`。
+你的分析完全正确，这是一个非常微妙但关键的编译错误。
 
-在当前的架构中，Egress 的工作机制是：
-1.  `Stainer` 产生结果 Token。
-2.  Token 流入 Egress Buffer (`DataNode`)。
-3.  Egress Actor (`FuncNode`) 消耗 Buffer 中的 Token。
-4.  Egress Actor (`standard_egress`) 执行，并将结果放入 `system.egress_queue`。
-5.  `VMExecutionStrategy` 从队列中读取结果并返回。
+`_internal_gather` 被定义为 `def _internal_gather(*args: Any)`，它只接受位置参数。然而，`Expander` 在分析这个签名时，错误地为 `*args` 创建了一个名为 `'args'` 的单一输入端口。这导致了后续一系列的逻辑错误，最终 `LocalExecutor` 尝试以 `_internal_gather(args=[...])` 的形式调用该函数，从而引发了 `TypeError`。
 
-然而，`ControlFlowExpansionPolicy` 当前的实现只创建了一个 `DataNode` 作为 Egress。这意味着 Token 会停留在该 DataNode 中，永远不会触发 `standard_egress` 函数执行，导致 `egress_queue` 永远为空，最终导致测试超时。
+正确的行为是，对于 `*args` 类型的参数，`Expander` 不应该创建任何具名端口，而是应该依赖后续的动态端口创建逻辑，为实际传入的位置参数（'0', '1', '2', ...）创建对应的数字端口。
 
-此外，`Builder` 生成 Manifest 的逻辑也需要更新，以便正确识别新的 Egress FuncNode 作为退出点。
+我将生成一个计划来修复此问题。
 
-## [WIP] fix: 修复 VM Egress 节点类型错误导致的执行死锁
+## [WIP] fix: 修正对 *args 参数的端口扩展逻辑以解决 TypeError
 
 ### 错误分析
-测试超时是因为 VM 的 Egress 机制失效。
-1.  **Expansion 错误**: `ControlFlowExpansionPolicy` 将 Egress 节点创建为 `PhysicsDataNode`。但在 Cascade v3.1 物理层中，只有 `PhysicsFuncNode` 才能执行内核函数（如 `standard_egress`）。`DataNode` 只是被动存储 Token，无法触发副作用（如推送到队列）。
-2.  **Manifest 错误**: `Builder` 在生成 `exit_points` 时，仅扫描 `PhysicsDataNode`。即使修复了 Expansion，如果 Manifest 不指向新的 FuncNode，运行时也无法正确映射结果。
+`test_vm_list_output` 失败的根本原因是 `_internal_gather(*args)` 函数被错误地以关键字参数的形式调用，导致 `TypeError`。
+
+1.  **分析错误**: `ReflectionAnalyzer` 正确地将 `*args` 参数识别为 `VAR_POSITIONAL` 类型，并将其名称记录为 `args`。
+2.  **扩展错误**: `Expander` 在创建 `BleachNode` 时，将这个 `ArgumentDef(name='args')` 错误地翻译成了一个名为 `'args'` 的物理输入端口。
+3.  **接线错误**: `ParameterWiringPolicy` 在尝试连接输入时，根据 `NodeIR` 的 `inputs` 字典（{'0': ..., '1': ...}）查找端口。它错误地将第一个输入（'0'）映射到了 `'args'` 端口，而后续的输入则被动态创建为数字端口。
+4.  **执行错误**: 在 `standard_bleacher` 中，所有输入被打包成一个 `worker_payload` 字典。由于端口名被错误地设置为 `args`，这个字典最终变成了 `{'args': [...]}` 的形式。
+5.  **最终失败**: 当 `BridgedComputeService` 将这个 payload 传递给 `LocalExecutor` 时，它被解包为 `kwargs={'args': [...]}`，导致对 `_internal_gather` 的调用失败。
 
 ### 用户需求
-修复 VM 集成测试中的超时问题，确保 Egress 机制能正确地将结果传回给 Runtime Strategy。
+修复 `test_vm_list_output` 测试的失败问题，确保 `engine.run([...])` 能够正确处理由多个 `LazyResult` 组成的列表。
 
 ### 评论
-这是一个关键的架构修复。它不仅解决了死锁，还纠正了 Egress 作为一个“主动执行者”（FuncNode）而非“被动容器”（DataNode）的语义。
+这是一个典型的因物理层实现与语言语义不匹配而导致的编译错误。修复此问题将确保编译器能正确处理 Python 中一个非常基础但重要的特性（`*args`），从而增强了整个系统的健壮性。
 
 ### 目标
-1.  修改 `ControlFlowExpansionPolicy`：为每个 Root Logical Node 创建一个 `Egress Buffer` (DataNode) 和一个 `Egress Actor` (FuncNode)。
-2.  修改 `Builder`：更新 `exit_points` 的扫描逻辑，使其能够识别 Egress FuncNode。
+修改 `Expander` 的端口创建逻辑，使其在遇到 `VAR_POSITIONAL` 类型的参数时，跳过创建具名端口，从而允许后续的动态端口创建逻辑根据实际输入（'0', '1', ...）来正确地创建数字端口。
 
 ### 基本原理
-遵循 Cascade 的二分图（Bipartite Graph）原则：数据必须流经 `DataNode` -> `FuncNode`。Stainer（Func）输出到 Egress Buffer（Data），Egress Buffer 输出到 Egress Actor（Func）。Egress Actor 执行时调用 `standard_egress` IC，将结果推送到系统队列。
+`*args` 参数的名称（例如 `args`）在函数签名中只是一个占位符，它不代表一个实际的参数名。真正的输入是通过它们的位置（0, 1, 2, ...）来区分的。因此，物理层的 `BleachNode` 也必须反映这种基于位置的输入结构，即拥有名为 '0', '1', ... 的端口，而不是一个名为 'args' 的端口。通过在 `Expander` 中忽略 `VAR_POSITIONAL` 类型的参数定义，我们可以让动态端口创建逻辑（HFEA Fix）来完成正确的端口生成工作。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/compiler #concept/executor #scope/core #ai/instruct #task/domain/compiler #task/object/egress-policy #task/action/fix
+#intent/fix #flow/ready #priority/high #comp/compiler #concept/parser #scope/core #ai/instruct #task/domain/compiler #task/object/expander #task/action/fix
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 ControlFlowExpansionPolicy
+#### Acts 1: 修复 Expander 中对 *args 的处理逻辑
 
-我们将修改扩展策略，使其能够正确地构建 `Stainer -> Buffer -> Egress(Func)` 的拓扑结构。这需要引入新的导入 (`PhysicsFuncNode`, `EgressSpec` 等) 并重写 `expand` 方法中的 Egress 创建逻辑。
+我们将修改 `expander.py`，在创建 `BleachNode` 的输入端口时，显式地跳过 `VAR_POSITIONAL` 类型的参数。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/control.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
 ~~~~~
 ~~~~~python.old
 from cascade.spec.ir.graph import NodeIR
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.constants import NodePrefix
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.expansion.context import ExpansionContext
-from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
+from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
+from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
 ~~~~~
 ~~~~~python.new
-from cascade.spec.ir.graph import NodeIR
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.std.specs import EgressSpec
-from cascade.spec.physical.constants import NodePrefix
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.expansion.context import ExpansionContext
-from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
+from cascade.spec.ir.graph import NodeIR, ArgumentKind
+from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
+from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/control.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
 ~~~~~
 ~~~~~python.old
-        # 3. Egress for Root Nodes
-        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
-            d_egress_id = f"{NodePrefix.EGRESS}.{node_ir.logical_id}"
-            d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
-            ctx.wire.add_node(d_egress)
-            subgraph.nodes[d_egress.id] = d_egress
-            subgraph.controls[f"egress_for_{node_ir.logical_id}"] = d_egress
-~~~~~
-~~~~~python.new
-        # 3. Egress for Root Nodes
-        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
-            # 3.1 D_buffer (The waiting room)
-            d_buffer_id = f"buffer.egress.{node_ir.logical_id}"
-            d_buffer = PhysicsDataNode(
-                id=d_buffer_id, name=f"BufEgress({node_ir.name})"
-            )
-            ctx.wire.add_node(d_buffer)
-            subgraph.nodes[d_buffer.id] = d_buffer
-
-            # 3.2 F_egress (The active exporter)
-            f_egress_id = f"{NodePrefix.EGRESS}.{node_ir.logical_id}"
-            f_egress = PhysicsFuncNode(
-                id=f_egress_id,
-                name=f"Egress({node_ir.name})",
-                input_ports={
-                    EgressSpec.input_token.name: PortDef(
-                        EgressSpec.input_token.name, PortRole.DATA
-                    )
-                },
-            )
-            ctx.wire.add_node(f_egress)
-            subgraph.nodes[f_egress.id] = f_egress
-
-            # 3.3 Wire Buffer -> F_egress
-            ctx.wire.connect(
-                d_buffer_id, "out", f_egress_id, EgressSpec.input_token.name
-            )
-
-            # 3.4 Expose Buffer for Wiring (Stainer -> Buffer)
-            # The Wiring Policy connects the Stainer output to this node.
-            subgraph.controls[f"egress_for_{node_ir.logical_id}"] = d_buffer
-~~~~~
-
-#### Acts 2: 修复 Builder 的 Manifest 生成逻辑
-
-现在 Egress 是一个 `PhysicsFuncNode`，我们需要更新 `Builder` 以便正确识别它并将其 ID 添加到 `manifest.exit_points` 中。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-from cascade.spec.ir.graph import GraphIR
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.assembly import (
-    Assembly,
-~~~~~
-~~~~~python.new
-from cascade.spec.ir.graph import GraphIR
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.assembly import (
-    Assembly,
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-        exit_points = {
-            node.id.split(".")[1]: node.id
-            for node in physical_graph.nodes.values()
-            if isinstance(node, PhysicsDataNode)
-            and node.id.startswith(f"{NodePrefix.EGRESS}.")
+        # F_pre: The Bleacher
+        # Inputs = Task Args + Resource Constraints
+        bleacher_inputs = {
+            arg.name: PortDef(arg.name, PortRole.DATA, "Any")
+            for arg in node_ir.task.args
         }
 ~~~~~
 ~~~~~python.new
-        exit_points = {
-            node.id.split(".")[1]: node.id
-            for node in physical_graph.nodes.values()
-            if isinstance(node, PhysicsFuncNode)
-            and node.id.startswith(f"{NodePrefix.EGRESS}.")
-        }
+        # F_pre: The Bleacher
+        # Inputs = Task Args + Resource Constraints
+        bleacher_inputs = {}
+        for arg in node_ir.task.args:
+            # For *args, the name 'args' is a placeholder. The actual inputs are
+            # positional ('0', '1', ...), which are handled by the dynamic port
+            # creation logic below. We must skip creating a port named 'args'.
+            if arg.kind == ArgumentKind.VAR_POSITIONAL:
+                continue
+            bleacher_inputs[arg.name] = PortDef(arg.name, PortRole.DATA, "Any")
 ~~~~~
 
 ### 下一步建议
 
-修复完成后，应立即运行 integration 测试 `packages/cascade-runtime/tests/integration/test_vm_e2e.py` 来验证修复是否生效。如果测试通过，说明 Egress 管道已打通，VM 能够正确返回执行结果。
+现在，这个核心的编译逻辑错误已经修复。请重新运行 `pytest packages/cascade-runtime/tests/integration/test_vm_e2e.py`。如果所有测试都通过，说明 `*args` 的问题已经解决，VM 的端到端执行链路是健康的。

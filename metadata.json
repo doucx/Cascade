@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 VM Egress 节点类型错误导致的执行死锁", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768018949.8698056, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修正对 *args 参数的端口扩展逻辑以解决 TypeError", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768019069.8388693, "duration_ms": 0}}

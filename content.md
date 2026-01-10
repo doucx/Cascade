@@ -1,29 +1,34 @@
-## [WIP] feat: 搭建 VMExecutionStrategy 与 RuntimeHarness 骨架
+## [WIP] feat: 完善 VMExecutionStrategy 核心逻辑
 
 ### 用户需求
-在 `cascade-runtime` 包中创建 `VMExecutionStrategy` 及其配套的基础设施 `RuntimeHarness`。这是实现从逻辑图到 VM 物理执行的关键一步（管理程序构建阶段）。
+完善 `VMExecutionStrategy` 的内部实现，使其具备完整的执行能力，包括：
+1.  **环境推断**: 根据 GraphIR 自动构建 `EnvironmentDef`。
+2.  **代码链接**: 正确地将前端生成的代码注册到 VM 的 `CodeRegistry`。
+3.  **结果收割**: 实现基于 `EgressQueue` 的主循环，等待并收集目标任务的结果，支持结果解包和错误传播。
 
 ### 评论
-该计划实现了 `VMExecutionStrategy` 的初始骨架。它定义了 `RuntimeHarness` 来封装 VM 运行所需的物理资源（队列、事件、服务适配器），并定义了 `VMExecutionStrategy` 的结构，包括编译、链接、引导和执行的占位逻辑。这为后续填充具体的编译和执行逻辑提供了明确的架构蓝图。
+当前的骨架代码只是一个占位符。为了让 VM 真正跑起来，我们需要填充中间的空白。特别是结果收割（Harvesting）部分，它是 Runtime 与 VM 异步世界交互的窗口，必须处理好 `Ref` 解引用、错误检测和多目标等待等细节。
 
 ### 目标
-1.  创建 `packages/cascade-runtime/src/cascade/runtime/strategies/vm.py`。
-2.  实现 `RuntimeHarness` 类，负责组装 `BridgedComputeService`, `ChronosService`, `ResourceRegistry` 和各种物理队列。
-3.  实现 `VMExecutionStrategy` 类，遵循 `ExecutionStrategy` 协议，并规划好 Compile-Link-Run 的生命周期。
+1.  重构 `packages/cascade-runtime/src/cascade/runtime/strategies/vm.py`。
+2.  实现 `_scan_resources` 方法，从 IR 中提取资源需求并构建 `EnvironmentDef`。
+3.  实现 `_link_code` 方法，建立 Logical ID 到 Canonical Hash 的映射并注册代码。
+4.  实现 `_materialize_constants` 方法，将常量值转换为 `Ref` 并存入 Store。
+5.  实现 `_run_and_harvest` 方法，作为核心执行循环。
 
 ### 基本原理
-*   **RuntimeHarness**: 作为 VM 的“主板”，将 Runtime 的上下文（`ExecutionContext`）和执行能力（`Executor`）转换为 VM 物理层可理解的组件（`Services` 和 `Queues`）。
-*   **BridgedComputeService**: 复用之前测试过的适配器，将 VM 的计算请求桥接到 Runtime 的 `Executor`。
-*   **VMExecutionStrategy**: 作为新的执行策略，它将不再依赖旧的 `NodeProcessor`，而是使用 `Compiler` 生成物理图，并驱动 `Machine` 进行执行。
+*   **按需环境构建**: 编译器要求明确的 `EnvironmentDef` 才能生成资源分配器节点。我们可以通过扫描 IR 中的约束来动态生成这个定义，默认假设所有资源都是离散的。
+*   **Egress 监听**: `RuntimeHarness` 的 `egress_queue` 是我们要监听的唯一输出通道。通过 `Manifest`，我们可以知道哪些物理节点对应我们关心的逻辑结果。
+*   **Ref 透明性**: VM 内部只传递 `Ref`。策略层负责在输入时将数据 `put` 进去（常量物化），在输出时 `get` 出来（结果解包）。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #comp/vm #concept/strategy #scope/core #ai/instruct #task/domain/runtime #task/object/vm-strategy #task/action/skeleton #task/state/continue
+#intent/build #flow/ready #priority/high #comp/runtime #comp/vm #concept/strategy #scope/core #ai/instruct #task/domain/runtime #task/object/vm-strategy #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `vm.py` 策略文件
+#### Acts 1: 完善 `VMExecutionStrategy` 实现
 
 ~~~~~act
 write_file
@@ -32,12 +37,15 @@ packages/cascade-runtime/src/cascade/runtime/strategies/vm.py
 ~~~~~python
 import asyncio
 import logging
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List, Set, Union, Tuple
 
 from cascade.spec.runtime.strategies import ExecutionStrategy, ExecutionContext
 from cascade.spec.runtime.interfaces import Executor
-from cascade.spec.physical.nodes import Token
-from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.physical.nodes import Token, PhysicsDataNode
+from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
+from cascade.spec.physical.object import Ref
+from cascade.spec.ir.graph import GraphIR
+from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 
 from cascade.vm.compute import BridgedComputeService
 from cascade.vm.services.chronos import ChronosService
@@ -49,8 +57,8 @@ from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.linker import Linker
 
-from cascade.compiler.frontend import IRGenerator
-from cascade.compiler.backend import Builder
+from cascade.compiler.frontend import IRGenerator, GenerationResult
+from cascade.compiler.backend import Builder, CompilationArtifact
 
 logger = logging.getLogger(__name__)
 
@@ -110,12 +118,9 @@ class RuntimeHarness:
         self.resource_registry.register("system.egress_queue", self.egress_queue)
         self.resource_registry.register("system.compute_queue", self.compute_queue)
         self.resource_registry.register("system.chronos_queue", self.chronos_queue)
-        self.resource_registry.register("system.object_store", self.context.object_store)
-        # Note: 'system.event_bus' is usually expected by Observers.
-        # We need to expose the bus from the context/engine if available.
-        # Currently ExecutionContext doesn't carry the bus explicitly, but it might be
-        # in active_resources or we might need to extend ExecutionContext.
-        # For now, we leave it, assuming Observers might fail or we'll add it later.
+        self.resource_registry.register(
+            "system.object_store", self.context.object_store
+        )
 
 
 class VMExecutionStrategy(ExecutionStrategy):
@@ -140,66 +145,27 @@ class VMExecutionStrategy(ExecutionStrategy):
         logger.info("VMStrategy: Starting execution cycle.")
 
         # --- Phase 1: Compilation ---
-        # Transform the user's Logical Intent (LazyResult) into a Physical Assembly.
         logger.debug("VMStrategy: Compiling logical graph...")
         graph_ir_result = self.compiler_frontend.generate(target)
         graph_ir = graph_ir_result.ir
-        
-        # TODO: Construct EnvironmentDef from context.active_resources or resource_manager
-        env_def = EnvironmentDef(resources=[]) 
-        
+
+        # Build environment definition from IR requirements
+        env_def = self._scan_resources(graph_ir)
+
         artifact = self.compiler_backend.build(graph_ir, environment=env_def)
         logger.debug("VMStrategy: Compilation complete.")
 
         # --- Phase 2: Linking ---
-        # Register the executable code blocks (functions) generated by the frontend
-        # into a CodeRegistry so the VM can find them by hash.
         logger.debug("VMStrategy: Linking code...")
-        code_registry = CodeRegistry()
-        for nid, code_hash in artifact.assembly.symbol_table.items():
-            # The frontend generates a mapping of instance_hash -> executable
-            # We need to map code_hash -> executable.
-            # In the current simple model, instance_hash 1:1 code_hash for unique tasks,
-            # but we should look up the executable from the frontend result using the node ID.
-            # The frontend result `executables` is Dict[node_instance_hash, Callable].
-            
-            # Wait, symbol_table maps Physical ID -> Canonical Code Hash.
-            # IRGenerator.executables maps Logical Node ID (current_node_instance_hash) -> Callable.
-            # We need to bridge this.
-            
-            # For now, let's assume the IRGenerator provided executables keyed by the 
-            # same hash used in the node definition if possible, OR we rely on the fact 
-            # that we can resolve them.
-            
-            # Workaround: The frontend's `executables` map is keyed by `node_instance_hash`.
-            # The `code_hash` in symbol table is `canonical_code_structure_hash`.
-            # We need to register: registry[canonical_code_structure_hash] = Callable.
-            
-            # Let's iterate over the IR nodes to find the mapping between code_hash and callable.
-            pass
-        
-        # Temporary Linking Logic (Naive):
-        # We just register everything we found in the frontend generation result.
-        # This part needs refinement to strictly follow the hash protocol.
-        for node_ir in graph_ir.nodes:
-            code_hash = node_ir.task.fingerprint.get("canonical_code_structure_hash")
-            if code_hash and node_ir.current_node_instance_hash in graph_ir_result.executables:
-                func = graph_ir_result.executables[node_ir.current_node_instance_hash]
-                # Register if not exists (idempotent)
-                if not code_registry.has(code_hash):
-                    code_registry.register(code_hash, func)
+        code_registry = self._link_code(graph_ir, graph_ir_result)
 
         # --- Phase 3: Bootstrap ---
-        # Assemble the physical machine.
         logger.debug("VMStrategy: Bootstrapping machine...")
         harness = RuntimeHarness(context, self.executor, code_registry)
 
-        # 3.1 Kernel Construction
-        # Link the physical nodes to their Kernel implementations (ICs)
         function_map = self.linker.link(artifact.assembly, code_registry)
         kernel = PhysicsKernel(function_map, harness.resource_registry)
 
-        # 3.2 Reactor & Machine Construction
         memory = VolatileMemory()
         reactor = Reactor(
             graph=artifact.assembly.graph,
@@ -215,54 +181,18 @@ class VMExecutionStrategy(ExecutionStrategy):
         )
 
         # --- Phase 4: Ignition ---
-        # Inject initial potential energy (constants, pulses).
         logger.debug("VMStrategy: Igniting reactor...")
-        
-        # We need to materialize constants into the ObjectStore just like the EventDrivenRunner does.
-        # This logic should arguably be in a shared helper or the Reactor itself if generalized.
-        for node in artifact.assembly.graph.nodes.values():
-            if hasattr(node, "initial_tokens") and node.initial_tokens > 0 and node.id.startswith("const."):
-                 payload = node.initial_payload
-                 # TODO: Check if already Ref, if not put into store.
-                 # For now, simplistic check:
-                 if payload is not None and not hasattr(payload, "uri"): # check for Ref duck typing
-                     meta = {}
-                     if isinstance(payload, (int, float, bool, str)) and len(str(payload)) < 256:
-                         meta["scalar_value"] = payload
-                     node.initial_payload = context.object_store.put(payload, metadata=meta)
-
+        self._materialize_constants(artifact, context)
         reactor.prime(genesis_trace={"rid": context.run_id})
 
         # --- Phase 5: Run Loop & Harvesting ---
         logger.debug("VMStrategy: Running...")
-        
-        # Start the machine in background
         machine_task = asyncio.create_task(machine.run())
-        
+
         try:
-            # Main Harvesting Loop
-            # We need to identify which Egress node corresponds to our target result.
-            # The Manifest has `exit_points` which maps Logical UUID -> Physical Egress ID.
-            
-            target_uuid = getattr(target, "_uuid", None)
-            if not target_uuid and isinstance(target, list) and target:
-                 # Handle list targets (e.g. gather). For now assume single target for skeleton.
-                 target_uuid = target[0]._uuid
-            
-            if not target_uuid:
-                # If we can't determine target, just run until stop?
-                # Or maybe the target IS the graph.
-                pass
-
-            # Determine expected egress ID
-            # target_egress_id = artifact.manifest.exit_points.get(target_uuid)
-            
-            # Wait for completion (Simplified for Skeleton)
-            # In reality, we'd wait for specific Egress tokens.
-            await machine_task
-            
-            return "Execution Complete (Skeleton Result)"
-
+            return await self._run_and_harvest(
+                target, artifact, harness, machine_task, context
+            )
         except Exception as e:
             logger.error(f"VM execution failed: {e}")
             raise
@@ -270,27 +200,210 @@ class VMExecutionStrategy(ExecutionStrategy):
             # Ensure machine is stopped
             if not machine_task.done():
                 reactor.shutdown_event.set()
-                await asyncio.wait([machine_task], timeout=2.0)
-~~~~~
+                # Use a shield or separate wait to ensure cancellation doesn't block forever
+                try:
+                    await asyncio.wait_for(machine_task, timeout=2.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
 
-#### Acts 2: 在 `cascade-runtime/src/cascade/runtime/strategies/__init__.py` 中暴露
+    def _scan_resources(self, graph_ir: GraphIR) -> EnvironmentDef:
+        """Scans the GraphIR to identify required resources and builds an EnvironmentDef."""
+        required_resources: Set[str] = set()
+        for node in graph_ir.nodes:
+            if node.constraints:
+                required_resources.update(node.constraints.keys())
 
-为了方便引用，我需要更新 `__init__.py`。
+        # For now, we assume all resources are 'discrete' with default capacity.
+        # In the future, this could be enriched by a global ResourceManager config.
+        resources = [
+            ResourceDef(name=r, type="discrete", capacity=100)
+            for r in required_resources
+        ]
+        return EnvironmentDef(resources=resources)
 
-~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/runtime/strategies/__init__.py
-~~~~~
-~~~~~python
-from .strategies import ExecutionContext, ExecutionStrategy
-from .vm import VMExecutionStrategy
+    def _link_code(
+        self, graph_ir: GraphIR, result: GenerationResult
+    ) -> CodeRegistry:
+        """
+        Populates the CodeRegistry by mapping canonical hashes to callables.
+        """
+        registry = CodeRegistry()
+        for node_ir in graph_ir.nodes:
+            # Only task nodes need code linking (not map nodes, params, etc. if handled purely by graph)
+            # Actually, map nodes might have a factory.
+            # The frontend provides 'executables' keyed by instance hash.
+            instance_hash = node_ir.current_node_instance_hash
+            canonical_hash = node_ir.task.fingerprint.get(
+                "canonical_code_structure_hash"
+            )
 
-__all__ = ["ExecutionContext", "ExecutionStrategy", "VMExecutionStrategy"]
+            if canonical_hash and instance_hash in result.executables:
+                func = result.executables[instance_hash]
+                if not registry.has(canonical_hash):
+                    registry.register(canonical_hash, func)
+
+        return registry
+
+    def _materialize_constants(
+        self, artifact: CompilationArtifact, context: ExecutionContext
+    ) -> None:
+        """
+        Scans the physical graph for Constant nodes and ensures their payloads
+        are materialized as Refs in the ObjectStore.
+        """
+        for node in artifact.assembly.graph.nodes.values():
+            if (
+                isinstance(node, PhysicsDataNode)
+                and node.initial_tokens > 0
+                and node.id.startswith("const.")
+            ):
+                payload = node.initial_payload
+                # If payload is already a Ref, we assume it's valid.
+                if isinstance(payload, Ref):
+                    continue
+
+                # Materialize raw value
+                meta = {}
+                # Scalar Hoisting: If it's a simple type, hoist it to metadata
+                # so the Kernel (e.g. allocators) can read it without I/O.
+                if (
+                    isinstance(payload, (int, float, bool, str))
+                    and len(str(payload)) < 256
+                ):
+                    meta["scalar_value"] = payload
+
+                ref = context.object_store.put(payload, metadata=meta)
+                node.initial_payload = ref
+
+    async def _run_and_harvest(
+        self,
+        target: Any,
+        artifact: CompilationArtifact,
+        harness: RuntimeHarness,
+        machine_task: asyncio.Task,
+        context: ExecutionContext,
+    ) -> Any:
+        """
+        The main event loop for the Strategy.
+        Waits for Egress tokens corresponding to the target(s) and assembles the final result.
+        """
+        # 1. Identify Target Egress Nodes
+        # We need to map Physical Egress ID -> Logical Target Component
+        
+        # Targets can be: Single Object, List, Tuple, Dict
+        # We need to reconstruct the structure with results.
+        
+        # Flatten the target structure to find all LazyResults we need to wait for
+        # Map: Logical UUID -> (Physical Egress ID, Placeholder Setter)
+        # But here we just need to collect them.
+        
+        target_map: Dict[str, str] = {} # UUID -> Egress Node ID
+        
+        def _register_target(obj):
+            if isinstance(obj, (LazyResult, MappedLazyResult)):
+                # Look up physical egress ID in manifest
+                # The manifest keys exit_points by logical UUID
+                if obj._uuid in artifact.manifest.exit_points:
+                    target_map[obj._uuid] = artifact.manifest.exit_points[obj._uuid]
+            elif isinstance(obj, (list, tuple)):
+                for item in obj:
+                    _register_target(item)
+            elif isinstance(obj, dict):
+                for item in obj.values():
+                    _register_target(item)
+
+        _register_target(target)
+        
+        if not target_map:
+            # Edge case: No targets (e.g. empty list). Wait for machine stop?
+            # Or just return empty structure.
+            # But the machine might still be running side effects.
+            # For robustness, we wait for drain if no targets.
+            logger.warning("No targets identified for harvesting.")
+            # For now, return target as is (it might be a literal)
+            return target
+
+        # 2. Harvesting Loop
+        collected_results: Dict[str, Any] = {} # UUID -> Result Value
+        pending_uuids = set(target_map.keys())
+        
+        # Reverse map for quick lookup: Egress ID -> UUID
+        egress_to_uuid = {v: k for k, v in target_map.items()}
+
+        while pending_uuids:
+            # Wait for either a result OR the machine stopping unexpectedly
+            done, pending = await asyncio.wait(
+                [harness.egress_queue.get(), machine_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if machine_task in done:
+                # Machine stopped before we got all results
+                # Check if it raised an exception
+                try:
+                    machine_task.result()
+                except Exception as e:
+                    raise RuntimeError(f"Machine crashed during execution: {e}") from e
+                
+                # If machine finished cleanly but we are still waiting, it's a deadlock or logic error
+                # OR, the task failed and didn't produce an output at the Egress.
+                # (Failed tasks route to error ports, which might not be wired to Egress in this version)
+                # TODO: Handle error propagation via Egress
+                raise RuntimeError(
+                    f"Machine stopped prematurely. Pending targets: {pending_uuids}"
+                )
+
+            # Handle Egress Result
+            # We must drain all ready items from the queue
+            if not harness.egress_queue.empty():
+                # Note: We already consumed one item via `wait`, we need to retrieve it.
+                # `asyncio.wait` with queue.get() doesn't return the item, it returns the coroutine object.
+                # We need to await the coroutine to get the item.
+                # But `done` contains the Task/Future.
+                
+                for task in done:
+                    if task is machine_task: continue
+                    
+                    egress_id, token = await task
+                    
+                    if egress_id in egress_to_uuid:
+                        uuid = egress_to_uuid[egress_id]
+                        
+                        # 3. Dereference Result
+                        # The payload is a Ref.
+                        val = token.payload
+                        if isinstance(val, Ref):
+                            val = context.object_store.get(val)
+                        
+                        # 4. Check for Error (Exception Propagation)
+                        if isinstance(val, Exception):
+                            raise val
+                        
+                        collected_results[uuid] = val
+                        if uuid in pending_uuids:
+                            pending_uuids.remove(uuid)
+
+        # 5. Reassemble Result Structure
+        def _reassemble(obj):
+            if isinstance(obj, (LazyResult, MappedLazyResult)):
+                return collected_results[obj._uuid]
+            elif isinstance(obj, list):
+                return [_reassemble(x) for x in obj]
+            elif isinstance(obj, tuple):
+                return tuple(_reassemble(x) for x in obj)
+            elif isinstance(obj, dict):
+                return {k: _reassemble(v) for k, v in obj.items()}
+            return obj
+
+        return _reassemble(target)
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 `VMExecutionStrategy` 的骨架代码。接下来的重点是**完善其内部逻辑**，使其真正能够执行任务。
+我们已经完成了 `VMExecutionStrategy` 的核心实现。接下来，为了确保其能够正常工作，我们需要编写一个**端到端的集成测试**。
 
-1.  **完善 `Linker` 逻辑**：目前的链接逻辑是“临时”的，需要确保前端生成的 `Callable` 能正确注册到 `CodeRegistry`，并且能被 `Linker` 通过 hash 找到。
-2.  **实现 `Harvesting` 逻辑**：目前的 `execute` 方法在 `machine_task` 结束后只是返回了一个字符串。我们需要实现真正的结果收集逻辑，即监听 `harness.egress_queue`，根据 `Manifest` 找到对应 `target` 的结果，并将其解包（Dereference）后返回给用户。
-3.  **集成测试**：编写一个使用 `VMExecutionStrategy` 的端到端测试，验证简单的 `Sync Task`能否被正确执行和返回。
+这个测试将模拟一个完整的用户场景：
+1.  定义一个简单的计算任务（`add(a, b)`）。
+2.  使用 `Engine` 和新的 `VMExecutionStrategy` 运行这个任务。
+3.  验证结果是否正确。
+
+这将验证 Compilation, Linking, Bootstrap, Ignition, Execution, 和 Harvesting 整个链路的连通性。

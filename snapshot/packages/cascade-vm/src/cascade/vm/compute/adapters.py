@@ -1,44 +1,3 @@
-[简要回答]
-我们将实现 `BridgedComputeService`，这是一个位于 `cascade-vm` 中的适配器，它实现了 VM 的计算服务接口，但将实际执行委托给 `Engine` 的 `Executor`，从而统一了资源管理。
-
-## [WIP] feat(vm): implement BridgedComputeService adapter
-
-### 用户需求
-根据实施路线图 Phase 1，任务 2.1.2，需要实现 `BridgedComputeService`。
-该服务旨在桥接 VM 的物理计算请求 (`ComputeRequest`) 和 Runtime 的执行器 (`Executor`)。它允许 VM 使用 Runtime 统一管理的线程池和执行策略，而不是自己创建独立的线程池。
-
-### 评论
-这是一个关键的架构适配器。它使得 VM 可以“寄生”在现有的 Runtime 基础设施上运行，而不需要 Runtime 了解 VM 的内部细节。这是分层架构解耦的关键一步。
-
-### 目标
-1.  在 `packages/cascade-vm/src/cascade/vm/compute/adapters.py` 创建 `BridgedComputeService`。
-2.  确保其接口与 `LocalComputeService` 兼容（具有 `run`, `stop`, `active_count` 等方法）。
-3.  实现请求处理逻辑：
-    *   解析输入引用。
-    *   查找代码。
-    *   构造适配 `Executor` 协议所需的轻量级 `Node` 对象（包含 `is_async` 和 `mode` 元数据）。
-    *   委托给 `Executor` 执行。
-    *   将结果存回 `ObjectStore` 并发送回 `ingress_queue`。
-
-### 基本原理
-为了遵守 ADAP 协议，我们不能假设 `Executor` 的具体实现细节，但我们要满足 `cascade.spec.runtime.interfaces.Executor` 的协议要求。目前的 `LocalExecutor` 实现依赖于传递给它的 `node` 对象具有 `definition.is_async` 和 `definition.mode` 属性。因此，`BridgedComputeService` 需要在运行时动态构建一个满足此契约的代理节点对象 (`ProxyNode`)。
-
-### 标签
-#intent/build #flow/ready #priority/high #comp/vm #concept/executor #scope/core #task/domain/vm #task/object/compute-service #task/action/bridge #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 BridgedComputeService
-
-我们将创建 `adapters.py` 文件，其中包含 `BridgedComputeService` 类及其辅助的代理节点类。
-
-~~~~~act
-write_file
-packages/cascade-vm/src/cascade/vm/compute/adapters.py
-~~~~~
-~~~~~python
 import asyncio
 import inspect
 import logging
@@ -178,30 +137,3 @@ class BridgedComputeService:
                 args[idx] = val
 
         return args, kwargs
-~~~~~
-
-#### Acts 2: 导出新模块
-
-更新 `cascade-vm` 的包导出，使其可见。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/compute/__init__.py
-~~~~~
-~~~~~python.old
-from .contract import ComputeRequest
-from .service import LocalComputeService
-
-__all__ = ["ComputeRequest", "LocalComputeService"]
-~~~~~
-~~~~~python.new
-from .contract import ComputeRequest
-from .service import LocalComputeService
-from .adapters import BridgedComputeService
-
-__all__ = ["ComputeRequest", "LocalComputeService", "BridgedComputeService"]
-~~~~~
-
-### 下一步建议
-我们已经完成了 **2.1.2: 实现 `BridgedComputeService`**。
-接下来的任务是 **1.3: 增强 `CodeRegistry` 的动态链接能力**。我们需要确保 `CodeRegistry` 可以在初始化之后，继续接受新的函数注册，这对于 JIT 编译场景（即边运行边生成代码）是必须的。目前 `CodeRegistry` 已经有 `register` 方法，我们需要确认其行为是否满足需求，以及是否需要添加线程安全或重复注册检查的逻辑。

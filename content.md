@@ -1,207 +1,184 @@
-[简要回答]
-我们将实现 `BridgedComputeService`，这是一个位于 `cascade-vm` 中的适配器，它实现了 VM 的计算服务接口，但将实际执行委托给 `Engine` 的 `Executor`，从而统一了资源管理。
+好的，我已分析 `CodeRegistry` 的现有实现。
 
-## [WIP] feat(vm): implement BridgedComputeService adapter
+它目前是一个简单的字典包装器，这对于动态注册的基本功能是足够的。由于 Python 的 GIL 保护，单次写入操作是原子性的，因此在单线程异步环境中，我们暂时不需要担心线程安全问题。
+
+然而，为了增强其健壮性并正式化其动态链接的契约，我将执行以下操作：
+1.  **增强 `register` 方法**：为其添加一个日志警告，以便在发生哈希冲突（即用一个新函数覆盖一个已存在的哈希）时提供明确的开发者反馈。这符合高保真工程（HFEA）的原则，使系统行为更可观测。
+2.  **创建单元测试**: 创建一个新的测试文件，专门验证 `CodeRegistry` 的动态注册行为，包括首次注册、幂等重注册以及哈希冲突场景。这遵循了 TDD 流程，将隐性需求显式化为可验证的契约。
+
+## [WIP] feat(vm): Harden CodeRegistry and add tests for dynamic linking
 
 ### 用户需求
-根据实施路线图 Phase 1，任务 2.1.2，需要实现 `BridgedComputeService`。
-该服务旨在桥接 VM 的物理计算请求 (`ComputeRequest`) 和 Runtime 的执行器 (`Executor`)。它允许 VM 使用 Runtime 统一管理的线程池和执行策略，而不是自己创建独立的线程池。
+根据 VM 实施路线图 1.3，需要增强 `CodeRegistry` 以确保其支持动态链接。这意味着代码注册表必须能够在 `Engine` 启动后，在运行时安全地接受新的 `(hash, callable)` 映射。
 
 ### 评论
-这是一个关键的架构适配器。它使得 VM 可以“寄生”在现有的 Runtime 基础设施上运行，而不需要 Runtime 了解 VM 的内部细节。这是分层架构解耦的关键一步。
+当前的 `CodeRegistry` 实现是一个简单的字典，虽然功能上可行，但缺少对关键边界情况（如哈希冲突）的明确处理和验证。通过添加日志记录和专门的单元测试，我们不仅能使系统在面对异常情况时更具可观测性，还能将“支持动态注册”这一核心需求固化为一个可长期维护的测试契约，防止未来出现回归。
 
 ### 目标
-1.  在 `packages/cascade-vm/src/cascade/vm/compute/adapters.py` 创建 `BridgedComputeService`。
-2.  确保其接口与 `LocalComputeService` 兼容（具有 `run`, `stop`, `active_count` 等方法）。
-3.  实现请求处理逻辑：
-    *   解析输入引用。
-    *   查找代码。
-    *   构造适配 `Executor` 协议所需的轻量级 `Node` 对象（包含 `is_async` 和 `mode` 元数据）。
-    *   委托给 `Executor` 执行。
-    *   将结果存回 `ObjectStore` 并发送回 `ingress_queue`。
+1.  修改 `CodeRegistry.register` 方法，当且仅当一个新的函数试图覆盖一个已存在的、由不同函数对象占用的哈希时，记录一个警告。
+2.  在 `packages/cascade-vm/tests/unit/` 目录下创建一个新的测试文件 `test_registry.py`。
+3.  在该测试文件中，实现至少三个测试用例：
+    *   验证一个函数可以被成功注册和检索。
+    *   验证对同一个函数进行重复注册是幂等的，且不会产生警告。
+    *   验证当一个不同的函数试图使用相同的哈希注册时，会成功覆盖并记录一条警告。
 
 ### 基本原理
-为了遵守 ADAP 协议，我们不能假设 `Executor` 的具体实现细节，但我们要满足 `cascade.spec.runtime.interfaces.Executor` 的协议要求。目前的 `LocalExecutor` 实现依赖于传递给它的 `node` 对象具有 `definition.is_async` 和 `definition.mode` 属性。因此，`BridgedComputeService` 需要在运行时动态构建一个满足此契约的代理节点对象 (`ProxyNode`)。
+`VMExecutionStrategy` 在其生命周期的“链接”阶段需要动态地将从 `CompilationArtifact` 中发现的函数注册到 `CodeRegistry` 中。这个过程必须是可靠和可观测的。通过在 `CodeRegistry` 本身添加防御性代码（日志警告）和外部验证（单元测试），我们确保了这一关键基础设施组件的健壮性，遵循了“先上锁，再加速”的战术原则。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/vm #concept/executor #scope/core #task/domain/vm #task/object/compute-service #task/action/bridge #task/state/continue
+#intent/refine #intent/tooling #flow/ready #priority/high #comp/vm #scope/core #scope/dx #task/domain/vm #task/object/code-registry #task/action/harden #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 BridgedComputeService
+#### Acts 1: 增强 CodeRegistry 以记录哈希冲突
 
-我们将创建 `adapters.py` 文件，其中包含 `BridgedComputeService` 类及其辅助的代理节点类。
+我们首先修改 `registry.py`，为 `register` 方法添加冲突检测逻辑。
 
 ~~~~~act
-write_file
-packages/cascade-vm/src/cascade/vm/compute/adapters.py
+patch_file
+packages/cascade-vm/src/cascade/vm/registry.py
 ~~~~~
-~~~~~python
-import asyncio
-import inspect
-import logging
-from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Optional, Callable
+~~~~~python.old
+from typing import Dict, Callable, Any
 
-from cascade.spec.physical.nodes import Token
-from cascade.spec.runtime.storage import ObjectStore
-from cascade.spec.runtime.interfaces import Executor
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute.contract import ComputeRequest
+# A generic callable type for task functions
+TaskCallable = Callable[..., Any]
+
+
+class CodeRegistry:
+    def __init__(self):
+        self._registry: Dict[str, TaskCallable] = {}
+
+    def register(self, canonical_hash: str, func: TaskCallable) -> None:
+        self._registry[canonical_hash] = func
+
+    def get(self, canonical_hash: str) -> TaskCallable:
+        if canonical_hash not in self._registry:
+            raise KeyError(f"Code for hash '{canonical_hash}' not found in registry.")
+        return self._registry[canonical_hash]
+
+    def has(self, canonical_hash: str) -> bool:
+        return canonical_hash in self._registry
+~~~~~
+~~~~~python.new
+import logging
+from typing import Dict, Callable, Any
+
+# A generic callable type for task functions
+TaskCallable = Callable[..., Any]
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ProxyDef:
-    """A lightweight proxy for TaskDef to satisfy Executor protocol."""
-    is_async: bool
-    mode: str = "blocking"
+class CodeRegistry:
+    def __init__(self):
+        self._registry: Dict[str, TaskCallable] = {}
 
-
-@dataclass
-class ProxyNode:
-    """A lightweight proxy for Node to satisfy Executor protocol."""
-    name: str
-    definition: ProxyDef
-    node_type: str = "task"
-
-
-class BridgedComputeService:
-    def __init__(
-        self,
-        executor: Executor,
-        store: ObjectStore,
-        registry: CodeRegistry,
-        inbound_queue: "asyncio.Queue[ComputeRequest]",
-        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
-        wakeup_event: Optional[asyncio.Event] = None,
-    ):
-        self.executor = executor
-        self.store = store
-        self.registry = registry
-        self.inbound_queue = inbound_queue
-        self.outbound_queue = outbound_queue
-        self._wakeup_event = wakeup_event
-        self._running = False
-        self._active_count = 0
-
-    @property
-    def active_count(self) -> int:
-        return self._active_count
-
-    def is_idle(self) -> bool:
-        return self.inbound_queue.empty() and self._active_count == 0
-
-    async def run(self) -> None:
-        self._running = True
-        logger.info("BridgedComputeService started.")
-        try:
-            while self._running:
-                request = await self.inbound_queue.get()
-                self._active_count += 1
-                asyncio.create_task(self._process_request(request))
-        finally:
-            logger.info("BridgedComputeService stopped.")
-
-    def stop(self) -> None:
-        self._running = False
-
-    async def _process_request(self, request: ComputeRequest) -> None:
-        try:
-            # 1. Resolve Inputs (Dereference Refs)
-            # The ObjectStore protocol dictates that get() returns the actual object.
-            inputs: Dict[str, Any] = {
-                key: self.store.get(ref) for key, ref in request.input_refs.items()
-            }
-            args, kwargs = self._resolve_arguments(inputs)
-
-            # 2. Resolve Code
-            func = self.registry.get(request.code_hash)
-
-            # 3. Construct Proxy Node for Executor
-            # We inspect the function to determine execution properties
-            is_async = inspect.iscoroutinefunction(func)
-            
-            # If the function is wrapped by @task, it might have a 'mode' attribute
-            mode = getattr(func, "mode", "blocking")
-            name = getattr(func, "__name__", "unknown_task")
-
-            proxy_node = ProxyNode(
-                name=name,
-                definition=ProxyDef(is_async=is_async, mode=mode)
+    def register(self, canonical_hash: str, func: TaskCallable) -> None:
+        if (
+            canonical_hash in self._registry
+            and self._registry[canonical_hash] is not func
+        ):
+            logger.warning(
+                f"Hash collision detected for '{canonical_hash}'. "
+                f"Overwriting registration for '{self._registry[canonical_hash].__name__}' "
+                f"with new function '{func.__name__}'."
             )
+        self._registry[canonical_hash] = func
 
-            # 4. Delegate Execution to Runtime Executor
-            # This allows the Runtime to manage thread pools, constraints, etc.
-            result = await self.executor.execute(proxy_node, func, args, kwargs)  # type: ignore
+    def get(self, canonical_hash: str) -> TaskCallable:
+        if canonical_hash not in self._registry:
+            raise KeyError(f"Code for hash '{canonical_hash}' not found in registry.")
+        return self._registry[canonical_hash]
 
-        except Exception as e:
-            logger.exception(
-                f"Computation failed for request on code {request.code_hash}"
-            )
-            result = e
-        finally:
-            self._active_count -= 1
-
-        # 5. Store Result and Prepare Token
-        result_ref = self.store.put(result)
-        result_token = Token(payload=result_ref, trace=request.trace)
-
-        # 6. Report Completion
-        await self.outbound_queue.put((request.reply_to_nid, result_token))
-
-        # 7. Signal Wakeup
-        if self._wakeup_event:
-            self._wakeup_event.set()
-
-    def _resolve_arguments(
-        self, inputs: Dict[str, Any]
-    ) -> Tuple[List[Any], Dict[str, Any]]:
-        # Helper to convert dict inputs back to *args and **kwargs
-        args_map: Dict[int, Any] = {}
-        kwargs: Dict[str, Any] = {}
-
-        for k, v in inputs.items():
-            if k.isdigit():
-                args_map[int(k)] = v
-            else:
-                kwargs[k] = v
-
-        args: List[Any] = []
-        if args_map:
-            max_idx = max(args_map.keys())
-            args = [None] * (max_idx + 1)
-            for idx, val in args_map.items():
-                args[idx] = val
-
-        return args, kwargs
+    def has(self, canonical_hash: str) -> bool:
+        return canonical_hash in self._registry
 ~~~~~
 
-#### Acts 2: 导出新模块
+#### Acts 2: 创建单元测试以验证动态注册行为
 
-更新 `cascade-vm` 的包导出，使其可见。
+现在，我们创建一个新的测试文件来锁定 `CodeRegistry` 的行为。
 
 ~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/compute/__init__.py
+write_file
+packages/cascade-vm/tests/unit/test_registry.py
 ~~~~~
-~~~~~python.old
-from .contract import ComputeRequest
-from .service import LocalComputeService
+~~~~~python
+import pytest
+import logging
+from cascade.vm.registry import CodeRegistry
 
-__all__ = ["ComputeRequest", "LocalComputeService"]
-~~~~~
-~~~~~python.new
-from .contract import ComputeRequest
-from .service import LocalComputeService
-from .adapters import BridgedComputeService
 
-__all__ = ["ComputeRequest", "LocalComputeService", "BridgedComputeService"]
+def sample_task_one():
+    return "one"
+
+
+def sample_task_two():
+    return "two"
+
+
+class TestCodeRegistry:
+    def test_register_and_get(self):
+        """Tests basic registration and retrieval of a function."""
+        registry = CodeRegistry()
+        sample_hash = "hash_one"
+
+        assert not registry.has(sample_hash)
+        registry.register(sample_hash, sample_task_one)
+
+        assert registry.has(sample_hash)
+        retrieved_func = registry.get(sample_hash)
+        assert retrieved_func is sample_task_one
+        assert retrieved_func() == "one"
+
+    def test_get_missing_raises_key_error(self):
+        """Tests that getting a non-existent hash raises KeyError."""
+        registry = CodeRegistry()
+        with pytest.raises(KeyError, match="not found in registry"):
+            registry.get("non_existent_hash")
+
+    def test_reregister_idempotent(self, caplog):
+        """Tests that re-registering the exact same function is a no-op and does not warn."""
+        registry = CodeRegistry()
+        sample_hash = "hash_one"
+
+        registry.register(sample_hash, sample_task_one)
+        
+        with caplog.at_level(logging.WARNING):
+            registry.register(sample_hash, sample_task_one)
+        
+        # No warning should be logged for idempotent re-registration
+        assert "Hash collision detected" not in caplog.text
+        
+        # Ensure the registration is still valid
+        assert registry.get(sample_hash) is sample_task_one
+
+    def test_reregister_collision_warns(self, caplog):
+        """Tests that registering a different function with the same hash logs a warning."""
+        registry = CodeRegistry()
+        sample_hash = "hash_collision"
+
+        # Initial registration
+        registry.register(sample_hash, sample_task_one)
+
+        # Re-register with a different function
+        with caplog.at_level(logging.WARNING):
+            registry.register(sample_hash, sample_task_two)
+
+        # A warning should be logged
+        assert "Hash collision detected" in caplog.text
+        assert f"Overwriting registration for '{sample_task_one.__name__}'" in caplog.text
+        assert f"with new function '{sample_task_two.__name__}'" in caplog.text
+
+        # Ensure the registry now holds the new function
+        retrieved_func = registry.get(sample_hash)
+        assert retrieved_func is sample_task_two
+        assert retrieved_func() == "two"
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 **2.1.2: 实现 `BridgedComputeService`**。
-接下来的任务是 **1.3: 增强 `CodeRegistry` 的动态链接能力**。我们需要确保 `CodeRegistry` 可以在初始化之后，继续接受新的函数注册，这对于 JIT 编译场景（即边运行边生成代码）是必须的。目前 `CodeRegistry` 已经有 `register` 方法，我们需要确认其行为是否满足需求，以及是否需要添加线程安全或重复注册检查的逻辑。
+我们已经完成了对 `CodeRegistry` 的加固和验证。现在，所有基础设施适配工作都已完成。
+
+是时候进入 **Phase 2: 管理程序构建** 了。我将开始实施核心的 `VMExecutionStrategy` 和 `RuntimeHarness`。

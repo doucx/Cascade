@@ -16,7 +16,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-csp_solver = ["python-constraint"]
 redis = ["redis"]
 
 [tool.hatch.build.targets.wheel]

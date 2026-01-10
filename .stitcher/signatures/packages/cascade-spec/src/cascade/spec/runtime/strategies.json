@@ -1,6 +1,7 @@
 {
   "ExecutionContext": {},
   "ExecutionContext.active_resources": {},
+  "ExecutionContext.object_store": {},
   "ExecutionContext.params": {},
   "ExecutionContext.run_id": {},
   "ExecutionContext.run_stack": {},

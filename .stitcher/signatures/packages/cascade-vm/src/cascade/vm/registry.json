@@ -21,5 +21,6 @@
     "baseline_code_structure_hash": "85d100680eb1d424e275278942ac5dfd395056fa439f64f097229437f0cafda8",
     "baseline_yaml_content_hash": "9889b77bffa8d661582a19cdb4f2b3cd96d486a3a7e7db9eaf196cb20b5e6503"
   },
-  "TaskCallable": {}
+  "TaskCallable": {},
+  "logger": {}
 }

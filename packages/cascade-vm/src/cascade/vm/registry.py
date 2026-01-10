@@ -1,7 +1,10 @@
+import logging
 from typing import Dict, Callable, Any
 
 # A generic callable type for task functions
 TaskCallable = Callable[..., Any]
+
+logger = logging.getLogger(__name__)
 
 
 class CodeRegistry:
@@ -9,6 +12,15 @@ class CodeRegistry:
         self._registry: Dict[str, TaskCallable] = {}
 
     def register(self, canonical_hash: str, func: TaskCallable) -> None:
+        if (
+            canonical_hash in self._registry
+            and self._registry[canonical_hash] is not func
+        ):
+            logger.warning(
+                f"Hash collision detected for '{canonical_hash}'. "
+                f"Overwriting registration for '{self._registry[canonical_hash].__name__}' "
+                f"with new function '{func.__name__}'."
+            )
         self._registry[canonical_hash] = func
 
     def get(self, canonical_hash: str) -> TaskCallable:

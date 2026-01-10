@@ -1,0 +1,10 @@
+"test_vm_async_execution": |-
+  Test executing a single asynchronous task.
+"test_vm_dependency_chain": |-
+  Test a chain of dependencies: (1 + 2) * 3.
+"test_vm_error_propagation": |-
+  Test that exceptions are propagated correctly.
+"test_vm_list_output": |-
+  Test that the VM can return a list of results (implicit gather).
+"test_vm_simple_execution": |-
+  Test executing a single synchronous task.

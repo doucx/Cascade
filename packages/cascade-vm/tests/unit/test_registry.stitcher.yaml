@@ -1,0 +1,8 @@
+"TestCodeRegistry.test_get_missing_raises_key_error": |-
+  Tests that getting a non-existent hash raises KeyError.
+"TestCodeRegistry.test_register_and_get": |-
+  Tests basic registration and retrieval of a function.
+"TestCodeRegistry.test_reregister_collision_warns": |-
+  Tests that registering a different function with the same hash logs a warning.
+"TestCodeRegistry.test_reregister_idempotent": |-
+  Tests that re-registering the exact same function is a no-op and does not warn.

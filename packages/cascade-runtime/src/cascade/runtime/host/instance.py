@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import asyncio
@@ -17,6 +18,8 @@ from cascade.runtime.services.observability.events import (
     ConnectorDisconnected,
 )
 from cascade.spec.runtime.interfaces import Solver, Executor, StateBackend, Connector
+from cascade.spec.runtime.storage import ObjectStore
+from cascade.runtime.storage import InMemoryObjectStore
 from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints import ConstraintManager
 from cascade.runtime.services.constraints.handlers import (
@@ -42,6 +45,7 @@ class Engine:
         cache_backend: Optional[Any] = None,
         resource_manager: Optional[ResourceManager] = None,
         strategy: Optional[ExecutionStrategy] = None,
+        object_store: Optional[ObjectStore] = None,
     ):
         self.solver = solver
         self.executor = executor
@@ -52,6 +56,7 @@ class Engine:
             lambda run_id: InMemoryStateBackend(run_id)
         )
         self.cache_backend = cache_backend
+        self.object_store = object_store or InMemoryObjectStore()
 
         if resource_manager:
             self.resource_manager = resource_manager
@@ -75,11 +80,23 @@ class Engine:
         if strategy:
             self.strategy = strategy
         else:
-            self.strategy = self._load_default_strategy()
+            self.strategy = self._resolve_default_strategy()
 
         self._managed_subscribers = []
 
-    def _load_default_strategy(self) -> ExecutionStrategy:
+    def _resolve_default_strategy(self) -> ExecutionStrategy:
+        backend_choice = os.getenv("CASCADE_BACKEND", "graph").lower()
+        if backend_choice == "vm":
+            return self._load_vm_strategy()
+        else:
+            return self._load_graph_strategy()
+
+    def _load_vm_strategy(self) -> ExecutionStrategy:
+        from cascade.runtime.strategies.vm import VMExecutionStrategy
+
+        return VMExecutionStrategy(executor=self.executor, bus=self.bus)
+
+    def _load_graph_strategy(self) -> ExecutionStrategy:
         try:
             # Dynamic imports to break hard dependency
             from cascade.execution.graph.logic.processor import NodeProcessor
@@ -221,6 +238,7 @@ class Engine:
                 context = ExecutionContext(
                     run_id=run_id,
                     state_backend=state_backend,
+                    object_store=self.object_store,
                     run_stack=run_stack,
                     active_resources=active_resources,
                     params=params or {},

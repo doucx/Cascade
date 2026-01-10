@@ -1,4 +1,4 @@
-from cascade.spec.ir.graph import NodeIR
+from cascade.spec.ir.graph import NodeIR, ArgumentKind
 from cascade.std.specs import StainerSpec
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.backend.wiring.context import WiringContext
@@ -16,11 +16,15 @@ class ParameterWiringPolicy(WiringPolicy):
             # Resolve the actual port name on the Bleacher.
             if input_key.isdigit():
                 idx = int(input_key)
-                port_name = (
-                    node_ir.task.args[idx].name
-                    if idx < len(node_ir.task.args)
-                    else input_key
+                arg_def = (
+                    node_ir.task.args[idx] if idx < len(node_ir.task.args) else None
                 )
+
+                # For *args, the port name is the index itself, not the arg name (e.g. 'args')
+                if arg_def and arg_def.kind != ArgumentKind.VAR_POSITIONAL:
+                    port_name = arg_def.name
+                else:
+                    port_name = input_key
             else:
                 port_name = input_key
 

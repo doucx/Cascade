@@ -1,3 +1,3 @@
-from .generator import IRGenerator
+from .generator import IRGenerator, GenerationResult
 
-__all__ = ["IRGenerator"]
+__all__ = ["IRGenerator", "GenerationResult"]

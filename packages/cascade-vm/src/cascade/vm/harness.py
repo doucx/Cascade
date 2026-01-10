@@ -57,6 +57,7 @@ class EventDrivenRunner:
         self.compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
         self.chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
         self.ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
+        self.egress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
 
         # 2. Setup Services
         # In a real system, store would be a separate entity.
@@ -94,6 +95,7 @@ class EventDrivenRunner:
         self.resource_registry.register("system.compute_queue", self.compute_queue)
         self.resource_registry.register("system.chronos_queue", self.chronos_queue)
         self.resource_registry.register("system.object_store", self.object_store)
+        self.resource_registry.register("system.egress_queue", self.egress_queue)
 
         # 4. Setup Reactor
         # Construct the Physics Kernel

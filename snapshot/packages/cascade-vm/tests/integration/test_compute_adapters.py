@@ -1,50 +1,3 @@
-当然，在进入路线图的第二阶段之前，为 `BridgedComputeService` 建立一套完整的测试套件是至关重要的，这完全符合我们所遵循的测试驱动开发（TDD）流程和高保真工程（HFEA）原则。
-
-`BridgedComputeService` 的核心职责是作为 VM 物理层和 Runtime 执行器之间的桥梁，确保计算请求被正确地委托和处理。测试的重点将是验证这种委托行为的正确性，包括参数解析、代码查找、执行器调用以及结果的返回。
-
-我将创建一个新的集成测试文件来实现这一点。
-
-## [WIP] test: 为 BridgedComputeService 创建集成测试
-
-### 用户需求
-
-在进入 `VMExecutionStrategy` 的实现阶段之前，需要为 `cascade.vm.compute.adapters.BridgedComputeService` 创建一套完整的集成测试，以确保其行为正确，并为后续开发提供坚实的基础和安全网。
-
-### 评论
-
-这是一个关键且必要的步骤。`BridgedComputeService` 是连接 VM 物理层和 Runtime 逻辑层的关键“转接器”。如果它的行为有任何偏差，整个 VM 执行策略都将建立在不稳定的基础上。通过创建一个专门的测试套件，我们不仅可以验证其当前的功能，还能确保未来的重构不会意外地破坏这个核心组件。
-
-### 目标
-
-1.  创建一个新的测试文件 `packages/cascade-vm/tests/integration/test_compute_adapters.py`。
-2.  测试 `BridgedComputeService` 能够正确处理同步和异步任务。
-3.  测试服务能够正确地将任务执行委托给外部 `Executor`。
-4.  测试任务执行失败时，异常能够被正确捕获并作为结果返回。
-5.  测试服务的空闲状态 (`is_idle`) 能正确反映其工作负载。
-
-### 基本原理
-
-我们将遵循“验证意图而非实现”的测试原则。通过 Mock 外部 `Executor`，我们可以精确地断言 `BridgedComputeService` 是否以正确的参数（代理节点、可调用对象、参数列表）调用了它。同时，我们将使用真实的 `InMemoryObjectStore` 和 `CodeRegistry` 来模拟一个高保真的测试环境。
-
-测试流程将围绕向服务的 `inbound_queue` 推送 `ComputeRequest`，并从 `outbound_queue` 验证返回的 `Token`，同时检查对 Mock `Executor` 的调用情况。
-
-### 标签
-
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/vm #concept/executor #scope/dx #ai/instruct #task/domain/testing #task/object/compute-bridge #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 `test_compute_adapters.py` 测试文件
-
-我将创建一个新的测试文件，并添加所有必要的测试用例。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_compute_adapters.py
-~~~~~
-~~~~~python
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, ANY
@@ -304,10 +257,3 @@ async def test_is_idle_state_changes(service, service_task, inbound_queue, outbo
     await asyncio.wait_for(outbound_queue.get(), timeout=1.1)
     assert service.is_idle() is True
     assert service.active_count == 0
-~~~~~
-
-### 下一步建议
-
-我们已经为 `BridgedComputeService` 建立了坚实的测试基础。现在，我们可以满怀信心地开始实施路线图的第二阶段：**构建管理程序（Hypervisor Construction）**。
-
-我建议我们创建 `cascade-runtime/src/cascade/runtime/strategies/vm.py` 文件，并开始定义 `RuntimeHarness` 和 `VMExecutionStrategy` 的骨架，正如路线图中所规划的那样。

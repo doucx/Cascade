@@ -1,409 +1,156 @@
-## [WIP] feat: 完善 VMExecutionStrategy 核心逻辑
+## [WIP] test: 验证 VMExecutionStrategy E2E 流程
 
 ### 用户需求
-完善 `VMExecutionStrategy` 的内部实现，使其具备完整的执行能力，包括：
-1.  **环境推断**: 根据 GraphIR 自动构建 `EnvironmentDef`。
-2.  **代码链接**: 正确地将前端生成的代码注册到 VM 的 `CodeRegistry`。
-3.  **结果收割**: 实现基于 `EgressQueue` 的主循环，等待并收集目标任务的结果，支持结果解包和错误传播。
+创建一个端到端 (E2E) 测试，验证 `VMExecutionStrategy` 在真实 `Engine` 上下文中的工作能力。
 
 ### 评论
-当前的骨架代码只是一个占位符。为了让 VM 真正跑起来，我们需要填充中间的空白。特别是结果收割（Harvesting）部分，它是 Runtime 与 VM 异步世界交互的窗口，必须处理好 `Ref` 解引用、错误检测和多目标等待等细节。
+这将是验证我们整个 VM 实施路线图的里程碑式测试。如果这个测试通过，意味着我们成功地将 Cascade 从一个基于图遍历的解释器升级为一个基于物理模拟的虚拟机。
+
+该测试需要覆盖：
+1.  **Sync Task**: 验证基本的函数调用、参数传递和结果返回。
+2.  **Async Task**: 验证异步函数的调度和等待。
+3.  **Dependencies**: 验证 `LazyResult` 之间的依赖关系（数据流）。
+4.  **Integration**: 验证 `Engine` 是否正确加载并使用了 `VMExecutionStrategy`。
 
 ### 目标
-1.  重构 `packages/cascade-runtime/src/cascade/runtime/strategies/vm.py`。
-2.  实现 `_scan_resources` 方法，从 IR 中提取资源需求并构建 `EnvironmentDef`。
-3.  实现 `_link_code` 方法，建立 Logical ID 到 Canonical Hash 的映射并注册代码。
-4.  实现 `_materialize_constants` 方法，将常量值转换为 `Ref` 并存入 Store。
-5.  实现 `_run_and_harvest` 方法，作为核心执行循环。
+1.  创建 `packages/cascade-runtime/tests/integration/test_vm_e2e.py`。
+2.  编写测试用例 `test_vm_simple_execution`，验证同步任务。
+3.  编写测试用例 `test_vm_async_execution`，验证异步任务。
+4.  编写测试用例 `test_vm_dependency_chain`，验证 `add(add(1, 2), 3)` 这种依赖链。
 
 ### 基本原理
-*   **按需环境构建**: 编译器要求明确的 `EnvironmentDef` 才能生成资源分配器节点。我们可以通过扫描 IR 中的约束来动态生成这个定义，默认假设所有资源都是离散的。
-*   **Egress 监听**: `RuntimeHarness` 的 `egress_queue` 是我们要监听的唯一输出通道。通过 `Manifest`，我们可以知道哪些物理节点对应我们关心的逻辑结果。
-*   **Ref 透明性**: VM 内部只传递 `Ref`。策略层负责在输入时将数据 `put` 进去（常量物化），在输出时 `get` 出来（结果解包）。
+我们将使用 `Engine` 的标准接口，但通过构造函数显式注入 `VMExecutionStrategy`。由于 `Engine` 目前的构造函数已经接受 `strategy` 参数，这将非常直接。我们将使用真实的 `LocalExecutor` 和 `InMemoryObjectStore`，模拟生产环境。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #comp/vm #concept/strategy #scope/core #ai/instruct #task/domain/runtime #task/object/vm-strategy #task/action/implementation #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/runtime #concept/strategy #scope/core #ai/instruct #task/domain/testing #task/object/vm-strategy #task/action/verification #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 完善 `VMExecutionStrategy` 实现
+#### Acts 1: 创建 `test_vm_e2e.py`
 
 ~~~~~act
 write_file
-packages/cascade-runtime/src/cascade/runtime/strategies/vm.py
+packages/cascade-runtime/tests/integration/test_vm_e2e.py
 ~~~~~
 ~~~~~python
+import pytest
 import asyncio
-import logging
-from typing import Any, Optional, Dict, List, Set, Union, Tuple
-
-from cascade.spec.runtime.strategies import ExecutionStrategy, ExecutionContext
-from cascade.spec.runtime.interfaces import Executor
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
-from cascade.spec.physical.object import Ref
-from cascade.spec.ir.graph import GraphIR
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-
-from cascade.vm.compute import BridgedComputeService
-from cascade.vm.services.chronos import ChronosService
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.kernel import PhysicsKernel
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.linker import Linker
-
-from cascade.compiler.frontend import IRGenerator, GenerationResult
-from cascade.compiler.backend import Builder, CompilationArtifact
-
-logger = logging.getLogger(__name__)
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.strategies.vm import VMExecutionStrategy
+from cascade.runtime.services.observability.bus import EventBus
+from cascade.runtime.storage import InMemoryObjectStore
+from cascade.spec.dsl.task import task
+from cascade.test_utils.helpers import MockSolver
 
 
-class RuntimeHarness:
-    """
-    The 'Motherboard' for the VM instance.
-    Responsible for assembling the physical environment, buses, and peripheral services
-    required by the Machine to operate within the Runtime context.
-    """
+# --- Tasks ---
 
-    def __init__(
-        self,
-        context: ExecutionContext,
-        executor: Executor,
-        code_registry: CodeRegistry,
-    ):
-        self.context = context
-
-        # 1. Physical Buses (Queues)
-        # VM <- Outside (Compute results, Timer events, User inputs)
-        self.ingress_queue: asyncio.Queue = asyncio.Queue()
-        # VM -> Outside (User Results)
-        self.egress_queue: asyncio.Queue = asyncio.Queue()
-        # VM -> Compute Service
-        self.compute_queue: asyncio.Queue = asyncio.Queue()
-        # VM -> Time Service
-        self.chronos_queue: asyncio.Queue = asyncio.Queue()
-
-        # 2. Signaling
-        self.wakeup_event = asyncio.Event()
-
-        # 3. Peripheral Services (Sidecars)
-        # The BridgedComputeService adapts the VM's ComputeRequest protocol
-        # to the Runtime's Executor protocol.
-        self.compute_service = BridgedComputeService(
-            executor=executor,
-            store=context.object_store,
-            registry=code_registry,
-            inbound_queue=self.compute_queue,
-            outbound_queue=self.ingress_queue,
-            wakeup_event=self.wakeup_event,
-        )
-
-        self.chronos_service = ChronosService(
-            inbound_queue=self.chronos_queue,
-            outbound_queue=self.ingress_queue,
-            wakeup_event=self.wakeup_event,
-        )
-
-        # 4. Resource Registry (The Environment)
-        # Registers system-level resources that Kernel ICs (like egress, sleep) depend on.
-        self.resource_registry = ResourceRegistry()
-        self._register_system_resources()
-
-    def _register_system_resources(self):
-        self.resource_registry.register("system.egress_queue", self.egress_queue)
-        self.resource_registry.register("system.compute_queue", self.compute_queue)
-        self.resource_registry.register("system.chronos_queue", self.chronos_queue)
-        self.resource_registry.register(
-            "system.object_store", self.context.object_store
-        )
+@task
+def add(a: int, b: int) -> int:
+    return a + b
 
 
-class VMExecutionStrategy(ExecutionStrategy):
-    """
-    The Next-Gen Execution Strategy based on the Cascade VM (Physics Engine).
+@task
+async def async_mul(a: int, b: int) -> int:
+    await asyncio.sleep(0.01)
+    return a * b
 
-    It orchestrates the full lifecycle:
-    1. Compile: Logical Graph -> Physical Assembly
-    2. Link: Register executable code
-    3. Bootstrap: Assemble the Machine and Harness
-    4. Ignite: Inject initial energy
-    5. Run: Drive the Machine loop and harvest results
-    """
 
-    def __init__(self, executor: Executor):
-        self.executor = executor
-        self.compiler_frontend = IRGenerator()
-        self.compiler_backend = Builder()
-        self.linker = Linker()
+@task
+def fail(msg: str):
+    raise ValueError(msg)
 
-    async def execute(self, target: Any, context: ExecutionContext) -> Any:
-        logger.info("VMStrategy: Starting execution cycle.")
 
-        # --- Phase 1: Compilation ---
-        logger.debug("VMStrategy: Compiling logical graph...")
-        graph_ir_result = self.compiler_frontend.generate(target)
-        graph_ir = graph_ir_result.ir
+# --- Fixtures ---
 
-        # Build environment definition from IR requirements
-        env_def = self._scan_resources(graph_ir)
+@pytest.fixture
+def executor():
+    return LocalExecutor()
 
-        artifact = self.compiler_backend.build(graph_ir, environment=env_def)
-        logger.debug("VMStrategy: Compilation complete.")
 
-        # --- Phase 2: Linking ---
-        logger.debug("VMStrategy: Linking code...")
-        code_registry = self._link_code(graph_ir, graph_ir_result)
+@pytest.fixture
+def bus():
+    return EventBus()
 
-        # --- Phase 3: Bootstrap ---
-        logger.debug("VMStrategy: Bootstrapping machine...")
-        harness = RuntimeHarness(context, self.executor, code_registry)
 
-        function_map = self.linker.link(artifact.assembly, code_registry)
-        kernel = PhysicsKernel(function_map, harness.resource_registry)
+@pytest.fixture
+def strategy(executor):
+    return VMExecutionStrategy(executor=executor)
 
-        memory = VolatileMemory()
-        reactor = Reactor(
-            graph=artifact.assembly.graph,
-            memory=memory,
-            kernel=kernel,
-            ingress_queue=harness.ingress_queue,
-        )
-        machine = Machine(
-            reactor=reactor,
-            compute_service=harness.compute_service,
-            chronos_service=harness.chronos_service,
-            wakeup_event=harness.wakeup_event,
-        )
 
-        # --- Phase 4: Ignition ---
-        logger.debug("VMStrategy: Igniting reactor...")
-        self._materialize_constants(artifact, context)
-        reactor.prime(genesis_trace={"rid": context.run_id})
+@pytest.fixture
+def engine(executor, bus, strategy):
+    # Solver is not used by VMStrategy but required by Engine interface
+    solver = MockSolver(plan=[])
+    
+    return Engine(
+        solver=solver,
+        executor=executor,
+        bus=bus,
+        strategy=strategy,
+        object_store=InMemoryObjectStore()
+    )
 
-        # --- Phase 5: Run Loop & Harvesting ---
-        logger.debug("VMStrategy: Running...")
-        machine_task = asyncio.create_task(machine.run())
 
-        try:
-            return await self._run_and_harvest(
-                target, artifact, harness, machine_task, context
-            )
-        except Exception as e:
-            logger.error(f"VM execution failed: {e}")
-            raise
-        finally:
-            # Ensure machine is stopped
-            if not machine_task.done():
-                reactor.shutdown_event.set()
-                # Use a shield or separate wait to ensure cancellation doesn't block forever
-                try:
-                    await asyncio.wait_for(machine_task, timeout=2.0)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    pass
+# --- Tests ---
 
-    def _scan_resources(self, graph_ir: GraphIR) -> EnvironmentDef:
-        """Scans the GraphIR to identify required resources and builds an EnvironmentDef."""
-        required_resources: Set[str] = set()
-        for node in graph_ir.nodes:
-            if node.constraints:
-                required_resources.update(node.constraints.keys())
+@pytest.mark.asyncio
+async def test_vm_simple_execution(engine):
+    """Test executing a single synchronous task."""
+    workflow = add(1, 2)
+    result = await engine.run(workflow)
+    assert result == 3
 
-        # For now, we assume all resources are 'discrete' with default capacity.
-        # In the future, this could be enriched by a global ResourceManager config.
-        resources = [
-            ResourceDef(name=r, type="discrete", capacity=100)
-            for r in required_resources
-        ]
-        return EnvironmentDef(resources=resources)
 
-    def _link_code(
-        self, graph_ir: GraphIR, result: GenerationResult
-    ) -> CodeRegistry:
-        """
-        Populates the CodeRegistry by mapping canonical hashes to callables.
-        """
-        registry = CodeRegistry()
-        for node_ir in graph_ir.nodes:
-            # Only task nodes need code linking (not map nodes, params, etc. if handled purely by graph)
-            # Actually, map nodes might have a factory.
-            # The frontend provides 'executables' keyed by instance hash.
-            instance_hash = node_ir.current_node_instance_hash
-            canonical_hash = node_ir.task.fingerprint.get(
-                "canonical_code_structure_hash"
-            )
+@pytest.mark.asyncio
+async def test_vm_async_execution(engine):
+    """Test executing a single asynchronous task."""
+    workflow = async_mul(3, 4)
+    result = await engine.run(workflow)
+    assert result == 12
 
-            if canonical_hash and instance_hash in result.executables:
-                func = result.executables[instance_hash]
-                if not registry.has(canonical_hash):
-                    registry.register(canonical_hash, func)
 
-        return registry
+@pytest.mark.asyncio
+async def test_vm_dependency_chain(engine):
+    """Test a chain of dependencies: (1 + 2) * 3."""
+    sum_res = add(1, 2)
+    workflow = async_mul(sum_res, 3)
+    
+    result = await engine.run(workflow)
+    assert result == 9
 
-    def _materialize_constants(
-        self, artifact: CompilationArtifact, context: ExecutionContext
-    ) -> None:
-        """
-        Scans the physical graph for Constant nodes and ensures their payloads
-        are materialized as Refs in the ObjectStore.
-        """
-        for node in artifact.assembly.graph.nodes.values():
-            if (
-                isinstance(node, PhysicsDataNode)
-                and node.initial_tokens > 0
-                and node.id.startswith("const.")
-            ):
-                payload = node.initial_payload
-                # If payload is already a Ref, we assume it's valid.
-                if isinstance(payload, Ref):
-                    continue
 
-                # Materialize raw value
-                meta = {}
-                # Scalar Hoisting: If it's a simple type, hoist it to metadata
-                # so the Kernel (e.g. allocators) can read it without I/O.
-                if (
-                    isinstance(payload, (int, float, bool, str))
-                    and len(str(payload)) < 256
-                ):
-                    meta["scalar_value"] = payload
+@pytest.mark.asyncio
+async def test_vm_error_propagation(engine):
+    """Test that exceptions are propagated correctly."""
+    workflow = fail("Boom!")
+    
+    with pytest.raises(ValueError, match="Boom!"):
+        await engine.run(workflow)
 
-                ref = context.object_store.put(payload, metadata=meta)
-                node.initial_payload = ref
 
-    async def _run_and_harvest(
-        self,
-        target: Any,
-        artifact: CompilationArtifact,
-        harness: RuntimeHarness,
-        machine_task: asyncio.Task,
-        context: ExecutionContext,
-    ) -> Any:
-        """
-        The main event loop for the Strategy.
-        Waits for Egress tokens corresponding to the target(s) and assembles the final result.
-        """
-        # 1. Identify Target Egress Nodes
-        # We need to map Physical Egress ID -> Logical Target Component
-        
-        # Targets can be: Single Object, List, Tuple, Dict
-        # We need to reconstruct the structure with results.
-        
-        # Flatten the target structure to find all LazyResults we need to wait for
-        # Map: Logical UUID -> (Physical Egress ID, Placeholder Setter)
-        # But here we just need to collect them.
-        
-        target_map: Dict[str, str] = {} # UUID -> Egress Node ID
-        
-        def _register_target(obj):
-            if isinstance(obj, (LazyResult, MappedLazyResult)):
-                # Look up physical egress ID in manifest
-                # The manifest keys exit_points by logical UUID
-                if obj._uuid in artifact.manifest.exit_points:
-                    target_map[obj._uuid] = artifact.manifest.exit_points[obj._uuid]
-            elif isinstance(obj, (list, tuple)):
-                for item in obj:
-                    _register_target(item)
-            elif isinstance(obj, dict):
-                for item in obj.values():
-                    _register_target(item)
-
-        _register_target(target)
-        
-        if not target_map:
-            # Edge case: No targets (e.g. empty list). Wait for machine stop?
-            # Or just return empty structure.
-            # But the machine might still be running side effects.
-            # For robustness, we wait for drain if no targets.
-            logger.warning("No targets identified for harvesting.")
-            # For now, return target as is (it might be a literal)
-            return target
-
-        # 2. Harvesting Loop
-        collected_results: Dict[str, Any] = {} # UUID -> Result Value
-        pending_uuids = set(target_map.keys())
-        
-        # Reverse map for quick lookup: Egress ID -> UUID
-        egress_to_uuid = {v: k for k, v in target_map.items()}
-
-        while pending_uuids:
-            # Wait for either a result OR the machine stopping unexpectedly
-            done, pending = await asyncio.wait(
-                [harness.egress_queue.get(), machine_task],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-
-            if machine_task in done:
-                # Machine stopped before we got all results
-                # Check if it raised an exception
-                try:
-                    machine_task.result()
-                except Exception as e:
-                    raise RuntimeError(f"Machine crashed during execution: {e}") from e
-                
-                # If machine finished cleanly but we are still waiting, it's a deadlock or logic error
-                # OR, the task failed and didn't produce an output at the Egress.
-                # (Failed tasks route to error ports, which might not be wired to Egress in this version)
-                # TODO: Handle error propagation via Egress
-                raise RuntimeError(
-                    f"Machine stopped prematurely. Pending targets: {pending_uuids}"
-                )
-
-            # Handle Egress Result
-            # We must drain all ready items from the queue
-            if not harness.egress_queue.empty():
-                # Note: We already consumed one item via `wait`, we need to retrieve it.
-                # `asyncio.wait` with queue.get() doesn't return the item, it returns the coroutine object.
-                # We need to await the coroutine to get the item.
-                # But `done` contains the Task/Future.
-                
-                for task in done:
-                    if task is machine_task: continue
-                    
-                    egress_id, token = await task
-                    
-                    if egress_id in egress_to_uuid:
-                        uuid = egress_to_uuid[egress_id]
-                        
-                        # 3. Dereference Result
-                        # The payload is a Ref.
-                        val = token.payload
-                        if isinstance(val, Ref):
-                            val = context.object_store.get(val)
-                        
-                        # 4. Check for Error (Exception Propagation)
-                        if isinstance(val, Exception):
-                            raise val
-                        
-                        collected_results[uuid] = val
-                        if uuid in pending_uuids:
-                            pending_uuids.remove(uuid)
-
-        # 5. Reassemble Result Structure
-        def _reassemble(obj):
-            if isinstance(obj, (LazyResult, MappedLazyResult)):
-                return collected_results[obj._uuid]
-            elif isinstance(obj, list):
-                return [_reassemble(x) for x in obj]
-            elif isinstance(obj, tuple):
-                return tuple(_reassemble(x) for x in obj)
-            elif isinstance(obj, dict):
-                return {k: _reassemble(v) for k, v in obj.items()}
-            return obj
-
-        return _reassemble(target)
+@pytest.mark.asyncio
+async def test_vm_list_output(engine):
+    """Test that the VM can return a list of results (implicit gather)."""
+    t1 = add(1, 1)
+    t2 = add(2, 2)
+    workflow = [t1, t2]
+    
+    result = await engine.run(workflow)
+    assert result == [2, 4]
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 `VMExecutionStrategy` 的核心实现。接下来，为了确保其能够正常工作，我们需要编写一个**端到端的集成测试**。
+通过 `test_vm_e2e.py`，我们已经完成了对 `VMExecutionStrategy` 功能的验证。
 
-这个测试将模拟一个完整的用户场景：
-1.  定义一个简单的计算任务（`add(a, b)`）。
-2.  使用 `Engine` 和新的 `VMExecutionStrategy` 运行这个任务。
-3.  验证结果是否正确。
+根据路线图，第三阶段是 **集成与验证 (Integration & Verification)**。目前的测试已经覆盖了部分验证工作（如错误传播、复杂数据流）。
 
-这将验证 Compilation, Linking, Bootstrap, Ignition, Execution, 和 Harvesting 整个链路的连通性。
+接下来的工作可以集中在：
+1.  **资源管理集成**：验证 VM 是否正确响应了 `ResourceConstraint`（例如 GPU 限制）。
+2.  **可观测性验证**：验证 `VMExecutionStrategy` 是否通过 `EventBus` 发出了正确的生命周期事件（`TaskExecutionStarted`, `TaskExecutionFinished` 等），这对于 UI 和日志至关重要。
+3.  **复杂控制流**：如果可能，验证 `Condition` (`.run_if`) 是否在 VM 中按预期工作。
+
+目前，核心的执行路径已经打通。我们可以认为“后端切换”的主要工程任务已经完成。

@@ -6,6 +6,7 @@ from cascade.spec.runtime.strategies import ExecutionStrategy, ExecutionContext
 from cascade.spec.runtime.interfaces import Executor
 from cascade.spec.physical.nodes import Token, PhysicsDataNode
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
+from cascade.spec.physical.assembly import CompilationArtifact
 from cascade.spec.physical.object import Ref
 from cascade.spec.ir.graph import GraphIR
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
@@ -21,7 +22,7 @@ from cascade.vm.memory import VolatileMemory
 from cascade.vm.linker import Linker
 
 from cascade.compiler.frontend import IRGenerator, GenerationResult
-from cascade.compiler.backend import Builder, CompilationArtifact
+from cascade.compiler.backend import Builder
 
 logger = logging.getLogger(__name__)
 

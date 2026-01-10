@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 验证 VMExecutionStrategy E2E 流程", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768017904.4224613, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py, M __init__.py, M vm.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768018399.6984847, "duration_ms": 0}}

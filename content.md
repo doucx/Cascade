@@ -1,167 +1,150 @@
-好的，测试全部通过，VM 的核心执行链路已经打通。现在我们来实现通过环境变量切换默认后端的功能。
+好的，我们来为这个新功能创建健壮的单元测试。
 
-这是一个非常好的开发者体验（DX）改进，它允许我们在不修改任何代码的情况下，轻松地在传统的图执行策略和新的 VM 执行策略之间进行切换，便于测试和性能对比。
+我将生成一个计划，该计划会创建一个新的测试文件，并使用 `pytest` 的 `monkeypatch` 和参数化功能来全面验证 `Engine` 的策略选择逻辑。
 
-我将生成一个计划来实现这个功能。
-
-## [WIP] feat: 通过环境变量 CASCADE_BACKEND 切换默认执行策略
+## [WIP] test: 为 Engine 的策略选择逻辑添加单元测试
 
 ### 错误分析
-无错误，此为新功能实现。
+无错误，此为新功能的测试实现。
 
 ### 用户需求
-当环境变量 `CASCADE_BACKEND` 被设置为 `vm` 时，`Engine` 实例在未指定 `strategy` 参数的情况下，应自动加载并使用 `VMExecutionStrategy` 作为其默认执行策略。如果环境变量未设置或设置为其他值，则应保持现有的默认行为（加载基于图的策略）。
+为 `Engine` 根据 `CASCADE_BACKEND` 环境变量选择默认执行策略的功能创建单元测试。
 
 ### 评论
-这是一个重要的工程实践，它将运行时的行为与环境配置解耦，极大地增强了系统的灵活性和可测试性。通过支持 `CASCADE_BACKEND=vm`，我们为未来将 VM 作为默认后端铺平了道路，同时保留了与旧版执行器的兼容性。
+为配置驱动的行为（如通过环境变量切换功能）编写单元测试至关重要。这可以确保：
+1.  **功能正确性**：我们验证了代码确实按预期响应环境变量。
+2.  **防止回归**：未来的代码变更不会意外地破坏这个切换机制。
+3.  **文档化**：测试本身就是关于该功能如何工作的清晰文档。
 
 ### 目标
-1.  修改 `Engine` 的 `__init__` 方法，使其在初始化时检查 `CASCADE_BACKEND` 环境变量。
-2.  实现一个新的私有方法 `_resolve_default_strategy`，根据环境变量的值来决定加载哪个策略。
-3.  创建一个 `_load_vm_strategy` 方法，负责实例化 `VMExecutionStrategy`。
-4.  将现有的 `_load_default_strategy` 重命名为 `_load_graph_strategy`，以明确其职责，并作为默认的回退选项。
+1.  创建新的目录结构 `packages/cascade-runtime/tests/unit/host/`。
+2.  在上述目录中创建一个新的测试文件 `test_engine_init.py`。
+3.  实现一个参数化的测试，覆盖 `CASCADE_BACKEND` 环境变量的所有相关情况（`vm`, `graph`, 未设置, 其他值）。
+4.  实现一个测试，验证当 `strategy` 被显式传入 `Engine` 时，它会覆盖环境变量的设置。
 
 ### 基本原理
-我们将在 `Engine` 的构造函数中引入一个决策点。该决策点将优先使用用户显式传入的 `strategy`。如果没有，它将查询 `os.getenv("CASCADE_BACKEND")`。如果值为 `'vm'`，则调用 VM 策略加载器；否则，调用传统的图策略加载器。这种方式清晰地隔离了不同策略的加载逻辑，并确保了向后兼容性。
+我们将使用 `pytest` 的核心功能来编写简洁而强大的测试：
+-   **`monkeypatch` Fixture**: 这是在测试期间安全地修改（和自动恢复）环境变量的标准方法。我们将用它来模拟 `os.getenv` 的不同返回值。
+-   **`@pytest.mark.parametrize`**: 这个装饰器让我们能用同一套测试逻辑来运行多个不同的输入和预期输出组合，从而有效地测试所有分支，同时保持代码的 DRY (Don't Repeat Yourself)。
+-   **`unittest.mock.MagicMock`**: 我们将使用 `MagicMock` 来创建 `Engine` 所需的依赖项（`solver`, `executor`, `bus`），确保我们的测试是轻量级的单元测试，只关注 `Engine` 的初始化逻辑，而不依赖于这些组件的实际实现。
 
 ### 标签
-#intent/build #flow/ready #priority/medium #comp/runtime #concept/config #scope/dx #ai/instruct #task/domain/runtime #task/object/engine-strategy #task/action/configure #task/state/begin
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/runtime #concept/config #scope/dx #ai/instruct #task/domain/testing #task/object/engine-strategy #task/action/test #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 Engine 以支持后端切换
+#### Acts 1: 创建测试目录
 
-我们将对 `packages/cascade-runtime/src/cascade/runtime/host/instance.py` 文件进行一次集中的 `patch` 操作。这次修改将包括：
-1.  导入 `os` 和 `VMExecutionStrategy`。
-2.  更新 `__init__` 方法以调用新的策略解析器 `_resolve_default_strategy`。
-3.  添加 `_resolve_default_strategy` 和 `_load_vm_strategy` 方法。
-4.  重命名 `_load_default_strategy` 为 `_load_graph_strategy`。
+首先，我们使用 `mkdir -p` 来确保测试文件所需的目录结构存在。
 
 ~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/host/instance.py
+run_command
 ~~~~~
-~~~~~python.old
-import sys
-import time
-import asyncio
-from typing import Any, Dict, Optional, Callable
-from uuid import uuid4
-from contextlib import ExitStack
+~~~~~
+mkdir -p packages/cascade-runtime/tests/unit/host/
+~~~~~
 
-from cascade.spec.dsl.resources import ResourceDefinition
-~~~~~
-~~~~~python.new
-import os
-import sys
-import time
-import asyncio
-from typing import Any, Dict, Optional, Callable
-from uuid import uuid4
-from contextlib import ExitStack
+#### Acts 2: 编写测试文件
 
-from cascade.spec.dsl.resources import ResourceDefinition
-~~~~~
+现在，我们创建 `test_engine_init.py` 文件。它将包含两个核心测试：一个用于验证基于环境变量的策略选择，另一个用于验证显式策略的优先级。
 
 ~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/host/instance.py
+write_file
+packages/cascade-runtime/tests/unit/host/test_engine_init.py
 ~~~~~
-~~~~~python.old
-        self.resource_container = ResourceContainer(self.bus)
+~~~~~python
+import pytest
+from unittest.mock import MagicMock
 
-        if strategy:
-            self.strategy = strategy
-        else:
-            self.strategy = self._load_default_strategy()
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.strategies.vm import VMExecutionStrategy
+from cascade.execution.graph.strategy import GraphExecutionStrategy
 
-        self._managed_subscribers = []
 
-    def _load_default_strategy(self) -> ExecutionStrategy:
-        try:
-            # Dynamic imports to break hard dependency
-            from cascade.execution.graph.logic.processor import NodeProcessor
-            from cascade.execution.graph.strategy import GraphExecutionStrategy
+# Fixtures for Engine dependencies
+@pytest.fixture
+def mock_solver():
+    return MagicMock()
 
-            # Reconstruct the legacy stack
-            node_processor = NodeProcessor(
-                executor=self.executor,
-                bus=self.bus,
-                resource_manager=self.resource_manager,
-                constraint_manager=self.constraint_manager,
-                solver=self.solver,
-            )
 
-            return GraphExecutionStrategy(
-                solver=self.solver,
-                node_processor=node_processor,
-                resource_container=self.resource_container,
-                constraint_manager=self.constraint_manager,
-                bus=self.bus,
-                wakeup_event=self._wakeup_event,
-            )
-        except ImportError:
-            raise RuntimeError(
-                "No execution strategy provided and 'cascade-execution-graph' package not found. "
-                "Please install 'cascade-execution-graph' or provide a custom strategy."
-            )
-~~~~~
-~~~~~python.new
-        self.resource_container = ResourceContainer(self.bus)
+@pytest.fixture
+def mock_executor():
+    return MagicMock()
 
-        if strategy:
-            self.strategy = strategy
-        else:
-            self.strategy = self._resolve_default_strategy()
 
-        self._managed_subscribers = []
+@pytest.fixture
+def mock_bus():
+    return MagicMock()
 
-    def _resolve_default_strategy(self) -> ExecutionStrategy:
-        backend_choice = os.getenv("CASCADE_BACKEND", "graph").lower()
-        if backend_choice == "vm":
-            return self._load_vm_strategy()
-        else:
-            return self._load_graph_strategy()
 
-    def _load_vm_strategy(self) -> ExecutionStrategy:
-        from cascade.runtime.strategies.vm import VMExecutionStrategy
+@pytest.mark.parametrize(
+    "backend_env, expected_strategy_type",
+    [
+        ("vm", VMExecutionStrategy),
+        ("VM", VMExecutionStrategy),  # Test case-insensitivity
+        ("graph", GraphExecutionStrategy),
+        ("GRAPH", GraphExecutionStrategy),
+        ("other", GraphExecutionStrategy),  # Test fallback for unknown values
+        (None, GraphExecutionStrategy),  # Test unset env var defaults to graph
+    ],
+)
+def test_engine_selects_strategy_from_env(
+    monkeypatch,
+    mock_solver,
+    mock_executor,
+    mock_bus,
+    backend_env,
+    expected_strategy_type,
+):
+    """
+    Tests that the Engine correctly selects the default execution strategy
+    based on the CASCADE_BACKEND environment variable.
+    """
 
-        return VMExecutionStrategy(executor=self.executor, bus=self.bus)
+    if backend_env is None:
+        monkeypatch.delenv("CASCADE_BACKEND", raising=False)
+    else:
+        monkeypatch.setenv("CASCADE_BACKEND", backend_env)
 
-    def _load_graph_strategy(self) -> ExecutionStrategy:
-        try:
-            # Dynamic imports to break hard dependency
-            from cascade.execution.graph.logic.processor import NodeProcessor
-            from cascade.execution.graph.strategy import GraphExecutionStrategy
+    # We pass strategy=None to trigger the default selection logic
+    engine = Engine(
+        solver=mock_solver,
+        executor=mock_executor,
+        bus=mock_bus,
+        strategy=None,
+    )
 
-            # Reconstruct the legacy stack
-            node_processor = NodeProcessor(
-                executor=self.executor,
-                bus=self.bus,
-                resource_manager=self.resource_manager,
-                constraint_manager=self.constraint_manager,
-                solver=self.solver,
-            )
+    assert isinstance(engine.strategy, expected_strategy_type)
 
-            return GraphExecutionStrategy(
-                solver=self.solver,
-                node_processor=node_processor,
-                resource_container=self.resource_container,
-                constraint_manager=self.constraint_manager,
-                bus=self.bus,
-                wakeup_event=self._wakeup_event,
-            )
-        except ImportError:
-            raise RuntimeError(
-                "No execution strategy provided and 'cascade-execution-graph' package not found. "
-                "Please install 'cascade-execution-graph' or provide a custom strategy."
-            )
+
+def test_engine_uses_explicit_strategy_over_env(
+    monkeypatch, mock_solver, mock_executor, mock_bus
+):
+    """
+    Tests that an explicitly provided strategy always takes precedence
+    over the environment variable.
+    """
+    # Set env to a value that would normally select GraphExecutionStrategy
+    monkeypatch.setenv("CASCADE_BACKEND", "graph")
+
+    # But explicitly provide the VM strategy
+    explicit_strategy = VMExecutionStrategy(executor=mock_executor, bus=mock_bus)
+
+    engine = Engine(
+        solver=mock_solver,
+        executor=mock_executor,
+        bus=mock_bus,
+        strategy=explicit_strategy,
+    )
+
+    assert engine.strategy is explicit_strategy
+    assert isinstance(engine.strategy, VMExecutionStrategy)
 ~~~~~
 
 ### 下一步建议
 
-功能已经实现，但我们还没有为它编写测试。我建议下一步是创建一个新的测试文件 `packages/cascade-runtime/tests/unit/host/test_engine_init.py`，并在其中添加一个测试用例，该用例使用 `monkeypatch` 来设置 `CASCADE_BACKEND` 环境变量，然后断言 `Engine` 实例化的 `strategy` 属性是我们期望的类型（`VMExecutionStrategy` 或 `GraphExecutionStrategy`）。
+测试已经创建完毕。现在请运行 `pytest packages/cascade-runtime/tests/unit/host/test_engine_init.py` 来验证我们刚刚实现的 `CASCADE_BACKEND` 功能是正确且健壮的。
 
-这将确保我们的新功能是健壮且可维护的。如果你同意，我将生成创建该测试的计划。
+如果测试通过，我们可以将这个任务标记为完成，并生成一个 `[COMMIT]` 计划来提交这些变更。

@@ -294,47 +294,41 @@ class VMExecutionStrategy(ExecutionStrategy):
         # Reverse map for quick lookup: Egress ID -> UUID
         egress_to_uuid = {v: k for k, v in target_map.items()}
 
-        while pending_uuids:
-            # Wait for either a result OR the machine stopping unexpectedly
-            done, pending = await asyncio.wait(
-                [harness.egress_queue.get(), machine_task],
-                return_when=asyncio.FIRST_COMPLETED
-            )
+        # Task management: We hold the egress reading task across loop iterations
+        # if it hasn't completed yet.
+        egress_task: Optional[asyncio.Task] = None
 
-            if machine_task in done:
-                # Machine stopped before we got all results
-                # Check if it raised an exception
-                try:
-                    machine_task.result()
-                except Exception as e:
-                    raise RuntimeError(f"Machine crashed during execution: {e}") from e
-                
-                # If machine finished cleanly but we are still waiting, it's a deadlock or logic error
-                # OR, the task failed and didn't produce an output at the Egress.
-                # (Failed tasks route to error ports, which might not be wired to Egress in this version)
-                # TODO: Handle error propagation via Egress
-                raise RuntimeError(
-                    f"Machine stopped prematurely. Pending targets: {pending_uuids}"
+        try:
+            while pending_uuids:
+                if egress_task is None:
+                    egress_task = asyncio.create_task(harness.egress_queue.get())
+
+                # Wait for either a result OR the machine stopping
+                done, pending = await asyncio.wait(
+                    [egress_task, machine_task],
+                    return_when=asyncio.FIRST_COMPLETED
                 )
 
-            # Handle Egress Result
-            # We must drain all ready items from the queue
-            if not harness.egress_queue.empty():
-                # Note: We already consumed one item via `wait`, we need to retrieve it.
-                # `asyncio.wait` with queue.get() doesn't return the item, it returns the coroutine object.
-                # We need to await the coroutine to get the item.
-                # But `done` contains the Task/Future.
-                
-                for task in done:
-                    if task is machine_task: continue
+                if machine_task in done:
+                    # Machine stopped before we got all results
+                    try:
+                        machine_task.result()
+                    except Exception as e:
+                        raise RuntimeError(f"Machine crashed during execution: {e}") from e
                     
-                    egress_id, token = await task
-                    
+                    raise RuntimeError(
+                        f"Machine stopped prematurely. Pending targets: {pending_uuids}"
+                    )
+
+                if egress_task in done:
+                    # We have a result token
+                    egress_id, token = await egress_task
+                    egress_task = None  # Reset for next iteration
+
                     if egress_id in egress_to_uuid:
                         uuid = egress_to_uuid[egress_id]
                         
                         # 3. Dereference Result
-                        # The payload is a Ref.
                         val = token.payload
                         if isinstance(val, Ref):
                             val = context.object_store.get(val)
@@ -346,6 +340,14 @@ class VMExecutionStrategy(ExecutionStrategy):
                         collected_results[uuid] = val
                         if uuid in pending_uuids:
                             pending_uuids.remove(uuid)
+        finally:
+            # Cleanup: Cancel pending egress read if we are exiting (e.g. on error)
+            if egress_task and not egress_task.done():
+                egress_task.cancel()
+                try:
+                    await egress_task
+                except asyncio.CancelledError:
+                    pass
 
         # 5. Reassemble Result Structure
         def _reassemble(obj):

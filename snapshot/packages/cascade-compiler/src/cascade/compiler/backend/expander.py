@@ -50,6 +50,15 @@ class Expander:
             arg.name: PortDef(arg.name, PortRole.DATA, "Any")
             for arg in node_ir.task.args
         }
+
+        # [HFEA Fix]: Variadic Args Support
+        # Check for inputs in NodeIR that don't have a corresponding port definition.
+        # This handles *args (which manifest as '0', '1', etc. in inputs) and other dynamic bindings.
+        for input_key in node_ir.inputs.keys():
+            if input_key not in bleacher_inputs:
+                # Create a dynamic port definition for this input
+                bleacher_inputs[input_key] = PortDef(input_key, PortRole.DATA, "Any")
+
         # Add ports for resources
         for res_name in node_ir.constraints.keys():
             port_name = f"res_{res_name}"

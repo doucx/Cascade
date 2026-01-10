@@ -3,9 +3,6 @@
 "Engine._is_simple_task": |-
   Checks if the LazyResult is a simple, flat task (no nested dependencies).
   This allows for the Zero-Overhead TCO fast path.
-"Engine._load_default_strategy": |-
-  Dynamically loads the legacy GraphExecutionStrategy if available.
-  This provides backward compatibility without hard compile-time dependencies.
 "Engine._on_constraint_update": |-
   Callback to handle incoming constraint messages.
 "Engine.add_subscriber": |-

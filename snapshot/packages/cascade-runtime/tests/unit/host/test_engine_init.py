@@ -41,11 +41,6 @@ def test_engine_selects_strategy_from_env(
     backend_env,
     expected_strategy_type,
 ):
-    """
-    Tests that the Engine correctly selects the default execution strategy
-    based on the CASCADE_BACKEND environment variable.
-    """
-
     if backend_env is None:
         monkeypatch.delenv("CASCADE_BACKEND", raising=False)
     else:
@@ -65,10 +60,6 @@ def test_engine_selects_strategy_from_env(
 def test_engine_uses_explicit_strategy_over_env(
     monkeypatch, mock_solver, mock_executor, mock_bus
 ):
-    """
-    Tests that an explicitly provided strategy always takes precedence
-    over the environment variable.
-    """
     # Set env to a value that would normally select GraphExecutionStrategy
     monkeypatch.setenv("CASCADE_BACKEND", "graph")
 

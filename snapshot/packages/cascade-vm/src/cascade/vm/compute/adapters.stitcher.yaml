@@ -1,0 +1,4 @@
+"ProxyDef": |-
+  A lightweight proxy for TaskDef to satisfy Executor protocol.
+"ProxyNode": |-
+  A lightweight proxy for Node to satisfy Executor protocol.

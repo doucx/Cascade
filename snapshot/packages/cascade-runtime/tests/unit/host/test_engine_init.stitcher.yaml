@@ -1,0 +1,6 @@
+"test_engine_selects_strategy_from_env": |-
+  Tests that the Engine correctly selects the default execution strategy
+  based on the CASCADE_BACKEND environment variable.
+"test_engine_uses_explicit_strategy_over_env": |-
+  Tests that an explicitly provided strategy always takes precedence
+  over the environment variable.

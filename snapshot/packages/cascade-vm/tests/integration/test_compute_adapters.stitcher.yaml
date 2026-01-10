@@ -1,0 +1,12 @@
+"service_task": |-
+  Starts the service as a background task and ensures it's stopped.
+"test_execution_failure": |-
+  Verify that exceptions from the executor are caught and returned as results.
+"test_is_idle_state_changes": |-
+  Verify that is_idle() correctly reflects the service's state.
+"test_process_async_task": |-
+  Verify that an asynchronous task is correctly identified and delegated.
+"test_process_sync_task": |-
+  Verify that a synchronous task is correctly delegated to the executor.
+"test_task_with_compute_mode": |-
+  Verify task mode is correctly read from the task object.

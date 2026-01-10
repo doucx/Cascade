@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Optional, Callable
+from typing import Any, Dict, List, Tuple, Optional
 
 from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime.storage import ObjectStore
@@ -15,14 +15,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ProxyDef:
-    """A lightweight proxy for TaskDef to satisfy Executor protocol."""
     is_async: bool
     mode: str = "blocking"
 
 
 @dataclass
 class ProxyNode:
-    """A lightweight proxy for Node to satisfy Executor protocol."""
     name: str
     definition: ProxyDef
     node_type: str = "task"
@@ -83,14 +81,13 @@ class BridgedComputeService:
             # 3. Construct Proxy Node for Executor
             # We inspect the function to determine execution properties
             is_async = inspect.iscoroutinefunction(func)
-            
+
             # If the function is wrapped by @task, it might have a 'mode' attribute
             mode = getattr(func, "mode", "blocking")
             name = getattr(func, "__name__", "unknown_task")
 
             proxy_node = ProxyNode(
-                name=name,
-                definition=ProxyDef(is_async=is_async, mode=mode)
+                name=name, definition=ProxyDef(is_async=is_async, mode=mode)
             )
 
             # 4. Delegate Execution to Runtime Executor

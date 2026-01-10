@@ -1,6 +1,6 @@
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock, ANY
+from unittest.mock import AsyncMock
 
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.object import Ref
@@ -73,7 +73,6 @@ def service(
 
 @pytest.fixture
 async def service_task(service):
-    """Starts the service as a background task and ensures it's stopped."""
     task = asyncio.create_task(service.run())
     yield task
     service.stop()
@@ -93,7 +92,6 @@ async def service_task(service):
 async def test_process_sync_task(
     service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor
 ):
-    """Verify that a synchronous task is correctly delegated to the executor."""
     # 1. Setup
     registry.register("sync_add_hash", sync_add)
     mock_executor.execute.return_value = 3
@@ -137,7 +135,6 @@ async def test_process_sync_task(
 async def test_process_async_task(
     service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor
 ):
-    """Verify that an asynchronous task is correctly identified and delegated."""
     # 1. Setup
     registry.register("async_add_hash", async_add)
     mock_executor.execute.return_value = 5
@@ -176,7 +173,6 @@ async def test_process_async_task(
 async def test_task_with_compute_mode(
     service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor
 ):
-    """Verify task mode is correctly read from the task object."""
     registry.register("compute_hash", sync_compute_task)
     mock_executor.execute.return_value = 100
 
@@ -199,7 +195,6 @@ async def test_task_with_compute_mode(
 async def test_execution_failure(
     service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor
 ):
-    """Verify that exceptions from the executor are caught and returned as results."""
     # 1. Setup
     registry.register("fail_hash", sync_add)
     error = ValueError("Execution failed")
@@ -223,8 +218,9 @@ async def test_execution_failure(
 
 
 @pytest.mark.asyncio
-async def test_is_idle_state_changes(service, service_task, inbound_queue, outbound_queue):
-    """Verify that is_idle() correctly reflects the service's state."""
+async def test_is_idle_state_changes(
+    service, service_task, inbound_queue, outbound_queue
+):
     # 1. Initial state
     assert service.is_idle() is True
 

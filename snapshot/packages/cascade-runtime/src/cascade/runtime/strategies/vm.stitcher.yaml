@@ -1,0 +1,23 @@
+"RuntimeHarness": |-
+  The 'Motherboard' for the VM instance.
+  Responsible for assembling the physical environment, buses, and peripheral services
+  required by the Machine to operate within the Runtime context.
+"VMExecutionStrategy": |-
+  The Next-Gen Execution Strategy based on the Cascade VM (Physics Engine).
+
+  It orchestrates the full lifecycle:
+  1. Compile: Logical Graph -> Physical Assembly
+  2. Link: Register executable code
+  3. Bootstrap: Assemble the Machine and Harness
+  4. Ignite: Inject initial energy
+  5. Run: Drive the Machine loop and harvest results
+"VMExecutionStrategy._link_code": |-
+  Populates the CodeRegistry by mapping canonical hashes to callables.
+"VMExecutionStrategy._materialize_constants": |-
+  Scans the physical graph for Constant nodes and ensures their payloads
+  are materialized as Refs in the ObjectStore.
+"VMExecutionStrategy._run_and_harvest": |-
+  The main event loop for the Strategy.
+  Waits for Egress tokens corresponding to the target(s) and assembles the final result.
+"VMExecutionStrategy._scan_resources": |-
+  Scans the GraphIR to identify required resources and builds an EnvironmentDef.

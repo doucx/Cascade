@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "f49d0f50dc9efdf79f71c60acd66f35710e51f4badbd0bebb6ca717391f463ce"
   },
   "Engine.__init__": {
-    "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: EventBus, state_backend_factory: Optional[Callable[[str], StateBackend]] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None, strategy: Optional[ExecutionStrategy] = None):",
-    "baseline_code_structure_hash": "841ac8c2c314aae5dd0e1d1cd63c778db44fc9418c5389e135487cea89507e1f"
+    "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: EventBus, state_backend_factory: Optional[Callable[[str], StateBackend]] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None, strategy: Optional[ExecutionStrategy] = None, object_store: Optional[ObjectStore] = None):",
+    "baseline_code_structure_hash": "5fa817167b66ccf00a7de4e7768f74f5f37449b5669a2e7a3e3f0c6b5e986fcb"
   },
   "Engine._is_simple_task": {
     "baseline_code_signature_text": "def _is_simple_task(self, lr: Any) -> bool:",
@@ -16,11 +16,23 @@
     "baseline_code_structure_hash": "f04bcbba34620dc393234173e9c8d81a262bf4b583150a4744131785e37cc9d4",
     "baseline_yaml_content_hash": "2ec2b724115dbeee925db255134cdec1507e8820c4eb2d93ad9b456e07f563d0"
   },
+  "Engine._load_graph_strategy": {
+    "baseline_code_signature_text": "def _load_graph_strategy(self) -> ExecutionStrategy:",
+    "baseline_code_structure_hash": "bf96c69a26ac0bd0ccef48fda1aa0944c4ff17c6c945a95746c83849f724d247"
+  },
+  "Engine._load_vm_strategy": {
+    "baseline_code_signature_text": "def _load_vm_strategy(self) -> ExecutionStrategy:",
+    "baseline_code_structure_hash": "4b7ae81149e02eee7d1012a422d8b12cfe9d23169bec87e00c8f56c3f55daa38"
+  },
   "Engine._managed_subscribers": {},
   "Engine._on_constraint_update": {
     "baseline_code_signature_text": "async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):",
     "baseline_code_structure_hash": "eddcb0897166dbfc907df5478fd877f9b8a961b202d84857fdd4c735fa143f65",
     "baseline_yaml_content_hash": "e2a92e49627d102435c531b3f6b908631f82e5b12bdf7eea30b29b75b3edebe4"
+  },
+  "Engine._resolve_default_strategy": {
+    "baseline_code_signature_text": "def _resolve_default_strategy(self) -> ExecutionStrategy:",
+    "baseline_code_structure_hash": "b28fb806669c3796135d187eec5e32290650e615e37ab4069957b8695a4e5bec"
   },
   "Engine._wakeup_event": {},
   "Engine.add_subscriber": {
@@ -39,6 +51,7 @@
   },
   "Engine.graph_strategy": {},
   "Engine.node_processor": {},
+  "Engine.object_store": {},
   "Engine.override_resource_provider": {
     "baseline_code_signature_text": "def override_resource_provider(self, name: str, new_provider: Any):",
     "baseline_code_structure_hash": "e105d26af5dec613d5e98e51508f08b7a7725753c3996041dfe280d968bc0170"

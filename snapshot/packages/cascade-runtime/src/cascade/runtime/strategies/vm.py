@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from typing import Any, Optional, Dict, List, Set, Union, Tuple
+from typing import Any, Optional, Dict, Set
 
 from cascade.spec.runtime.strategies import ExecutionStrategy, ExecutionContext
 from cascade.spec.runtime.interfaces import Executor
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
+from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.spec.physical.assembly import CompilationArtifact
 from cascade.spec.physical.object import Ref
@@ -29,12 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 class RuntimeHarness:
-    """
-    The 'Motherboard' for the VM instance.
-    Responsible for assembling the physical environment, buses, and peripheral services
-    required by the Machine to operate within the Runtime context.
-    """
-
     def __init__(
         self,
         context: ExecutionContext,
@@ -92,17 +86,6 @@ class RuntimeHarness:
 
 
 class VMExecutionStrategy(ExecutionStrategy):
-    """
-    The Next-Gen Execution Strategy based on the Cascade VM (Physics Engine).
-
-    It orchestrates the full lifecycle:
-    1. Compile: Logical Graph -> Physical Assembly
-    2. Link: Register executable code
-    3. Bootstrap: Assemble the Machine and Harness
-    4. Ignite: Inject initial energy
-    5. Run: Drive the Machine loop and harvest results
-    """
-
     def __init__(self, executor: Executor, bus: EventBus):
         self.executor = executor
         self.bus = bus
@@ -176,7 +159,6 @@ class VMExecutionStrategy(ExecutionStrategy):
                     pass
 
     def _scan_resources(self, graph_ir: GraphIR) -> EnvironmentDef:
-        """Scans the GraphIR to identify required resources and builds an EnvironmentDef."""
         required_resources: Set[str] = set()
         for node in graph_ir.nodes:
             if node.constraints:
@@ -190,12 +172,7 @@ class VMExecutionStrategy(ExecutionStrategy):
         ]
         return EnvironmentDef(resources=resources)
 
-    def _link_code(
-        self, graph_ir: GraphIR, result: GenerationResult
-    ) -> CodeRegistry:
-        """
-        Populates the CodeRegistry by mapping canonical hashes to callables.
-        """
+    def _link_code(self, graph_ir: GraphIR, result: GenerationResult) -> CodeRegistry:
         registry = CodeRegistry()
         for node_ir in graph_ir.nodes:
             # Only task nodes need code linking (not map nodes, params, etc. if handled purely by graph)
@@ -216,10 +193,6 @@ class VMExecutionStrategy(ExecutionStrategy):
     def _materialize_constants(
         self, artifact: CompilationArtifact, context: ExecutionContext
     ) -> None:
-        """
-        Scans the physical graph for Constant nodes and ensures their payloads
-        are materialized as Refs in the ObjectStore.
-        """
         for node in artifact.assembly.graph.nodes.values():
             if (
                 isinstance(node, PhysicsDataNode)
@@ -252,22 +225,18 @@ class VMExecutionStrategy(ExecutionStrategy):
         machine_task: asyncio.Task,
         context: ExecutionContext,
     ) -> Any:
-        """
-        The main event loop for the Strategy.
-        Waits for Egress tokens corresponding to the target(s) and assembles the final result.
-        """
         # 1. Identify Target Egress Nodes
         # We need to map Physical Egress ID -> Logical Target Component
-        
+
         # Targets can be: Single Object, List, Tuple, Dict
         # We need to reconstruct the structure with results.
-        
+
         # Flatten the target structure to find all LazyResults we need to wait for
         # Map: Logical UUID -> (Physical Egress ID, Placeholder Setter)
         # But here we just need to collect them.
-        
-        target_map: Dict[str, str] = {} # UUID -> Egress Node ID
-        
+
+        target_map: Dict[str, str] = {}  # UUID -> Egress Node ID
+
         def _register_target(obj):
             if isinstance(obj, (LazyResult, MappedLazyResult)):
                 # Look up physical egress ID in manifest
@@ -282,7 +251,7 @@ class VMExecutionStrategy(ExecutionStrategy):
                     _register_target(item)
 
         _register_target(target)
-        
+
         if not target_map:
             # Edge case: No targets (e.g. empty list). Wait for machine stop?
             # Or just return empty structure.
@@ -293,9 +262,9 @@ class VMExecutionStrategy(ExecutionStrategy):
             return target
 
         # 2. Harvesting Loop
-        collected_results: Dict[str, Any] = {} # UUID -> Result Value
+        collected_results: Dict[str, Any] = {}  # UUID -> Result Value
         pending_uuids = set(target_map.keys())
-        
+
         # Reverse map for quick lookup: Egress ID -> UUID
         egress_to_uuid = {v: k for k, v in target_map.items()}
 
@@ -310,8 +279,7 @@ class VMExecutionStrategy(ExecutionStrategy):
 
                 # Wait for either a result OR the machine stopping
                 done, pending = await asyncio.wait(
-                    [egress_task, machine_task],
-                    return_when=asyncio.FIRST_COMPLETED
+                    [egress_task, machine_task], return_when=asyncio.FIRST_COMPLETED
                 )
 
                 if machine_task in done:
@@ -319,8 +287,10 @@ class VMExecutionStrategy(ExecutionStrategy):
                     try:
                         machine_task.result()
                     except Exception as e:
-                        raise RuntimeError(f"Machine crashed during execution: {e}") from e
-                    
+                        raise RuntimeError(
+                            f"Machine crashed during execution: {e}"
+                        ) from e
+
                     raise RuntimeError(
                         f"Machine stopped prematurely. Pending targets: {pending_uuids}"
                     )
@@ -332,16 +302,16 @@ class VMExecutionStrategy(ExecutionStrategy):
 
                     if egress_id in egress_to_uuid:
                         uuid = egress_to_uuid[egress_id]
-                        
+
                         # 3. Dereference Result
                         val = token.payload
                         if isinstance(val, Ref):
                             val = context.object_store.get(val)
-                        
+
                         # 4. Check for Error (Exception Propagation)
                         if isinstance(val, Exception):
                             raise val
-                        
+
                         collected_results[uuid] = val
                         if uuid in pending_uuids:
                             pending_uuids.remove(uuid)

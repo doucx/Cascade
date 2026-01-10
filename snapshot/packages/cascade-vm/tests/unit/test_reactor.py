@@ -8,7 +8,7 @@ from cascade.spec import EventIR, EventType, EventState
 from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
-from cascade.vm.harness import EventDrivenRunner
+from cascade.test_utils import EventDrivenRunner
 from cascade.spec.physical.triad import ObservabilityNode
 from cascade.spec.physical.object import Ref
 from cascade.std.triad.observer import standard_observer

@@ -5,7 +5,7 @@ from cascade.spec.physical.nodes import Token, PhysicsDataNode
 from cascade.spec.physical.triad import RetryNode
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.vm.harness import EventDrivenRunner
+from cascade.test_utils import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.std.system.retry import standard_retry_logic
 

@@ -1,7 +1,6 @@
 import asyncio
 import logging
-from cascade.vm.protocols import ReactorProtocol
-from cascade.vm.compute.service import LocalComputeService
+from cascade.vm.protocols import ReactorProtocol, ComputeServiceProtocol
 from cascade.vm.services.chronos import ChronosService
 
 logger = logging.getLogger(__name__)
@@ -11,7 +10,7 @@ class Machine:
     def __init__(
         self,
         reactor: ReactorProtocol,
-        compute_service: LocalComputeService,
+        compute_service: ComputeServiceProtocol,
         chronos_service: ChronosService,
         wakeup_event: asyncio.Event,
     ):

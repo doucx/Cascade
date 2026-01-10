@@ -26,7 +26,7 @@ def resource_heavy_task(duration: float = 0.01):
     return "Done"
 
 
-@pytest.mark.timeout(10)
+@pytest.mark.timeout(1)
 @pytest.mark.asyncio
 async def test_resource_scarcity_topology_and_execution():
     # Configuration

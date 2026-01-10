@@ -1,21 +1,11 @@
-from dataclasses import dataclass, field
-from typing import Dict
+from dataclasses import dataclass
 
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.ir.graph import GraphIR
 from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.wiring import WiringHarness
+from cascade.compiler.backend.expansion.context import ExpansionContext
 
 
 @dataclass
-class WiringContext:
-    graph_ir: GraphIR
-    environment: EnvironmentDef
-    physical_graph: BipartiteGraph
-    wire: WiringHarness
-    subgraphs: Dict[str, SubGraph] = field(default_factory=dict)
-
+class WiringContext(ExpansionContext):
     def register_subgraph(self, node_id: str, subgraph: SubGraph) -> None:
         self.subgraphs[node_id] = subgraph
         self.wire.add_subgraph(subgraph)

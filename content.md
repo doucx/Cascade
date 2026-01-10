@@ -1,252 +1,73 @@
-我们开始执行 **协议优化** 任务。为了达成 **HFEA v1.0** 定义的“定义与实现彻底解耦”，我们将核心协议和作为契约组成部分的数据模型迁移至 `cascade-spec`。
+好的，我们已经完成了第一阶段的架构重构工作。现在，我们将这些改动作为一个完整的逻辑单元提交到版本库中。
 
-## [WIP] refactor: 迁移核心协议与模型至 spec 包
+## [COMMIT] refactor: 提升导出层级、隔离测试支架并迁移核心协议至 spec
 
 ### 用户需求
-将 `ReactorProtocol`、`ExpansionPolicy`、`SubGraph` 等核心协议和契约模型移动到 `cascade-spec` 中。
+将之前进行的 `__init__.py` 导出优化、`EventDrivenRunner` 迁移以及核心协议（`ReactorProtocol`, `ExpansionPolicy` 等）向 `spec` 包的迁移进行提交。
 
 ### 评论
-当前架构中，编译器和物理引擎的契约定义散落在实现包中。这违反了“真理单一来源 (SSoT)”公理。通过将这些定义提升到 `spec` 包，我们允许：
-1.  **多语言实现**：其他语言（如 Rust）可以根据 `spec` 中定义的协议实现兼容的 `Reactor`。
-2.  **解耦扩展**：第三方开发者可以定义自己的 `ExpansionPolicy` 或 `Prism`，而无需依赖复杂的编译器后端实现。
+这次提交标志着项目向 **HFEA v1.0** 定义的“本体论正确性”迈出了重要一步。通过物理隔离测试逻辑和提升契约定义的地位，我们显著降低了系统的模块间耦合度，并为后续的跨语言实现（如 Rust 版 Reactor）打下了基础。
 
 ### 目标
-1.  **VM 协议迁移**：将 `ReactorProtocol` 和 `ComputeServiceProtocol` 移至 `cascade.spec.vm.interfaces`。
-2.  **编译器模型迁移**：将 `SubGraph` 移至 `cascade.spec.compiler.model`。
-3.  **编译器协议迁移**：将 `ExpansionPolicy`、`WiringPolicy` 和 `ResourcePrism` 移至 `cascade.spec.compiler.interfaces`。
-4.  **更新依赖关系**：修正所有包中的导入路径。
+1.  提交 `cascade-compiler` 和 `cascade-runtime` 的导出优化。
+2.  提交 `EventDrivenRunner` 从 `cascade-vm` 到 `cascade-test-utils` 的物理迁移及相关的测试路径修复。
+3.  提交核心协议（VM 接口、编译器策略和 SubGraph 模型）向 `cascade-spec` 的迁移。
+
+### 基本原理
+按照 Quipu 协议，在完成一系列文件变更后，应当通过一个专门的 `[COMMIT]` 计划来固化这些成果。这确保了 Git 历史的清晰，并使每个提交都对应一个具有明确架构意义的步骤。
 
 ### 标签
-#intent/refine #flow/ready #priority/high
-#comp/spec #comp/compiler #comp/vm #scope/dx
-#task/domain/architecture #task/object/contracts #task/action/elevation
-#task/state/continue
+#intent/refine #flow/ready #priority/medium 
+#comp/compiler #comp/runtime #comp/vm #comp/spec #comp/tests
+#task/domain/architecture #task/object/monorepo-structure #task/action/commit
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 在 `cascade-spec` 中建立编译器与 VM 的契约结构
+#### Acts 1: 提交架构重构变更
 
-我们首先在 `cascade-spec` 中创建承载这些协议的新模块。
+我们将所有修改过的文件添加到暂存区，并创建一个描述详尽的提交。
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-compiler/src/cascade/compiler/__init__.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/protocol.py
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/protocol.py
+packages/cascade-runtime/src/cascade/runtime/__init__.py
+packages/cascade-test-utils/src/cascade/test_utils/harness.py
+packages/cascade-test-utils/src/cascade/test_utils/__init__.py
+packages/cascade-vm/src/cascade/vm/harness.py
+packages/cascade-vm/src/cascade/vm/protocols.py
+packages/cascade-vm/tests/integration/test_context_injection.py
+packages/cascade-vm/tests/integration/test_linker_validation.py
+packages/cascade-vm/tests/integration/test_ref_architecture.py
+packages/cascade-vm/tests/integration/test_resource_contention.py
+packages/cascade-vm/tests/integration/test_resource_sentry.py
+packages/cascade-vm/tests/integration/test_retry_topology.py
+packages/cascade-vm/tests/integration/test_source_node_execution.py
+packages/cascade-vm/tests/unit/test_reactor.py
 packages/cascade-spec/src/cascade/spec/compiler/model.py
-~~~~~
-~~~~~python
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-
-from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.physical.topology import Channel
-
-@dataclass
-class SubGraph:
-    """
-    A comprehensive container for all physical nodes representing a single logical task.
-    It acts as the 'inventory' for the task's physical manifestation.
-    """
-    bleacher: Optional[BleachNode] = None
-    worker: Optional[WorkerNode] = None
-    stainer: Optional[StainNode] = None
-
-    constants: Dict[str, PhysicsDataNode] = field(default_factory=dict)
-    resources: Dict[str, List[PhysicsNode]] = field(default_factory=dict)
-    controls: Dict[str, PhysicsNode] = field(default_factory=dict)
-
-    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
-    channels: List[Channel] = field(default_factory=list)
-~~~~~
-
-~~~~~act
-write_file
 packages/cascade-spec/src/cascade/spec/compiler/interfaces.py
-~~~~~
-~~~~~python
-from typing import Protocol, Any, TYPE_CHECKING
-from cascade.spec.ir.graph import NodeIR
-from cascade.spec.compiler.model import SubGraph
-
-if TYPE_CHECKING:
-    # Avoid circular dependency with implementation-heavy contexts
-    # These will be passed as 'Any' or via Generic types in the implementation
-    from cascade.compiler.backend.expansion.context import ExpansionContext
-    from cascade.compiler.backend.wiring.context import WiringContext
-    from cascade.spec.physical.environment import ResourceDef
-
-class ExpansionPolicy(Protocol):
-    def expand(self, ctx: Any, node_ir: NodeIR, subgraph: SubGraph) -> None: ...
-
-class WiringPolicy(Protocol):
-    def setup_globals(self, ctx: Any) -> None: ...
-    def apply(self, ctx: Any, node_ir: NodeIR, subgraph: SubGraph) -> None: ...
-
-class ResourcePrism(Protocol):
-    def ensure_globals(self, ctx: Any, res_def: Any) -> None: ...
-    def expand_task(self, ctx: Any, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None: ...
-    def wire_task(self, ctx: Any, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None: ...
-~~~~~
-
-~~~~~act
-write_file
 packages/cascade-spec/src/cascade/spec/vm/interfaces.py
 ~~~~~
-~~~~~python
-import asyncio
-from typing import Protocol, Dict, Any, Optional
-
-class ComputeServiceProtocol(Protocol):
-    @property
-    def active_count(self) -> int: ...
-    def is_idle(self) -> bool: ...
-    async def run(self) -> None: ...
-    def stop(self) -> None: ...
-
-class ReactorProtocol(Protocol):
-    shutdown_event: asyncio.Event
-    drain_event: asyncio.Event
-    ingress_queue: Optional[asyncio.Queue]
-
-    def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None: ...
-    def step(self) -> int: ...
-~~~~~
-
-#### Acts 2: 更新 `cascade-compiler` 的实现以指向新契约
-
-我们需要更新 `SubGraph` 的引用，并删除编译器内部的重复定义。
 
 ~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+git_commit
 ~~~~~
-~~~~~python.old
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+~~~~~text
+refactor: improve architecture by elevating exports, isolating test utilities, and migrating core protocols to spec
 
-from cascade.spec.ir.graph import NodeIR, ArgumentKind
-from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.physical.topology import Channel
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.std.specs import BleacherSpec
-from cascade.reflection import PhysicalIdGenerator
-
-
-@dataclass
-class SubGraph:
-    # Interface pointers to the core triad
-    bleacher: Optional[BleachNode] = None
-    worker: Optional[WorkerNode] = None
-    stainer: Optional[StainNode] = None
-
-    # Component storage for managed identity
-    constants: Dict[str, PhysicsDataNode] = field(default_factory=dict)
-    resources: Dict[str, List[PhysicsNode]] = field(default_factory=dict)
-    controls: Dict[str, PhysicsNode] = field(default_factory=dict)
-
-    # Global index of all nodes and channels within this subgraph
-    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
-    channels: List[Channel] = field(default_factory=list)
-
-
-class Expander:
-~~~~~
-~~~~~python.new
-from typing import List, Dict, Optional
-
-from cascade.spec.ir.graph import NodeIR, ArgumentKind
-from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.physical.topology import Channel
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.compiler.model import SubGraph
-from cascade.std.specs import BleacherSpec
-from cascade.reflection import PhysicalIdGenerator
-
-
-class Expander:
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/expansion/protocol.py
-~~~~~
-~~~~~python.old
-from typing import Protocol
-from cascade.spec.ir.graph import NodeIR
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.expansion.context import ExpansionContext
-
-
-class ExpansionPolicy(Protocol):
-    def expand(
-        self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph
-    ) -> None: ...
-~~~~~
-~~~~~python.new
-from cascade.spec.compiler.interfaces import ExpansionPolicy
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/wiring/protocol.py
-~~~~~
-~~~~~python.old
-from typing import Protocol
-from cascade.spec.ir.graph import NodeIR
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.wiring.context import WiringContext
-
-
-class WiringPolicy(Protocol):
-    def setup_globals(self, ctx: WiringContext) -> None: ...
-
-    def apply(
-        self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph
-    ) -> None: ...
-~~~~~
-~~~~~python.new
-from cascade.spec.compiler.interfaces import WiringPolicy
-~~~~~
-
-#### Acts 3: 更新 `cascade-vm` 指向新契约
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/protocols.py
-~~~~~
-~~~~~python.old
-import asyncio
-from typing import Protocol, Dict, Any, Optional
-
-
-class ComputeServiceProtocol(Protocol):
-    @property
-    def active_count(self) -> int: ...
-
-    def is_idle(self) -> bool: ...
-
-    async def run(self) -> None: ...
-
-    def stop(self) -> None: ...
-
-
-class ReactorProtocol(Protocol):
-    shutdown_event: asyncio.Event
-    drain_event: asyncio.Event
-    ingress_queue: Optional[asyncio.Queue]
-
-    def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None: ...
-
-    def step(self) -> int: ...
-~~~~~
-~~~~~python.new
-from cascade.spec.vm.interfaces import ComputeServiceProtocol, ReactorProtocol
+- Elevated key compiler and runtime components (Builder, IRGenerator, TelemetrySubscriber, Events) to package roots for better DX.
+- Moved `EventDrivenRunner` from `cascade-vm` to `cascade-test-utils` to separate test infrastructure from production code.
+- Migrated `SubGraph` model and `ExpansionPolicy`, `WiringPolicy`, `ReactorProtocol` to `cascade-spec` to decouple definitions from implementations.
+- Updated all internal references and imports across the monorepo to align with the new package structure.
+- Fixed import paths in VM integration and unit tests.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了核心协议的迁移。这大大增强了系统的本体论正确性。下一步建议处理 **硬编码逻辑分析**：
-- 在 `Machine.run` 中，目前有一个硬编码的 `asyncio.sleep(0.001)`。我们应该将其替换为一个基于状态的自适应等待机制，或者至少将其提升到配置层。
-- 同时，我们可以检查 `PhysicalIdGenerator` 是否可以从 `reflection` 移动到 `spec` 或其附近，以减少语义漂移。
+- **运行测试**: 执行 `pytest packages/cascade-vm/tests` 确保重构后的测试套件依然能够通过。
+- **处理硬编码**: 针对审计报告中的第 4 项，着手处理 `Machine.run` 中的硬编码 `sleep(0.001)`，引入更稳健的自适应等待机制。
+- **内置任务迁移**: 考虑将 `reflection.tasks` 中的内置任务（如 `_internal_gather`）移动到 `cascade-std` 中。

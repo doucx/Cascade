@@ -1,7 +1,6 @@
-from typing import List, Dict, Optional
 
 from cascade.spec.ir.graph import NodeIR, ArgumentKind
-from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
+from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.physical.topology import Channel
 from cascade.spec.physical.ports import PortDef, PortRole

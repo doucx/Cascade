@@ -1,0 +1,62 @@
+{
+  "EventDrivenRunner": {},
+  "EventDrivenRunner.__init__": {
+    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, function_map: Dict[str, Callable], code_registry: CodeRegistry, reactor_factory: Optional[Callable[..., ReactorProtocol]] = None):",
+    "baseline_code_structure_hash": "cab12d61cc371edd366aae71afce9afb12c306b700d40d0c35fa0f94dc951ba9"
+  },
+  "EventDrivenRunner._captured_events": {},
+  "EventDrivenRunner._loop_task": {},
+  "EventDrivenRunner._on_event": {
+    "baseline_code_signature_text": "def _on_event(self, event: Event):",
+    "baseline_code_structure_hash": "a4fd1e7b41e49f32e7ad17f691aed58fedbb9deee85a04cf8bf74a5caeabe774"
+  },
+  "EventDrivenRunner._stop_event": {},
+  "EventDrivenRunner.chronos_queue": {},
+  "EventDrivenRunner.chronos_service": {},
+  "EventDrivenRunner.compute_queue": {},
+  "EventDrivenRunner.compute_service": {},
+  "EventDrivenRunner.egress_queue": {},
+  "EventDrivenRunner.event_bus": {},
+  "EventDrivenRunner.event_queue": {},
+  "EventDrivenRunner.from_assembly": {
+    "baseline_code_signature_text": "def from_assembly(cls, assembly: Assembly, code_registry: CodeRegistry, reactor_factory: Optional[Callable[..., ReactorProtocol]] = None) -> EventDrivenRunner:",
+    "baseline_code_structure_hash": "1c02c00d0423c401ae4def63ae78112f45968288adf49a15cadbb119fca47329"
+  },
+  "EventDrivenRunner.graph": {},
+  "EventDrivenRunner.ingress_queue": {},
+  "EventDrivenRunner.inject_input": {
+    "baseline_code_signature_text": "def inject_input(self, node_id: str, payload: Any, trace: Optional[Dict[str, Any]] = None):",
+    "baseline_code_structure_hash": "0af48699a7e9ad675092a5567d0a2781a7f1798f16b18e83ca50eb92fa79af33"
+  },
+  "EventDrivenRunner.kernel": {},
+  "EventDrivenRunner.machine": {},
+  "EventDrivenRunner.memory": {},
+  "EventDrivenRunner.object_store": {},
+  "EventDrivenRunner.prime": {
+    "baseline_code_signature_text": "def prime(self):",
+    "baseline_code_structure_hash": "c85e226f7edbe780ce9d34162baaead081e49167cf70dc028ba02606ee0d7206"
+  },
+  "EventDrivenRunner.reactor": {},
+  "EventDrivenRunner.resource_registry": {},
+  "EventDrivenRunner.run_id": {},
+  "EventDrivenRunner.run_until_complete": {
+    "baseline_code_signature_text": "async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> Event:",
+    "baseline_code_structure_hash": "7a507d7de4f62776310e5d5fd22d02d5e0a8f882da14a33951f3b5eec80fe70e"
+  },
+  "EventDrivenRunner.start_loop": {
+    "baseline_code_signature_text": "async def start_loop(self):",
+    "baseline_code_structure_hash": "0a9520fc821a4ef232e4e7303bc3a34b44af5d7f26ea6779ab01d161c54c3084"
+  },
+  "EventDrivenRunner.stop_loop": {
+    "baseline_code_signature_text": "async def stop_loop(self):",
+    "baseline_code_structure_hash": "d0a34527de60218a303489365f5ed74ca757d6def91589edc22d065198fc6e82"
+  },
+  "EventDrivenRunner.wait_for_event": {
+    "baseline_code_signature_text": "async def wait_for_event(self, predicate: Callable[[Event], bool], timeout: float = 1.0) -> Event:",
+    "baseline_code_structure_hash": "2735e23a1b74576928734e9e3aba0459b5ecd94d6632bf3bb7afc89861cb8003"
+  },
+  "EventDrivenRunner.wakeup_event": {},
+  "EventTimeoutError": {},
+  "T": {},
+  "logger": {}
+}

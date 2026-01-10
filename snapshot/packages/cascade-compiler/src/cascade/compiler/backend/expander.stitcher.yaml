@@ -5,17 +5,3 @@
   \ D_trace -------------------------------+"
 "Expander.expand_node": |-
   Expands a NodeIR into a physical Triad.
-"SubGraph": |-
-  A comprehensive container for all physical nodes representing a single logical task.
-
-  It acts as the "inventory" for the task's physical manifestation, containing:
-  1. The Core Triad (Bleacher, Worker, Stainer) created by the Expander.
-  2. Auxiliary Components (Constants, Requestors, Glue Logic) created by ExpansionPolicies.
-
-  WiringPolicies use this container to look up nodes and establish connections.
-"SubGraph.constants": |-
-  Registry of parameter constant nodes (D_const), indexed by argument name.
-"SubGraph.controls": |-
-  Registry of control flow nodes (D_seq, D_cond, D_egress, D_pulse), indexed by role.
-"SubGraph.resources": |-
-  Registry of resource-related nodes (List[D_amt, F_req, D_gnt]), indexed by resource name.

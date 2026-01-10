@@ -5,12 +5,9 @@ from cascade.spec.physical.nodes import PhysicsNode, PhysicsDataNode
 from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.physical.topology import Channel
 
+
 @dataclass
 class SubGraph:
-    """
-    A comprehensive container for all physical nodes representing a single logical task.
-    It acts as the 'inventory' for the task's physical manifestation.
-    """
     bleacher: Optional[BleachNode] = None
     worker: Optional[WorkerNode] = None
     stainer: Optional[StainNode] = None

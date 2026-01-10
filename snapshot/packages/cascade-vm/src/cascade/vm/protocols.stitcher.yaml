@@ -1,8 +1,0 @@
-"ReactorProtocol": |-
-  Protocol defining the interface for a Cascade Reactor.
-  This allows swapping the Python implementation with a Rust-based one.
-"ReactorProtocol.prime": |-
-  Inject initial potential energy into the system.
-"ReactorProtocol.step": |-
-  Perform one reaction step.
-  Returns the number of tasks fired.

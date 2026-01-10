@@ -3,7 +3,7 @@ from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.backend.expansion.context import ExpansionContext
-from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
+from cascade.spec.compiler.interfaces import ExpansionPolicy
 
 
 class PulseExpansionPolicy(ExpansionPolicy):

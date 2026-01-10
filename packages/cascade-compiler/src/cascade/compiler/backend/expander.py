@@ -1,4 +1,3 @@
-
 from cascade.spec.ir.graph import NodeIR, ArgumentKind
 from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode

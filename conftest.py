@@ -1,7 +1,7 @@
 import pytest
 from typing import Type
 from cascade.vm.reactor import Reactor
-from cascade.vm.protocols import ReactorProtocol
+from cascade.spec.vm.interfaces import ReactorProtocol
 
 # Imports for new global fixtures
 from cascade.runtime import EventBus

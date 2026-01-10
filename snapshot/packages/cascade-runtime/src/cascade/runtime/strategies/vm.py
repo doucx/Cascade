@@ -20,6 +20,7 @@ from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.linker import Linker
+from cascade.runtime.services.observability.bus import EventBus
 
 from cascade.compiler.frontend import IRGenerator, GenerationResult
 from cascade.compiler.backend import Builder
@@ -38,9 +39,11 @@ class RuntimeHarness:
         self,
         context: ExecutionContext,
         executor: Executor,
+        bus: EventBus,
         code_registry: CodeRegistry,
     ):
         self.context = context
+        self.bus = bus
 
         # 1. Physical Buses (Queues)
         # VM <- Outside (Compute results, Timer events, User inputs)
@@ -85,6 +88,7 @@ class RuntimeHarness:
         self.resource_registry.register(
             "system.object_store", self.context.object_store
         )
+        self.resource_registry.register("system.event_bus", self.bus)
 
 
 class VMExecutionStrategy(ExecutionStrategy):
@@ -99,8 +103,9 @@ class VMExecutionStrategy(ExecutionStrategy):
     5. Run: Drive the Machine loop and harvest results
     """
 
-    def __init__(self, executor: Executor):
+    def __init__(self, executor: Executor, bus: EventBus):
         self.executor = executor
+        self.bus = bus
         self.compiler_frontend = IRGenerator()
         self.compiler_backend = Builder()
         self.linker = Linker()
@@ -125,7 +130,7 @@ class VMExecutionStrategy(ExecutionStrategy):
 
         # --- Phase 3: Bootstrap ---
         logger.debug("VMStrategy: Bootstrapping machine...")
-        harness = RuntimeHarness(context, self.executor, code_registry)
+        harness = RuntimeHarness(context, self.executor, self.bus, code_registry)
 
         function_map = self.linker.link(artifact.assembly, code_registry)
         kernel = PhysicsKernel(function_map, harness.resource_registry)

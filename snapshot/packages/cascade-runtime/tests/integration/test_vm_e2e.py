@@ -40,8 +40,8 @@ def bus():
 
 
 @pytest.fixture
-def strategy(executor):
-    return VMExecutionStrategy(executor=executor)
+def strategy(executor, bus):
+    return VMExecutionStrategy(executor=executor, bus=bus)
 
 
 @pytest.fixture

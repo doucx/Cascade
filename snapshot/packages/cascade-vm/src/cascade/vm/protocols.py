@@ -2,6 +2,17 @@ import asyncio
 from typing import Protocol, Dict, Any, Optional
 
 
+class ComputeServiceProtocol(Protocol):
+    @property
+    def active_count(self) -> int: ...
+
+    def is_idle(self) -> bool: ...
+
+    async def run(self) -> None: ...
+
+    def stop(self) -> None: ...
+
+
 class ReactorProtocol(Protocol):
     shutdown_event: asyncio.Event
     drain_event: asyncio.Event

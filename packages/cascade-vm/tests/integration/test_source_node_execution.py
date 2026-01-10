@@ -4,7 +4,7 @@ from cascade.spec.dsl.task import task
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.backend.builder import Builder
 from cascade.spec.physical.environment import EnvironmentDef
-from cascade.vm.harness import EventDrivenRunner
+from cascade.test_utils import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.runtime.services.observability.events import TaskExecutionFinished
 from cascade.spec.runtime.observability import EventState

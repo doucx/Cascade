@@ -1,0 +1,29 @@
+{
+  "ExpansionPolicy": {},
+  "ExpansionPolicy.expand": {
+    "baseline_code_signature_text": "def expand(self, ctx: Any, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+    "baseline_code_structure_hash": "8d05d95a6dba7951a0d6ea90d779152ae4e463669614ed9055d3499a2a669769"
+  },
+  "ResourcePrism": {},
+  "ResourcePrism.ensure_globals": {
+    "baseline_code_signature_text": "def ensure_globals(self, ctx: Any, res_def: Any) -> None:",
+    "baseline_code_structure_hash": "517e05cc86e5f2ee2546b26219de41caee7dae8b499c6aa682e0cf1c6c50c030"
+  },
+  "ResourcePrism.expand_task": {
+    "baseline_code_signature_text": "def expand_task(self, ctx: Any, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+    "baseline_code_structure_hash": "8a70f912e4c8cb1ee88fa86b35e3af52631a20983c700ee440ffc681612565ea"
+  },
+  "ResourcePrism.wire_task": {
+    "baseline_code_signature_text": "def wire_task(self, ctx: Any, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+    "baseline_code_structure_hash": "ff8fa949b111d1428c82f56634ced0aca32011257858f1a8a13a315394588e5b"
+  },
+  "WiringPolicy": {},
+  "WiringPolicy.apply": {
+    "baseline_code_signature_text": "def apply(self, ctx: Any, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+    "baseline_code_structure_hash": "3a2a483ee2feab2930625814cc054eefbb530fa505a82b77b3e506f3c82764b7"
+  },
+  "WiringPolicy.setup_globals": {
+    "baseline_code_signature_text": "def setup_globals(self, ctx: Any) -> None:",
+    "baseline_code_structure_hash": "35f99a91ddb7d973a8c857f5a4f9851b7e5f05a5bf9ce4088e07f239f688b585"
+  }
+}

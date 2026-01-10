@@ -6,7 +6,7 @@ from cascade.compiler.frontend import IRGenerator
 from cascade.reflection import ReflectionAnalyzer
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.spec.dsl.task import task
-from cascade.vm.harness import EventDrivenRunner
+from cascade.test_utils import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.compiler.utils.inspector import GraphInspector
 from cascade.runtime.services.observability.events import (

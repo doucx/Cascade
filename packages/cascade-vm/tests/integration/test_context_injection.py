@@ -14,7 +14,7 @@ from cascade.runtime.services.observability.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
 )
-from cascade.vm.harness import EventDrivenRunner
+from cascade.test_utils import EventDrivenRunner
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer

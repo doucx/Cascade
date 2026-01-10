@@ -60,13 +60,6 @@ class EventDrivenRunner:
         self.egress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
 
         # 2. Setup Services
-        # In a real system, store would be a separate entity.
-        # Here we use a mock that is part of the test setup.
-        # This runner doesn't have a store, but the compute service will need one.
-        # Let's assume for now the compute service can be built without a real store
-        # because the test functions it calls don't use it.
-        # CORRECTION: LocalComputeService requires a store. Test functions will need one.
-        # Let's create a mock store for the service.
         from cascade.runtime.storage import InMemoryObjectStore
 
         self.object_store = InMemoryObjectStore()
@@ -98,7 +91,6 @@ class EventDrivenRunner:
         self.resource_registry.register("system.egress_queue", self.egress_queue)
 
         # 4. Setup Reactor
-        # Construct the Physics Kernel
         self.kernel = PhysicsKernel(function_map, self.resource_registry)
 
         factory = reactor_factory or Reactor
@@ -115,20 +107,13 @@ class EventDrivenRunner:
             self.reactor, self.compute_service, self.chronos_service, self.wakeup_event
         )
         self._loop_task: Optional[asyncio.Task] = None
-        self._service_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
 
     def _on_event(self, event: Event):
         self.event_queue.put_nowait(event)
 
     def prime(self):
-        # Phase 3.2 - Constant Materialization & Scalar Hoisting
-        # The runner, acting as the Strategy, scans the graph for any initial payloads
-        # and converts them to Refs before priming the reactor.
         for node in self.graph.nodes.values():
-            # CRITICAL: We only materialize nodes that are explicitly marked as constants.
-            # System-level nodes like resource ledgers must retain their object payloads
-            # to be used directly by kernel functions without I/O.
             if (
                 isinstance(node, PhysicsDataNode)
                 and node.initial_tokens > 0
@@ -137,14 +122,12 @@ class EventDrivenRunner:
                 payload = node.initial_payload
                 if payload is not None and not isinstance(payload, Ref):
                     meta = {}
-                    # Perform Scalar Hoisting for kernel-readable values
                     if (
                         isinstance(payload, (int, float, bool, str))
                         and len(str(payload)) < 256
                     ):
                         meta["scalar_value"] = payload
 
-                    # Materialize the raw value into the object store with metadata
                     node.initial_payload = self.object_store.put(payload, metadata=meta)
 
         self.reactor.prime(genesis_trace={"rid": self.run_id})
@@ -153,24 +136,18 @@ class EventDrivenRunner:
         if self._loop_task:
             return
         self._stop_event.clear()
-        # The machine now manages starting the compute service.
         self._loop_task = asyncio.create_task(self.machine.run())
 
-    # The _run_loop is now managed by the Machine, so we can remove it.
-    # async def _run_loop(self): ...
-
     async def stop_loop(self):
-        # Trigger shutdown via the reactor's event, which the machine listens for
         self.reactor.shutdown_event.set()
         if self._loop_task:
             try:
-                # Wait for the machine's run() to finish its cleanup
                 await asyncio.wait_for(self._loop_task, timeout=2.0)
             except asyncio.TimeoutError:
                 logger.warning("Machine did not shut down cleanly, cancelling task.")
                 self._loop_task.cancel()
             except asyncio.CancelledError:
-                pass  # It's already cancelled, that's fine.
+                pass
             self._loop_task = None
 
     def inject_input(
@@ -183,7 +160,6 @@ class EventDrivenRunner:
         if trace:
             final_trace.update(trace)
 
-        # v3.1: All data in the physical layer is a Ref.
         ref = self.object_store.put(payload)
         self.memory.put(node, Token(payload=ref, trace=final_trace))
 

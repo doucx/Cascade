@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "3f0d2bab97cfff23aff0a729c8c6434965b0dbb549d0175b5721a74a90bed995"
   },
   "Machine.__init__": {
-    "baseline_code_signature_text": "def __init__(self, reactor: ReactorProtocol, compute_service: LocalComputeService, chronos_service: ChronosService, wakeup_event: asyncio.Event):",
-    "baseline_code_structure_hash": "9a512090ac558dcd46e594ad8ffe5b6ce8bfd6671dc3fc546fe8b54699dc758e"
+    "baseline_code_signature_text": "def __init__(self, reactor: ReactorProtocol, compute_service: ComputeServiceProtocol, chronos_service: ChronosService, wakeup_event: asyncio.Event):",
+    "baseline_code_structure_hash": "39425f8f29a7e20ce38c7f480b9c1f8c2fdc2b491e262179d941fc2e57c4c7e4"
   },
   "Machine.chronos_service": {},
   "Machine.compute_service": {},

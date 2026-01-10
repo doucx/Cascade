@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Dict
 
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.backend.expansion.context import ExpansionContext

@@ -1,4 +1,18 @@
 {
+  "ComputeServiceProtocol": {},
+  "ComputeServiceProtocol.active_count": {},
+  "ComputeServiceProtocol.is_idle": {
+    "baseline_code_signature_text": "def is_idle(self) -> bool:",
+    "baseline_code_structure_hash": "c95ad9d9ef6894d5590de285647a6720b3997d9779f5c663448d7b30f8a0a271"
+  },
+  "ComputeServiceProtocol.run": {
+    "baseline_code_signature_text": "async def run(self) -> None:",
+    "baseline_code_structure_hash": "23d60ef0787b87861c8853216071832d8b40d0953517705ad99ad36a1c6a5a4f"
+  },
+  "ComputeServiceProtocol.stop": {
+    "baseline_code_signature_text": "def stop(self) -> None:",
+    "baseline_code_structure_hash": "14864074f7cf807016cfec6298c551a6b22cca02f61c1e24780898d969f58b81"
+  },
   "ReactorProtocol": {
     "baseline_yaml_content_hash": "e1840c9d54fb3c11d8a7122066c7d824407cb2a159c90aa4defd100e10a5fa2b"
   },

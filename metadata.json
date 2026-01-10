@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 为 BridgedComputeService 创建集成测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768017412.0819986, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 搭建 VMExecutionStrategy 与 RuntimeHarness 骨架", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768017710.7306783, "duration_ms": 0}}

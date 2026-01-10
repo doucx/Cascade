@@ -1,35 +1,3 @@
-## [WIP] feat: 搭建 VMExecutionStrategy 与 RuntimeHarness 骨架
-
-### 用户需求
-在 `cascade-runtime` 包中创建 `VMExecutionStrategy` 及其配套的基础设施 `RuntimeHarness`。这是实现从逻辑图到 VM 物理执行的关键一步（管理程序构建阶段）。
-
-### 评论
-该计划实现了 `VMExecutionStrategy` 的初始骨架。它定义了 `RuntimeHarness` 来封装 VM 运行所需的物理资源（队列、事件、服务适配器），并定义了 `VMExecutionStrategy` 的结构，包括编译、链接、引导和执行的占位逻辑。这为后续填充具体的编译和执行逻辑提供了明确的架构蓝图。
-
-### 目标
-1.  创建 `packages/cascade-runtime/src/cascade/runtime/strategies/vm.py`。
-2.  实现 `RuntimeHarness` 类，负责组装 `BridgedComputeService`, `ChronosService`, `ResourceRegistry` 和各种物理队列。
-3.  实现 `VMExecutionStrategy` 类，遵循 `ExecutionStrategy` 协议，并规划好 Compile-Link-Run 的生命周期。
-
-### 基本原理
-*   **RuntimeHarness**: 作为 VM 的“主板”，将 Runtime 的上下文（`ExecutionContext`）和执行能力（`Executor`）转换为 VM 物理层可理解的组件（`Services` 和 `Queues`）。
-*   **BridgedComputeService**: 复用之前测试过的适配器，将 VM 的计算请求桥接到 Runtime 的 `Executor`。
-*   **VMExecutionStrategy**: 作为新的执行策略，它将不再依赖旧的 `NodeProcessor`，而是使用 `Compiler` 生成物理图，并驱动 `Machine` 进行执行。
-
-### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #comp/vm #concept/strategy #scope/core #ai/instruct #task/domain/runtime #task/object/vm-strategy #task/action/skeleton #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 `vm.py` 策略文件
-
-~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/runtime/strategies/vm.py
-~~~~~
-~~~~~python
 import asyncio
 import logging
 from typing import Any, Optional, Dict
@@ -271,26 +239,3 @@ class VMExecutionStrategy(ExecutionStrategy):
             if not machine_task.done():
                 reactor.shutdown_event.set()
                 await asyncio.wait([machine_task], timeout=2.0)
-~~~~~
-
-#### Acts 2: 在 `cascade-runtime/src/cascade/runtime/strategies/__init__.py` 中暴露
-
-为了方便引用，我需要更新 `__init__.py`。
-
-~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/runtime/strategies/__init__.py
-~~~~~
-~~~~~python
-from .strategies import ExecutionContext, ExecutionStrategy
-from .vm import VMExecutionStrategy
-
-__all__ = ["ExecutionContext", "ExecutionStrategy", "VMExecutionStrategy"]
-~~~~~
-
-### 下一步建议
-我们已经完成了 `VMExecutionStrategy` 的骨架代码。接下来的重点是**完善其内部逻辑**，使其真正能够执行任务。
-
-1.  **完善 `Linker` 逻辑**：目前的链接逻辑是“临时”的，需要确保前端生成的 `Callable` 能正确注册到 `CodeRegistry`，并且能被 `Linker` 通过 hash 找到。
-2.  **实现 `Harvesting` 逻辑**：目前的 `execute` 方法在 `machine_task` 结束后只是返回了一个字符串。我们需要实现真正的结果收集逻辑，即监听 `harness.egress_queue`，根据 `Manifest` 找到对应 `target` 的结果，并将其解包（Dereference）后返回给用户。
-3.  **集成测试**：编写一个使用 `VMExecutionStrategy` 的端到端测试，验证简单的 `Sync Task`能否被正确执行和返回。

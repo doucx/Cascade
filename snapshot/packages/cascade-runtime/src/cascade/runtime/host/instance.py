@@ -28,7 +28,7 @@ from cascade.runtime.services.constraints.handlers import (
 from cascade.runtime.io.state import InMemoryStateBackend
 from cascade.runtime.services.resources.container import ResourceContainer
 from cascade.spec.runtime import ExecutionContext
-from cascade.runtime.strategies import ExecutionStrategy
+from cascade.spec.runtime import ExecutionStrategy
 
 
 class Engine:

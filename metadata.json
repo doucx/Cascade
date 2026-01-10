@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(runtime): 解耦 Engine 与遗留图执行器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768015173.622599, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(runtime): 修正 Engine 中 ExecutionStrategy 的导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768015310.8946497, "duration_ms": 0}}

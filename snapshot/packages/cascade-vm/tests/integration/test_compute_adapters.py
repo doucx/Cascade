@@ -230,7 +230,7 @@ async def test_is_idle_state_changes(
 
     async def blocking_executor(*args, **kwargs):
         in_flight_event.set()
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.1)
 
     service.executor.execute = blocking_executor
     service.registry.register("idle_test_hash", sync_add)
@@ -250,6 +250,6 @@ async def test_is_idle_state_changes(
     assert service.active_count == 1
 
     # 4. After completion
-    await asyncio.wait_for(outbound_queue.get(), timeout=1.1)
+    await asyncio.wait_for(outbound_queue.get(), timeout=0.2)
     assert service.is_idle() is True
     assert service.active_count == 0

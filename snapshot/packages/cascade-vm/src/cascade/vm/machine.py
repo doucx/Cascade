@@ -58,7 +58,7 @@ class Machine:
                         self.ingress_queue and not self.ingress_queue.empty()
                     ):
                         # If physics fired or ingress is pending, yield but loop again immediately.
-                        await asyncio.sleep(0)
+                        await asyncio.sleep(0.001)
                     else:
                         # System is physically idle. Wait for new ingress.
                         try:

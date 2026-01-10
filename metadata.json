@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix: 修复 VM 调度活锁、内核恐慌及测试延时冲突", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768021099.1028016, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] 计划：提升组件导出层级", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768022047.5246575, "duration_ms": 0}}

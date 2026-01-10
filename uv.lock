@@ -1009,9 +1009,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-csp-solver = [
-    { name = "python-constraint" },
-]
 redis = [
     { name = "redis", version = "6.1.1", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
     { name = "redis", version = "7.0.1", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version == '3.9.*'" },
@@ -1025,10 +1022,9 @@ requires-dist = [
     { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
     { name = "cascade-vm", editable = "packages/cascade-vm" },
-    { name = "python-constraint", marker = "extra == 'csp-solver'" },
     { name = "redis", marker = "extra == 'redis'" },
 ]
-provides-extras = ["csp-solver", "redis"]
+provides-extras = ["redis"]
 
 [[package]]
 name = "cascade-sdk"

@@ -26,12 +26,9 @@ from cascade.runtime.services.constraints.handlers import (
     RateLimitConstraintHandler,
 )
 from cascade.runtime.io.state import InMemoryStateBackend
-from cascade.execution.graph.logic.processor import NodeProcessor
 from cascade.runtime.services.resources.container import ResourceContainer
-from cascade.runtime.legacy.strategies import (
-    GraphExecutionStrategy,
-)
 from cascade.spec.runtime import ExecutionContext
+from cascade.runtime.strategies import ExecutionStrategy
 
 
 class Engine:
@@ -45,6 +42,7 @@ class Engine:
         connector: Optional[Connector] = None,
         cache_backend: Optional[Any] = None,
         resource_manager: Optional[ResourceManager] = None,
+        strategy: Optional[ExecutionStrategy] = None,
     ):
         self.solver = solver
         self.executor = executor
@@ -75,27 +73,45 @@ class Engine:
 
         self.resource_container = ResourceContainer(self.bus)
 
-        # Delegate node execution logic to NodeProcessor
-        self.node_processor = NodeProcessor(
-            executor=self.executor,
-            bus=self.bus,
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            solver=self.solver,
-        )
-
-        # Initialize Strategies
-        self.graph_strategy = GraphExecutionStrategy(
-            solver=self.solver,
-            node_processor=self.node_processor,
-            resource_container=self.resource_container,
-            constraint_manager=self.constraint_manager,
-            bus=self.bus,
-            wakeup_event=self._wakeup_event,
-        )
-        self.vm_strategy = self.graph_strategy  # for future
+        if strategy:
+            self.strategy = strategy
+        else:
+            self.strategy = self._load_default_strategy()
 
         self._managed_subscribers = []
+
+    def _load_default_strategy(self) -> ExecutionStrategy:
+        """
+        Dynamically loads the legacy GraphExecutionStrategy if available.
+        This provides backward compatibility without hard compile-time dependencies.
+        """
+        try:
+            # Dynamic imports to break hard dependency
+            from cascade.execution.graph.logic.processor import NodeProcessor
+            from cascade.execution.graph.strategy import GraphExecutionStrategy
+
+            # Reconstruct the legacy stack
+            node_processor = NodeProcessor(
+                executor=self.executor,
+                bus=self.bus,
+                resource_manager=self.resource_manager,
+                constraint_manager=self.constraint_manager,
+                solver=self.solver,
+            )
+
+            return GraphExecutionStrategy(
+                solver=self.solver,
+                node_processor=node_processor,
+                resource_container=self.resource_container,
+                constraint_manager=self.constraint_manager,
+                bus=self.bus,
+                wakeup_event=self._wakeup_event,
+            )
+        except ImportError:
+            raise RuntimeError(
+                "No execution strategy provided and 'cascade-execution-graph' package not found. "
+                "Please install 'cascade-execution-graph' or provide a custom strategy."
+            )
 
     def add_subscriber(self, subscriber: Any):
         self._managed_subscribers.append(subscriber)
@@ -181,10 +197,9 @@ class Engine:
             )
 
             # 3. Select Strategy
-            # The explicit `use_vm` flag takes precedence.
-            # Otherwise, fall back to the environment variable for testing/experimental runs.
-            should_use_vm = use_vm or os.getenv("CASCADE_BACKEND") == "vm"
-            strategy = self.vm_strategy if should_use_vm else self.graph_strategy
+            # NOTE: `use_vm` is deprecated. Strategy is now selected at Engine init.
+            # We use the configured strategy.
+            strategy = self.strategy
 
             # 4. Execute
             # The global stack holds "run" scoped resources

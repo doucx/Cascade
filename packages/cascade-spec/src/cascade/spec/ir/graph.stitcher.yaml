@@ -9,14 +9,30 @@
 "NodeIR": |-
   Intermediate Representation of a Task instantiation in the logical graph.
   This is the input to the Compiler Backend.
+"NodeIR.cache_policy": |-
+  Configuration for result persistence and retrieval.
+"NodeIR.condition": |-
+  Reference to a node that acts as a gatekeeper for this node's execution.
 "NodeIR.constraints": |-
   Resource constraints for this node (e.g. {'gpu': 1}).
+"NodeIR.current_node_instance_hash": |-
+  The unique, stable Merkle hash identifying this specific node instance.
+"NodeIR.dependencies": |-
+  List of nodes that must succeed before this node can start.
+"NodeIR.flow_control": |-
+  Instructions for explicit jumps or iterative loops.
 "NodeIR.inputs": "Mapping of argument names to values. \nValues can be literals or\
   \ references to other NodeIR IDs."
+"NodeIR.logical_id": |-
+  The original UUID from the DSL layer, used for cross-layer tracking.
 "NodeIR.name": |-
   Human-readable name.
+"NodeIR.retry_policy": |-
+  Runtime configuration for retrying failed attempts.
 "NodeIR.task": |-
   The definition of the task being invoked.
+"NodeIR.type": |-
+  The structural category of the node (task, map, or param).
 "TaskDef": |-
   The static intermediate representation (IR) of a Task.
   This separates the 'definition' of what a task is from the 'node'

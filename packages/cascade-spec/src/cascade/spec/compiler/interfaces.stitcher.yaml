@@ -1,0 +1,12 @@
+"ExpansionPolicy": |-
+  Protocol defining the Phase 1 (Materialization) contract.
+  Policies implementing this are responsible for creating physical nodes
+  based on logical IR without establishing cross-subgraph connections.
+"ResourcePrism": |-
+  A high-level interface for resource-specific compilation strategies.
+  It defines how a logical resource requirement is refracted into
+  physical topology (allocators, ledgers, etc.).
+"WiringPolicy": |-
+  Protocol defining the Phase 2 (Wiring) contract.
+  Policies implementing this are responsible for establishing connections
+  between pre-existing nodes once the physical structure is locked.

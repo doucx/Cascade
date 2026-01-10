@@ -13,9 +13,7 @@
     "baseline_code_signature_text": "def stop(self) -> None:",
     "baseline_code_structure_hash": "14864074f7cf807016cfec6298c551a6b22cca02f61c1e24780898d969f58b81"
   },
-  "ReactorProtocol": {
-    "baseline_yaml_content_hash": "e1840c9d54fb3c11d8a7122066c7d824407cb2a159c90aa4defd100e10a5fa2b"
-  },
+  "ReactorProtocol": {},
   "ReactorProtocol.active_task_count": {},
   "ReactorProtocol.add_sink": {
     "baseline_code_signature_text": "def add_sink(self, node_id: str, port_name: str, callback: Callable[[Token], Awaitable[None]]) -> None:",

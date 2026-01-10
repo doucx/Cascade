@@ -1,6 +1,24 @@
 "LazyResult": |-
   A placeholder for the result of a task execution.
   It holds the task that produces it and the arguments passed to that task.
+"LazyResult.after": |-
+  Establishes an explicit sequence dependency (happens-before relationship).
+"LazyResult.run_if": |-
+  Conditional execution: sets a dependency on a boolean-returning LazyResult.
+"LazyResult.with_cache": |-
+  Attaches a caching policy to the task.
+"LazyResult.with_constraints": |-
+  Defines resource requirements (e.g., GPU, Memory) for this specific task instance.
+"LazyResult.with_retry": |-
+  Attaches a retry policy to the task.
 "MappedLazyResult": |-
   Represents the result of mapping a factory over a set of inputs.
   It resolves to a list of results.
+"MappedLazyResult.after": |-
+  Explicit sequencing for the map operation.
+"MappedLazyResult.run_if": |-
+  Conditional execution for the entire map operation.
+"MappedLazyResult.with_retry": |-
+  Attaches a retry policy to each individual task in the map.
+"RetryPolicy": |-
+  Configuration for task-level error recovery and backoff strategies.

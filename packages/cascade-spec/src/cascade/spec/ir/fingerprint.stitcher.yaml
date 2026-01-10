@@ -1,0 +1,12 @@
+"Fingerprint": |-
+  A structured container for Merkle hashes and structural signatures.
+  It enforces a specific naming convention (state_source_object_type) to ensure
+  architectural consistency across different versions of the system.
+"Fingerprint.from_dict": |-
+  Hydrates a dictionary into a Fingerprint object, validating all keys.
+"Fingerprint.get": |-
+  Retrieves a specific hash by its semantic key.
+"Fingerprint.to_dict": |-
+  Returns a serializable dictionary representation of all hashes.
+"InvalidFingerprintKeyError": |-
+  Raised when a key does not conform to the required segment-based naming axiom.

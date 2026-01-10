@@ -1,126 +1,99 @@
-我已分析了你提供的 `diff` 和测试失败报告。这些测试失败是由于引入新的 `VMExecutionStrategy` 和相关组件后，在并发和调度方面出现了微妙的回归。超时本身并非根本原因，而是由底层死锁或活锁（Livelock）问题触发的症状。
+Your analysis is sharp. The previous fix resolved the scheduling livelock, but in doing so, it allowed the tests to proceed further and uncover a new, more fundamental issue: a kernel panic.
 
-我的修复方案将针对以下两个核心问题：
+You are correct. The test timeouts are again a symptom, not the root cause.
 
-1.  **测试逻辑问题**: `test_is_idle_state_changes` 测试中包含一个硬编码的 1 秒休眠，这与 `pytest-timeout` 的 1 秒全局超时冲突，导致测试必然失败。这是一个有缺陷的测试，而非系统 bug。我将修正测试本身的逻辑，使其能够在超时限制内完成。
-2.  **系统调度问题 (活锁)**: 在高负载下（如资源竞争场景），`Machine` 的主循环会进入一个非常紧密的“忙等待”状态（使用 `asyncio.sleep(0)`），这会过度占用事件循环，导致其他关键的后台任务（如在线程中完成的计算任务）无法及时被调度，其结果也无法返回给 `Machine`。这会使 `Machine` 认为系统处于停滞状态，而实际上是它自己造成了调度饥饿。最终，资源永远不会被释放，导致死锁。
+The log output provides a clear diagnosis:
+```
+KeyError: "Resource 'system.egress_queue' not found."
+```
+This error occurs within the `standard_egress` kernel function, which is responsible for handling the final output of a graph. This function has a hard dependency on a system resource named `system.egress_queue` to publish its results.
 
-以下是我的修复计划。
+The test harness used in these integration tests, `EventDrivenRunner`, was not updated to provide this required resource to the `PhysicsKernel`. Consequently, when an `egress` node tries to fire, the kernel panics, the `Reactor` correctly interprets this as a critical system error, and shuts down the machine. The test, however, is still waiting for `TaskExecutionFinished` events that will never be emitted due to the premature shutdown, leading to the timeout.
 
-## [WIP] fix: 修复VM调度活锁并修正有缺陷的并发测试
+The goal is to align the `EventDrivenRunner` test harness with the requirements of the production runtime by ensuring it properly initializes and registers the `system.egress_queue`.
+
+The `EventDrivenRunner` must simulate the complete system environment required by the `PhysicsKernel`. By adding the missing `egress_queue` and registering it with the `ResourceRegistry`, we satisfy the dependency of the `standard_egress` function, preventing the kernel panic and allowing the test workflows to run to completion as intended.
+
+I will now generate the plan to implement this fix.
+
+## [WIP] fix(vm): Register egress_queue in test harness to prevent kernel panic
 
 ### 用户需求
 
-修复在 `cascade-vm` 包中引入 `VMExecutionStrategy` 后出现的三个集成测试超时失败。失败的测试包括 `test_is_idle_state_changes`, `test_resource_contention`, 和 `test_resource_sentry`。分析表明，失败的根本原因不是超时限制过于严格，而是底层的调度活锁和有缺陷的测试逻辑。
+修复 `test_resource_contention` 和 `test_resource_sentry` 中的 `KeyError: "Resource 'system.egress_queue' not found."` 问题。该问题导致内核恐慌 (kernel panic) 和测试超时。
 
 ### 评论
 
-这是一个典型的并发系统问题。`Machine` 的调度循环过于激进，导致其在等待 I/O（如此处的线程池计算结果）时“饿死”了本应向其报告结果的任务。通过在忙碌循环中引入一个极小的、非零的延迟，我们能强制事件循环将控制权交还给其他就绪的任务，从而打破活锁。
-
-同时，`test_is_idle_state_changes` 的实现存在明显缺陷，其内部休眠时间与测试套件的全局超时时间冲突。修正这个测试是保证测试套件稳定性的必要步骤。
+这是一个典型的测试基础设施与生产代码不同步的问题。随着 `VMExecutionStrategy` 的引入，`egress` 节点的实现方式发生了变化，其依赖于一个标准的 `system.egress_queue` 来输出结果。`EventDrivenRunner` 这个测试工具没有相应地更新，导致在执行 `egress` 节点时因缺少资源而崩溃。修复方法是使测试工具的行为与生产环境的 `RuntimeHarness` 保持一致。
 
 ### 目标
 
-1.  **修复 `Machine` 调度活锁**: 修改 `Machine` 的主循环，在“忙等待”阶段引入一个微小的非零延迟，以防止事件循环饥饿，解决 `test_resource_contention` 和 `test_resource_sentry` 的死锁问题。
-2.  **修正 `test_is_idle_state_changes`**: 调整测试内部的休眠和等待时间，使其逻辑正确且能在全局超时限制内可靠地完成。
+修改 `EventDrivenRunner` 以创建并注册 `system.egress_queue`，从而解决内核恐慌问题并使相关集成测试能够通过。
 
 ### 基本原理
 
-1.  **调度器协作**: `asyncio.sleep(0)` 仅会将控制权交还给事件循环，如果当时没有其他就绪的任务，控制权会立即返回。在高频同步事件（如 `Reactor` 步骤）中，这会导致一个事实上的紧密循环。将其改为 `asyncio.sleep(0.001)` 可以保证一个最小的时间片，让事件循环有机会运行其他后台任务，例如处理来自线程池的已完成的回调。
-2.  **确定性测试**: 测试的执行时间不应与外部配置的超时限制有冲突。通过将测试内的 `sleep(1)` 大幅缩短，我们移除了导致其必定失败的竞争条件，使其成为一个稳定、快速的单元。
+`standard_egress` 内核函数需要从 `ResourceRegistry` 中获取一个名为 `system.egress_queue` 的 `asyncio.Queue` 来放置图的最终结果。`EventDrivenRunner` 作为测试中的“主板”，负责组装所有必要的系统组件。通过在 `EventDrivenRunner` 的初始化过程中添加 `egress_queue` 的创建和注册逻辑，我们为 `standard_egress` 提供了其运行所必需的依赖，从而修复了整个执行路径。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #concept/state #task/domain/testing #task/object/concurrency-bugs #task/action/bug-fix #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/tests #comp/runtime #concept/state #task/domain/testing #task/object/test-harness #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 Machine 调度器的活锁问题
+#### Acts 1: 在 `EventDrivenRunner` 中添加 `egress_queue`
 
-我们将修改 `machine.py` 中的主循环，将 `asyncio.sleep(0)` 替换为一个极小的非零延迟，以确保调度公平性，防止事件循环饥饿。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/machine.py
-~~~~~
-~~~~~python.old
-                    if fired_count > 0 or (
-                        self.ingress_queue and not self.ingress_queue.empty()
-                    ):
-                        # If physics fired or ingress is pending, yield but loop again immediately.
-                        await asyncio.sleep(0)
-                    else:
-                        # System is physically idle. Wait for new ingress.
-                        try:
-~~~~~
-~~~~~python.new
-                    if fired_count > 0 or (
-                        self.ingress_queue and not self.ingress_queue.empty()
-                    ):
-                        # If physics fired or ingress is pending, yield but loop again immediately.
-                        await asyncio.sleep(0.001)
-                    else:
-                        # System is physically idle. Wait for new ingress.
-                        try:
-~~~~~
-
-#### Acts 2: 修正 `test_is_idle_state_changes` 的逻辑缺陷
-
-我们将缩短测试内部的 `sleep` 和 `wait_for` 时间，消除与全局 `pytest-timeout` 的冲突，使其成为一个快速且确定性的测试。
+我们将修改 `packages/cascade-vm/src/cascade/vm/harness.py` 文件，在 `EventDrivenRunner` 中添加 `egress_queue` 的初始化和注册逻辑。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/integration/test_compute_adapters.py
+packages/cascade-vm/src/cascade/vm/harness.py
 ~~~~~
 ~~~~~python.old
-    async def blocking_executor(*args, **kwargs):
-        in_flight_event.set()
-        await asyncio.sleep(1)
+        # 1. Setup Queues for disconnected execution
+        self.compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
+        self.chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
+        self.ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
 
-    service.executor.execute = blocking_executor
-    service.registry.register("idle_test_hash", sync_add)
+        # 2. Setup Services
+        # In a real system, store would be a separate entity.
 ~~~~~
 ~~~~~python.new
-    async def blocking_executor(*args, **kwargs):
-        in_flight_event.set()
-        await asyncio.sleep(0.1)
+        # 1. Setup Queues for disconnected execution
+        self.compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
+        self.chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
+        self.ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
+        self.egress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
 
-    service.executor.execute = blocking_executor
-    service.registry.register("idle_test_hash", sync_add)
+        # 2. Setup Services
+        # In a real system, store would be a separate entity.
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/integration/test_compute_adapters.py
+packages/cascade-vm/src/cascade/vm/harness.py
 ~~~~~
 ~~~~~python.old
-    # 3. While processing
-    await asyncio.wait_for(in_flight_event.wait(), timeout=1)
-    assert service.is_idle() is False
-    assert service.active_count == 1
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        self.resource_registry.register("system.compute_queue", self.compute_queue)
+        self.resource_registry.register("system.chronos_queue", self.chronos_queue)
+        self.resource_registry.register("system.object_store", self.object_store)
 
-    # 4. After completion
-    await asyncio.wait_for(outbound_queue.get(), timeout=1.1)
-    assert service.is_idle() is True
-    assert service.active_count == 0
+        # 4. Setup Reactor
+        # Construct the Physics Kernel
 ~~~~~
 ~~~~~python.new
-    # 3. While processing
-    await asyncio.wait_for(in_flight_event.wait(), timeout=1)
-    assert service.is_idle() is False
-    assert service.active_count == 1
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        self.resource_registry.register("system.compute_queue", self.compute_queue)
+        self.resource_registry.register("system.chronos_queue", self.chronos_queue)
+        self.resource_registry.register("system.object_store", self.object_store)
+        self.resource_registry.register("system.egress_queue", self.egress_queue)
 
-    # 4. After completion
-    await asyncio.wait_for(outbound_queue.get(), timeout=0.2)
-    assert service.is_idle() is True
-    assert service.active_count == 0
+        # 4. Setup Reactor
+        # Construct the Physics Kernel
 ~~~~~
 
 ### 下一步建议
 
-既然核心的调度问题已经解决，我建议：
-1.  **提交变更**: 这些修复是关键性的，应尽快集成。
-2.  **审查其他测试**: 审查其他测试中是否存在类似的硬编码长延时，以提高整个测试套件的健壮性和执行速度。
-3.  **性能分析**: 可以在修复后对 `test_resource_contention` 这样的高并发测试进行性能分析，以确保 `asyncio.sleep(0.001)` 的引入没有对正常执行路径造成不可接受的性能影响。
+既然 `EventDrivenRunner` 的核心缺陷已经修复，现在可以重新运行测试套件。如果所有测试都通过，那么这个宏观任务（修复并发测试）就完成了，我们可以生成一个 `[COMMIT]` 计划来最终提交所有相关的修复。

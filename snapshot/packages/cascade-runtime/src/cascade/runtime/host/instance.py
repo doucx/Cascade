@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 import asyncio
@@ -81,10 +80,6 @@ class Engine:
         self._managed_subscribers = []
 
     def _load_default_strategy(self) -> ExecutionStrategy:
-        """
-        Dynamically loads the legacy GraphExecutionStrategy if available.
-        This provides backward compatibility without hard compile-time dependencies.
-        """
         try:
             # Dynamic imports to break hard dependency
             from cascade.execution.graph.logic.processor import NodeProcessor

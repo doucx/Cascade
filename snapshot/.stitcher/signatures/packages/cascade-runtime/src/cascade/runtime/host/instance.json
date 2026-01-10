@@ -3,13 +3,18 @@
     "baseline_yaml_content_hash": "f49d0f50dc9efdf79f71c60acd66f35710e51f4badbd0bebb6ca717391f463ce"
   },
   "Engine.__init__": {
-    "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: EventBus, state_backend_factory: Optional[Callable[[str], StateBackend]] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None):",
-    "baseline_code_structure_hash": "7c775247d684b97ea7fc877bd638515443f8044160590f3c680279327601e6b2"
+    "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: EventBus, state_backend_factory: Optional[Callable[[str], StateBackend]] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None, strategy: Optional[ExecutionStrategy] = None):",
+    "baseline_code_structure_hash": "841ac8c2c314aae5dd0e1d1cd63c778db44fc9418c5389e135487cea89507e1f"
   },
   "Engine._is_simple_task": {
     "baseline_code_signature_text": "def _is_simple_task(self, lr: Any) -> bool:",
     "baseline_code_structure_hash": "ab3b4f902ec588d911cd296be79c4cb9dff75507849fefb34e27d836b57b6ddd",
     "baseline_yaml_content_hash": "320895a40ef8271f5725f1091710433048134cc759ecc97198bd2897cc1a63d7"
+  },
+  "Engine._load_default_strategy": {
+    "baseline_code_signature_text": "def _load_default_strategy(self) -> ExecutionStrategy:",
+    "baseline_code_structure_hash": "f04bcbba34620dc393234173e9c8d81a262bf4b583150a4744131785e37cc9d4",
+    "baseline_yaml_content_hash": "2ec2b724115dbeee925db255134cdec1507e8820c4eb2d93ad9b456e07f563d0"
   },
   "Engine._managed_subscribers": {},
   "Engine._on_constraint_update": {
@@ -50,5 +55,6 @@
   },
   "Engine.solver": {},
   "Engine.state_backend_factory": {},
+  "Engine.strategy": {},
   "Engine.vm_strategy": {}
 }

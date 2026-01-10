@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import asyncio
@@ -79,11 +80,23 @@ class Engine:
         if strategy:
             self.strategy = strategy
         else:
-            self.strategy = self._load_default_strategy()
+            self.strategy = self._resolve_default_strategy()
 
         self._managed_subscribers = []
 
-    def _load_default_strategy(self) -> ExecutionStrategy:
+    def _resolve_default_strategy(self) -> ExecutionStrategy:
+        backend_choice = os.getenv("CASCADE_BACKEND", "graph").lower()
+        if backend_choice == "vm":
+            return self._load_vm_strategy()
+        else:
+            return self._load_graph_strategy()
+
+    def _load_vm_strategy(self) -> ExecutionStrategy:
+        from cascade.runtime.strategies.vm import VMExecutionStrategy
+
+        return VMExecutionStrategy(executor=self.executor, bus=self.bus)
+
+    def _load_graph_strategy(self) -> ExecutionStrategy:
         try:
             # Dynamic imports to break hard dependency
             from cascade.execution.graph.logic.processor import NodeProcessor

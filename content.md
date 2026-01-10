@@ -1,104 +1,167 @@
-你的分析完全正确。上一轮的修复是成功的，它清除了 `Expander` 层的错误，但这也暴露了编译流程中下一阶段的问题：`ParameterWiringPolicy`。
+好的，测试全部通过，VM 的核心执行链路已经打通。现在我们来实现通过环境变量切换默认后端的功能。
 
-错误日志 `WiringError: FuncNode '...bleach' has no input port 'args'. Available: ['0', '1']` 明确指出：
-1.  **成功之处**: `BleachNode` 确实已经被正确地创建了，它拥有名为 `'0'` 和 `'1'` 的输入端口，这与 `_internal_gather(*args)` 的语义一致。
-2.  **新的失败点**: `ParameterWiringPolicy` 在尝试连接依赖项时，仍然错误地计算出目标端口名为 `'args'`，而不是正确的 `'0'` 或 `'1'`。
+这是一个非常好的开发者体验（DX）改进，它允许我们在不修改任何代码的情况下，轻松地在传统的图执行策略和新的 VM 执行策略之间进行切换，便于测试和性能对比。
 
-这是因为该策略的逻辑只检查了参数索引是否在 `task.args` 列表的范围内，但没有检查该参数的 `kind` 是否为 `VAR_POSITIONAL`。对于 `*args`，其参数名（如 `args`）不应被用作端口名。
+我将生成一个计划来实现这个功能。
 
-我将生成一个计划来修复这个接线策略。
-
-## [WIP] fix: 纠正 ParameterWiringPolicy 中对 *args 的端口名解析
+## [WIP] feat: 通过环境变量 CASCADE_BACKEND 切换默认执行策略
 
 ### 错误分析
-`WiringError` 的根本原因在于 `ParameterWiringPolicy` 在解析位置参数（`input_key` 是数字）的目标端口名时存在缺陷。
-
-其现有逻辑为：
-```python
-if idx < len(node_ir.task.args):
-    port_name = node_ir.task.args[idx].name
-else:
-    port_name = input_key
-```
-对于 `_internal_gather(*args)`，`task.args` 列表为 `[ArgumentDef(name='args', kind=VAR_POSITIONAL)]`。当 `input_key` 为 `'0'` 时，`idx` 为 `0`，`0 < 1` 为真，因此 `port_name` 被错误地解析为 `node_ir.task.args[0].name`，即 `'args'`。
-
-正确的逻辑应该是：如果参数类型是 `VAR_POSITIONAL`，则端口名必须是其数字索引（`input_key`），而不是参数名。
+无错误，此为新功能实现。
 
 ### 用户需求
-修复 `test_vm_list_output` 测试中出现的 `WiringError`，确保编译器能够为 `*args` 函数正确地连接输入。
+当环境变量 `CASCADE_BACKEND` 被设置为 `vm` 时，`Engine` 实例在未指定 `strategy` 参数的情况下，应自动加载并使用 `VMExecutionStrategy` 作为其默认执行策略。如果环境变量未设置或设置为其他值，则应保持现有的默认行为（加载基于图的策略）。
 
 ### 评论
-这个修复进一步加强了编译器物理层与 Python 语言语义之间的一致性。通过在接线阶段也尊重参数的 `kind`，我们确保了从定义到实现的整个编译链路的正确性。
+这是一个重要的工程实践，它将运行时的行为与环境配置解耦，极大地增强了系统的灵活性和可测试性。通过支持 `CASCADE_BACKEND=vm`，我们为未来将 VM 作为默认后端铺平了道路，同时保留了与旧版执行器的兼容性。
 
 ### 目标
-修改 `ParameterWiringPolicy` 的 `apply` 方法，使其在解析位置参数的端口名时，能够正确处理 `ArgumentKind.VAR_POSITIONAL` 的情况。
+1.  修改 `Engine` 的 `__init__` 方法，使其在初始化时检查 `CASCADE_BACKEND` 环境变量。
+2.  实现一个新的私有方法 `_resolve_default_strategy`，根据环境变量的值来决定加载哪个策略。
+3.  创建一个 `_load_vm_strategy` 方法，负责实例化 `VMExecutionStrategy`。
+4.  将现有的 `_load_default_strategy` 重命名为 `_load_graph_strategy`，以明确其职责，并作为默认的回退选项。
 
 ### 基本原理
-我们将增强端口名解析逻辑，增加一个对 `arg.kind` 的检查。只有当参数是常规的位置或关键字参数时，才使用其 `.name` 作为端口名。如果参数是 `VAR_POSITIONAL`，则直接使用其数字索引作为端口名。
+我们将在 `Engine` 的构造函数中引入一个决策点。该决策点将优先使用用户显式传入的 `strategy`。如果没有，它将查询 `os.getenv("CASCADE_BACKEND")`。如果值为 `'vm'`，则调用 VM 策略加载器；否则，调用传统的图策略加载器。这种方式清晰地隔离了不同策略的加载逻辑，并确保了向后兼容性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/compiler #concept/parser #scope/core #ai/instruct #task/domain/compiler #task/object/wiring-policy #task/action/fix #task/state/continue
+#intent/build #flow/ready #priority/medium #comp/runtime #concept/config #scope/dx #ai/instruct #task/domain/runtime #task/object/engine-strategy #task/action/configure #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 导入 ArgumentKind
+#### Acts 1: 修改 Engine 以支持后端切换
 
-首先，我们需要在 `parameter.py` 中导入 `ArgumentKind` 枚举，以便在逻辑中使用它。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py
-~~~~~
-~~~~~python.old
-from cascade.spec.ir.graph import NodeIR
-from cascade.std.specs import StainerSpec
-from cascade.compiler.backend.expander import SubGraph
-~~~~~
-~~~~~python.new
-from cascade.spec.ir.graph import NodeIR, ArgumentKind
-from cascade.std.specs import StainerSpec
-from cascade.compiler.backend.expander import SubGraph
-~~~~~
-
-#### Acts 2: 修正端口名解析逻辑
-
-现在，我们用更精确的逻辑替换掉有问题的端口名解析代码块。
+我们将对 `packages/cascade-runtime/src/cascade/runtime/host/instance.py` 文件进行一次集中的 `patch` 操作。这次修改将包括：
+1.  导入 `os` 和 `VMExecutionStrategy`。
+2.  更新 `__init__` 方法以调用新的策略解析器 `_resolve_default_strategy`。
+3.  添加 `_resolve_default_strategy` 和 `_load_vm_strategy` 方法。
+4.  重命名 `_load_default_strategy` 为 `_load_graph_strategy`。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py
+packages/cascade-runtime/src/cascade/runtime/host/instance.py
 ~~~~~
 ~~~~~python.old
-            # Resolve the actual port name on the Bleacher.
-            if input_key.isdigit():
-                idx = int(input_key)
-                port_name = (
-                    node_ir.task.args[idx].name
-                    if idx < len(node_ir.task.args)
-                    else input_key
-                )
-            else:
-                port_name = input_key
+import sys
+import time
+import asyncio
+from typing import Any, Dict, Optional, Callable
+from uuid import uuid4
+from contextlib import ExitStack
+
+from cascade.spec.dsl.resources import ResourceDefinition
 ~~~~~
 ~~~~~python.new
-            # Resolve the actual port name on the Bleacher.
-            if input_key.isdigit():
-                idx = int(input_key)
-                arg_def = (
-                    node_ir.task.args[idx] if idx < len(node_ir.task.args) else None
-                )
+import os
+import sys
+import time
+import asyncio
+from typing import Any, Dict, Optional, Callable
+from uuid import uuid4
+from contextlib import ExitStack
 
-                # For *args, the port name is the index itself, not the arg name (e.g. 'args')
-                if arg_def and arg_def.kind != ArgumentKind.VAR_POSITIONAL:
-                    port_name = arg_def.name
-                else:
-                    port_name = input_key
-            else:
-                port_name = input_key
+from cascade.spec.dsl.resources import ResourceDefinition
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/host/instance.py
+~~~~~
+~~~~~python.old
+        self.resource_container = ResourceContainer(self.bus)
+
+        if strategy:
+            self.strategy = strategy
+        else:
+            self.strategy = self._load_default_strategy()
+
+        self._managed_subscribers = []
+
+    def _load_default_strategy(self) -> ExecutionStrategy:
+        try:
+            # Dynamic imports to break hard dependency
+            from cascade.execution.graph.logic.processor import NodeProcessor
+            from cascade.execution.graph.strategy import GraphExecutionStrategy
+
+            # Reconstruct the legacy stack
+            node_processor = NodeProcessor(
+                executor=self.executor,
+                bus=self.bus,
+                resource_manager=self.resource_manager,
+                constraint_manager=self.constraint_manager,
+                solver=self.solver,
+            )
+
+            return GraphExecutionStrategy(
+                solver=self.solver,
+                node_processor=node_processor,
+                resource_container=self.resource_container,
+                constraint_manager=self.constraint_manager,
+                bus=self.bus,
+                wakeup_event=self._wakeup_event,
+            )
+        except ImportError:
+            raise RuntimeError(
+                "No execution strategy provided and 'cascade-execution-graph' package not found. "
+                "Please install 'cascade-execution-graph' or provide a custom strategy."
+            )
+~~~~~
+~~~~~python.new
+        self.resource_container = ResourceContainer(self.bus)
+
+        if strategy:
+            self.strategy = strategy
+        else:
+            self.strategy = self._resolve_default_strategy()
+
+        self._managed_subscribers = []
+
+    def _resolve_default_strategy(self) -> ExecutionStrategy:
+        backend_choice = os.getenv("CASCADE_BACKEND", "graph").lower()
+        if backend_choice == "vm":
+            return self._load_vm_strategy()
+        else:
+            return self._load_graph_strategy()
+
+    def _load_vm_strategy(self) -> ExecutionStrategy:
+        from cascade.runtime.strategies.vm import VMExecutionStrategy
+
+        return VMExecutionStrategy(executor=self.executor, bus=self.bus)
+
+    def _load_graph_strategy(self) -> ExecutionStrategy:
+        try:
+            # Dynamic imports to break hard dependency
+            from cascade.execution.graph.logic.processor import NodeProcessor
+            from cascade.execution.graph.strategy import GraphExecutionStrategy
+
+            # Reconstruct the legacy stack
+            node_processor = NodeProcessor(
+                executor=self.executor,
+                bus=self.bus,
+                resource_manager=self.resource_manager,
+                constraint_manager=self.constraint_manager,
+                solver=self.solver,
+            )
+
+            return GraphExecutionStrategy(
+                solver=self.solver,
+                node_processor=node_processor,
+                resource_container=self.resource_container,
+                constraint_manager=self.constraint_manager,
+                bus=self.bus,
+                wakeup_event=self._wakeup_event,
+            )
+        except ImportError:
+            raise RuntimeError(
+                "No execution strategy provided and 'cascade-execution-graph' package not found. "
+                "Please install 'cascade-execution-graph' or provide a custom strategy."
+            )
 ~~~~~
 
 ### 下一步建议
 
-这个修复应该能解决 `WiringError`。请再次运行 `pytest packages/cascade-runtime/tests/integration/test_vm_e2e.py`。如果所有测试通过，则意味着从前端 DSL 解析到后端物理图生成和接线的整个 `*args` 处理链路都已正确实现。
+功能已经实现，但我们还没有为它编写测试。我建议下一步是创建一个新的测试文件 `packages/cascade-runtime/tests/unit/host/test_engine_init.py`，并在其中添加一个测试用例，该用例使用 `monkeypatch` 来设置 `CASCADE_BACKEND` 环境变量，然后断言 `Engine` 实例化的 `strategy` 属性是我们期望的类型（`VMExecutionStrategy` 或 `GraphExecutionStrategy`）。
+
+这将确保我们的新功能是健壮且可维护的。如果你同意，我将生成创建该测试的计划。

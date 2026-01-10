@@ -1,7 +1,5 @@
 {
-  "WiringPolicy": {
-    "baseline_yaml_content_hash": "a345ba76029886ae5d304cddbf877507d5d724cd304a65800bae0f2b67c29d32"
-  },
+  "WiringPolicy": {},
   "WiringPolicy.apply": {
     "baseline_code_signature_text": "def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
     "baseline_code_structure_hash": "eff3dd8900ac3bfb8492a3138311eb9594eab43ef6c18ebf1d19066a360889c2",

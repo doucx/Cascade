@@ -2,7 +2,7 @@ from cascade.spec.ir.graph import NodeIR
 from cascade.std.specs import BleacherSpec
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.spec.compiler.interfaces import WiringPolicy
 
 
 class PulseWiringPolicy(WiringPolicy):

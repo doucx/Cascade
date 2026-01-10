@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from cascade.vm.protocols import ReactorProtocol, ComputeServiceProtocol
+from cascade.spec.vm.interfaces import ReactorProtocol, ComputeServiceProtocol
 from cascade.vm.services.chronos import ChronosService
 
 logger = logging.getLogger(__name__)

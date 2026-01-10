@@ -7,7 +7,7 @@ from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.nodes import Token, PhysicsDataNode
 from cascade.spec.physical.object import Ref
 from cascade.vm.reactor import Reactor
-from cascade.vm.protocols import ReactorProtocol
+from cascade.spec.vm.interfaces import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.kernel import PhysicsKernel

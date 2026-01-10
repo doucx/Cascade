@@ -9,12 +9,12 @@ from cascade.spec.physical.assembly import (
     CompilationArtifact,
     CompilationManifest,
 )
+from cascade.spec.compiler.interfaces import WiringPolicy, ExpansionPolicy
+
 from .expander import Expander
 from .validator import GraphValidator
 from .wiring import WiringHarness
 from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.wiring.protocol import WiringPolicy
-from cascade.compiler.backend.expansion.protocol import ExpansionPolicy
 from cascade.compiler.backend.expansion.policies.parameter import (
     ParameterExpansionPolicy,
 )

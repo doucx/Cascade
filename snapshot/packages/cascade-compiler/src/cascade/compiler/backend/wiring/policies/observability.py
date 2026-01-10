@@ -7,7 +7,7 @@ from cascade.std.specs import ObservabilitySpec, BleacherSpec, StainerSpec
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.spec.compiler.interfaces import WiringPolicy
 
 
 class ObservabilityWiringPolicy(WiringPolicy):

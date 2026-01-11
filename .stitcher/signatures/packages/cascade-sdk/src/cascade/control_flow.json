@@ -1,10 +1,10 @@
 {
-  "bind": {
+  "py://packages/cascade-sdk/src/cascade/control_flow.py#bind": {
     "baseline_code_signature_text": "def bind(source: LazyResult, target: Any):",
     "baseline_code_structure_hash": "8264b4a87b261343bf09ab7a781dbfc1117592b5649277d04ee00c688f98de5e",
     "baseline_yaml_content_hash": "0eb0f026e8f750a27cd2beec19dea5dce1f06e6092ed328f0f3efc29ff3d764a"
   },
-  "select_jump": {
+  "py://packages/cascade-sdk/src/cascade/control_flow.py#select_jump": {
     "baseline_code_signature_text": "def select_jump(routes: Dict[str, Optional[LazyResult]]) -> JumpSelector:",
     "baseline_code_structure_hash": "4d689055116e2d61f84fa92236832d388445613e35997826f76c612249ec5733",
     "baseline_yaml_content_hash": "647e3631084773add392ae3e842b41fcc56ff8117a40c5f1506e094ab953ee44"

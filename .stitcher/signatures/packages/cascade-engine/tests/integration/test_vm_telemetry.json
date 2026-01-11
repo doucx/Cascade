@@ -1,7 +1,0 @@
-{
-  "test_vm_telemetry_e2e": {
-    "baseline_code_signature_text": "async def test_vm_telemetry_e2e():",
-    "baseline_code_structure_hash": "d5264c032f3c869d20829cd6d22c6232fc06cb8ad81f1273bb01492419a7e5b7",
-    "baseline_yaml_content_hash": "09bd99d4569d50acefbb04ac0dd0b99028d64769cfa2037521cc087450dae9d5"
-  }
-}

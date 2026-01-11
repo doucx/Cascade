@@ -1,29 +1,29 @@
 {
-  "Env": {
+  "py://packages/cascade-sdk/src/cascade/sdk.py#Env": {
     "baseline_code_signature_text": "def Env(name: str, default: Any = None, description: str = '') -> LazyResult:",
     "baseline_code_structure_hash": "aee58e71ade7c1cc0026f302f141072a89eb988299cb560281dd4e121f69c096"
   },
-  "Param": {
+  "py://packages/cascade-sdk/src/cascade/sdk.py#Param": {
     "baseline_code_signature_text": "def Param(name: str, default: Any = None, type: Any = str, description: str = '') -> LazyResult:",
     "baseline_code_structure_hash": "157bdbe14a70fdca2402f222d57e2f11c6f36098b5c1f40710b809a93e177647"
   },
-  "_IMPORT_MAP": {},
-  "__all__": {},
-  "__getattr__": {
+  "py://packages/cascade-sdk/src/cascade/sdk.py#_IMPORT_MAP": {},
+  "py://packages/cascade-sdk/src/cascade/sdk.py#__all__": {},
+  "py://packages/cascade-sdk/src/cascade/sdk.py#__getattr__": {
     "baseline_code_signature_text": "def __getattr__(name: str) -> Any:",
     "baseline_code_structure_hash": "e4c6375eacd59d709311f755b6d45a5256cf3f5517bc10b7eaf8e38228d9701f"
   },
-  "dry_run": {
+  "py://packages/cascade-sdk/src/cascade/sdk.py#dry_run": {
     "baseline_code_signature_text": "def dry_run(target: Any) -> None:",
     "baseline_code_structure_hash": "f05cb4c328e2beecb116cca35297d758c405c65c8d9af4f9c02fd123f68b698b"
   },
-  "http": {},
-  "run": {
+  "py://packages/cascade-sdk/src/cascade/sdk.py#http": {},
+  "py://packages/cascade-sdk/src/cascade/sdk.py#run": {
     "baseline_code_signature_text": "def run(target: Union[LazyResult, List[Any], tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None) -> Any:",
     "baseline_code_structure_hash": "5508c31bb9996ac7f840897b1e6f4e485e46b7262facda3ef4f515a93c5cd0d9"
   },
-  "template": {},
-  "visualize": {
+  "py://packages/cascade-sdk/src/cascade/sdk.py#template": {},
+  "py://packages/cascade-sdk/src/cascade/sdk.py#visualize": {
     "baseline_code_signature_text": "def visualize(target: Any) -> str:",
     "baseline_code_structure_hash": "cbdf7900f72c964721532288de54bba433ba71290f3fce1f7c467a77f8a6e689"
   }

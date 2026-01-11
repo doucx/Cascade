@@ -1,72 +1,81 @@
 {
-  "ArgumentDef": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentDef": {
+    "baseline_code_signature_text": "class ArgumentDef:",
+    "baseline_code_structure_hash": "72f096e2eb7f730413a6c363312c4ef7246c6a0da612f07e49ad5d673dc7b4b9",
     "baseline_yaml_content_hash": "321cc5d0bd9882a03dee23a84a1336c02451dae1aa4564abe1bba618b958e717"
   },
-  "ArgumentDef.annotation": {},
-  "ArgumentDef.default_value_repr": {},
-  "ArgumentDef.kind": {},
-  "ArgumentDef.name": {},
-  "ArgumentKind": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentDef.annotation": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentDef.default_value_repr": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentDef.kind": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentDef.name": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentKind": {
+    "baseline_code_signature_text": "class ArgumentKind(str, Enum):",
+    "baseline_code_structure_hash": "99ac56b09945499ce5a28d6fa8c327feebd297a25133e446d4621de8a9731a9b",
     "baseline_yaml_content_hash": "cd50430c79d2551b12b908b9a298c85dedd472e257a267edcdbf17cc3842b307"
   },
-  "ArgumentKind.KEYWORD_ONLY": {},
-  "ArgumentKind.POSITIONAL_ONLY": {},
-  "ArgumentKind.POSITIONAL_OR_KEYWORD": {},
-  "ArgumentKind.VAR_KEYWORD": {},
-  "ArgumentKind.VAR_POSITIONAL": {},
-  "GraphIR": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentKind.KEYWORD_ONLY": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentKind.POSITIONAL_ONLY": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentKind.POSITIONAL_OR_KEYWORD": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentKind.VAR_KEYWORD": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#ArgumentKind.VAR_POSITIONAL": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#GraphIR": {
+    "baseline_code_signature_text": "class GraphIR:",
+    "baseline_code_structure_hash": "c67a39e354733689a07c511b3d962b2d03069407506287561df3175b758059d4",
     "baseline_yaml_content_hash": "1ecffaf6460a4511c2bd35b0e73cb52292dd33d8fd6e6188732876662febb558"
   },
-  "GraphIR.nodes": {},
-  "GraphIR.root_logical_ids": {},
-  "NodeIR": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#GraphIR.nodes": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#GraphIR.root_logical_ids": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR": {
+    "baseline_code_signature_text": "class NodeIR:",
+    "baseline_code_structure_hash": "ce34cb4851be9d3f23b8e20501202a997543c875c09f387dbcf605d070b42c8a",
     "baseline_yaml_content_hash": "ac5a306e32ed790fe771a0e4aeed17630ac9088d1df677734bb19c163c78607b"
   },
-  "NodeIR.cache_policy": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.cache_policy": {
     "baseline_yaml_content_hash": "d792d25e7068ecea2db45b34dc6648ff775397aba928829cec99d0ab026585ee"
   },
-  "NodeIR.condition": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.condition": {
     "baseline_yaml_content_hash": "c5c2810e48e0bc251f28cb2d1902bd31b80145c2d9730aa0cfa988904f19ef77"
   },
-  "NodeIR.constraints": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.constraints": {
     "baseline_yaml_content_hash": "3ae90761dbe3274616b3ac71ecff97f382ce25e33eed5c5fcd70b80a6578f581"
   },
-  "NodeIR.current_node_instance_hash": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.current_node_instance_hash": {
     "baseline_yaml_content_hash": "a9b0b9aff1656629c0c5b8dde098017e8585d294cd8e395a957640089c8d1993"
   },
-  "NodeIR.dependencies": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.dependencies": {
     "baseline_yaml_content_hash": "8d93562585251484a02564e27f4bdaa696e71bc6fa979e4824b3ba990d7f2df8"
   },
-  "NodeIR.flow_control": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.flow_control": {
     "baseline_yaml_content_hash": "b1b34910ed6066eb8cfcfaae1c3aff6d9fd6c8b601bebeb5a09aa2440c67d4f2"
   },
-  "NodeIR.id": {},
-  "NodeIR.inputs": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.inputs": {
     "baseline_yaml_content_hash": "d9b42d06d9b428812129bbfab5aa6b464b87fd17fafed13d931ca1894266065f"
   },
-  "NodeIR.logical_id": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.logical_id": {
     "baseline_yaml_content_hash": "4e543550737d2c5b0c2e9932862891ab8beb3cefecf5439007201201d519daa6"
   },
-  "NodeIR.name": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.name": {
     "baseline_yaml_content_hash": "49db437a8f5fe33f72c68dc722662bb55254e03bccb202358f52050604a6ea74"
   },
-  "NodeIR.retry_policy": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.retry_policy": {
     "baseline_yaml_content_hash": "969c2f1c89bd05326ba4bdd8668b2442fe4011bcc68685003c2886601db86a96"
   },
-  "NodeIR.task": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.task": {
     "baseline_yaml_content_hash": "2366d9a3bd686b9d05b1a301e19a8e1c4ec618f4f2513f86aff21cdf7a829abc"
   },
-  "NodeIR.type": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.type": {
     "baseline_yaml_content_hash": "c9a897b26b8361b4cbd8de3f1573404c0a9743c4e5787b7832fbcb04d25afe32"
   },
-  "TaskDef": {
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#TaskDef": {
+    "baseline_code_signature_text": "class TaskDef:",
+    "baseline_code_structure_hash": "647adf2e8533d09e2cb3a7d652dff20ff7a3418acf50b2d047ac23fbbc9499c1",
     "baseline_yaml_content_hash": "fd4f7e4eafcb22ebb5e9077a8d0bdbef3e7a09859ce27d39d13761a8d78e31cd"
   },
-  "TaskDef.args": {},
-  "TaskDef.docstring": {},
-  "TaskDef.fingerprint": {},
-  "TaskDef.is_async": {},
-  "TaskDef.mode": {},
-  "TaskDef.name": {},
-  "TaskDef.return_annotation": {}
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#TaskDef.args": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#TaskDef.docstring": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#TaskDef.fingerprint": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#TaskDef.is_async": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#TaskDef.mode": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#TaskDef.name": {},
+  "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#TaskDef.return_annotation": {}
 }

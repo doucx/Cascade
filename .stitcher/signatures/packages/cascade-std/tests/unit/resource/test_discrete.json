@@ -1,47 +1,27 @@
 {
-  "available_ledger": {
+  "py://packages/cascade-std/tests/unit/resource/test_discrete.py#available_ledger": {
     "baseline_code_signature_text": "def available_ledger() -> DiscreteLedger:",
     "baseline_code_structure_hash": "7495ea3a4feeb8999be299ce6d522e724bda137c05588cd23ee2e1a1fd3e975a",
     "baseline_yaml_content_hash": "f8f3bb433f4e7daf04dde4eca8570219e42ec80c693b3dfdb10f9594d766ff47"
   },
-  "starved_ledger": {
+  "py://packages/cascade-std/tests/unit/resource/test_discrete.py#starved_ledger": {
     "baseline_code_signature_text": "def starved_ledger() -> DiscreteLedger:",
     "baseline_code_structure_hash": "f28692ddc4880dd1322ee5d768be5534f53a599ec69461ca49fcd1ed65b5221a",
     "baseline_yaml_content_hash": "1030541f9fb9effe49220be645a8d56745f067d01e367a4fbd7039a3e68b0c0b"
   },
-  "test_discrete_allocator_grants_when_available": {
+  "py://packages/cascade-std/tests/unit/resource/test_discrete.py#test_discrete_allocator_grants_when_available": {
     "baseline_code_signature_text": "def test_discrete_allocator_grants_when_available(available_ledger):",
     "baseline_code_structure_hash": "c4d809253b9bb3d60b4d986c20c1d61486e42446e8d3a0604968b1d460460b9e"
   },
-  "test_discrete_allocator_parks_when_starved": {
+  "py://packages/cascade-std/tests/unit/resource/test_discrete.py#test_discrete_allocator_parks_when_starved": {
     "baseline_code_signature_text": "def test_discrete_allocator_parks_when_starved(starved_ledger):",
     "baseline_code_structure_hash": "1a4eac176f4e29bec4c12a7a4565c6535c301485f924406012cb7befcefdc48d"
   },
-  "test_discrete_allocator_recirculates_when_starved": {
-    "baseline_code_signature_text": "def test_discrete_allocator_recirculates_when_starved(starved_ledger):",
-    "baseline_code_structure_hash": "8152852d7494db86eb2dd7d30ceae6d6a2c1a021699e2bbcfc41b0823e42744f"
-  },
-  "test_discrete_broker_grants_when_available": {
-    "baseline_code_signature_text": "async def test_discrete_broker_grants_when_available():",
-    "baseline_code_structure_hash": "90f60c3a67542e30f426f005f4ab451de3caa095403067aadd36210dfd2a4808"
-  },
-  "test_discrete_broker_recirculates_when_starved": {
-    "baseline_code_signature_text": "async def test_discrete_broker_recirculates_when_starved():",
-    "baseline_code_structure_hash": "4d11a58b38b8a8112eb6efdbb22ab55e86966611a09c7de5a98a1024692dc45e"
-  },
-  "test_discrete_broker_releases_resource": {
-    "baseline_code_signature_text": "async def test_discrete_broker_releases_resource():",
-    "baseline_code_structure_hash": "31d1a2156e519790ad607e5d4acbeb3ad48105010ebcf0e9fb137989d102a7e8"
-  },
-  "test_discrete_broker_simultaneous_rel_and_req": {
-    "baseline_code_signature_text": "async def test_discrete_broker_simultaneous_rel_and_req():",
-    "baseline_code_structure_hash": "f2768363d65597a68025b6d6e609de70b995b81178bb16f674c938d8003eb451"
-  },
-  "test_discrete_reclaimer_releases_resource": {
+  "py://packages/cascade-std/tests/unit/resource/test_discrete.py#test_discrete_reclaimer_releases_resource": {
     "baseline_code_signature_text": "def test_discrete_reclaimer_releases_resource(available_ledger):",
     "baseline_code_structure_hash": "b6f0330c3e4f830ae5425b804ea3cb78c80599f91d586cc80dc17f2b7bc43389"
   },
-  "test_sequential_rel_and_req": {
+  "py://packages/cascade-std/tests/unit/resource/test_discrete.py#test_sequential_rel_and_req": {
     "baseline_code_signature_text": "def test_sequential_rel_and_req():",
     "baseline_code_structure_hash": "10a345dc148876d0affe26f1c0abd37e57c871ebd046b62da57bdc167f104d48"
   }

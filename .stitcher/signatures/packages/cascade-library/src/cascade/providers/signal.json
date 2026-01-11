@@ -1,11 +1,14 @@
 {
-  "RecvProvider": {},
-  "RecvProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/signal.py#RecvProvider": {
+    "baseline_code_signature_text": "class RecvProvider(Provider):",
+    "baseline_code_structure_hash": "612ce497d010661dc73ee7662dce2ab2aefa2101744c18727f6b115f037906b5"
+  },
+  "py://packages/cascade-library/src/cascade/providers/signal.py#RecvProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "RecvProvider.name": {},
-  "_recv_task": {
+  "py://packages/cascade-library/src/cascade/providers/signal.py#RecvProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/signal.py#_recv_task": {
     "baseline_code_signature_text": "async def _recv_task(topic: str, timeout: Optional[float] = None, connector: Connector = inject('_internal_connector')) -> Any:",
     "baseline_code_structure_hash": "acea109a8b6f43f36e1cf14c93aef25e82f9b570c1742aa58be219c277504ab3",
     "baseline_yaml_content_hash": "e2971c64ea593551623460749498a3768ab160138dcb58dcd62780a54d3e8623"

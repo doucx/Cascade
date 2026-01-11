@@ -1,20 +1,20 @@
 {
-  "test_csp_solver_init": {
+  "py://packages/cascade-runtime/tests/unit/test_solver_csp.py#test_csp_solver_init": {
     "baseline_code_signature_text": "def test_csp_solver_init():",
     "baseline_code_structure_hash": "c36e90f56b4a04fb08102ca3612079b27fffff9aa9b79b759fd1c55742065aae",
     "baseline_yaml_content_hash": "78ec471874f1d44002f986ccd425a62dfe7f67cb9cea61a39b0cd3d1d77f5f2a"
   },
-  "test_csp_solver_missing_dependency": {
+  "py://packages/cascade-runtime/tests/unit/test_solver_csp.py#test_csp_solver_missing_dependency": {
     "baseline_code_signature_text": "def test_csp_solver_missing_dependency(monkeypatch):",
     "baseline_code_structure_hash": "60e49252664c84f97382d83dcaa3418e72e6f4efd59a0228776847997b460d0e",
     "baseline_yaml_content_hash": "b08525856c1418ff842fbd3330b2bf0522141d360ca6dee042145c2cdb0f497a"
   },
-  "test_csp_solver_parallel_when_resources_sufficient": {
+  "py://packages/cascade-runtime/tests/unit/test_solver_csp.py#test_csp_solver_parallel_when_resources_sufficient": {
     "baseline_code_signature_text": "def test_csp_solver_parallel_when_resources_sufficient():",
     "baseline_code_structure_hash": "83d1f68fcd28b9c94b86168b8a2a0b5f5fdb184164425ba354b816d8b4cd4d5a",
     "baseline_yaml_content_hash": "1dd6f594cf775199fdb0c155960253b57a0d03bbfe4e6c12c2d131ddef51efcc"
   },
-  "test_csp_solver_serial_when_resources_insufficient": {
+  "py://packages/cascade-runtime/tests/unit/test_solver_csp.py#test_csp_solver_serial_when_resources_insufficient": {
     "baseline_code_signature_text": "def test_csp_solver_serial_when_resources_insufficient():",
     "baseline_code_structure_hash": "f5ba43e5fa453067090552e41eaf767c2e19161669e3c913e21ce68e01437bcd",
     "baseline_yaml_content_hash": "a19b92c2ebab68daf116f267fa8a50da88409c6f9e3982d1d588a862518d7ec7"

@@ -1,35 +1,23 @@
 {
-  "partial_ledger": {
+  "py://packages/cascade-std/tests/unit/resource/test_continuous.py#partial_ledger": {
     "baseline_code_signature_text": "def partial_ledger() -> ContinuousLedger:",
     "baseline_code_structure_hash": "019dbbf69392dc2057dae699af321d1cbdb78f42bed5285f6ce982a12bb6de74",
     "baseline_yaml_content_hash": "6091fa7f19366335acbf14639ca8c6f6f338835e4d3357d9976c37e5fe651529"
   },
-  "starved_ledger": {
+  "py://packages/cascade-std/tests/unit/resource/test_continuous.py#starved_ledger": {
     "baseline_code_signature_text": "def starved_ledger() -> ContinuousLedger:",
     "baseline_code_structure_hash": "374f362b18bd779a18aa14428bde97fa473319ad86df26460249d50572a519bd",
     "baseline_yaml_content_hash": "88a99e289e41b9f34b66c6cf53066b17ceb5897f7f4b2266e319c1031ce0480d"
   },
-  "test_continuous_allocator_grants_memory": {
+  "py://packages/cascade-std/tests/unit/resource/test_continuous.py#test_continuous_allocator_grants_memory": {
     "baseline_code_signature_text": "def test_continuous_allocator_grants_memory(partial_ledger):",
     "baseline_code_structure_hash": "bd43e929e7c6fad8dd52ca2068f8661edbbaf4b976751fb9f5ccf8e7d4df7f63"
   },
-  "test_continuous_allocator_recirculates_large_request": {
+  "py://packages/cascade-std/tests/unit/resource/test_continuous.py#test_continuous_allocator_recirculates_large_request": {
     "baseline_code_signature_text": "def test_continuous_allocator_recirculates_large_request(starved_ledger):",
     "baseline_code_structure_hash": "93cf407674ad8e5228f60888ed365ce951b51733e0eb3427fcf560f7deca6efe"
   },
-  "test_continuous_broker_grants_memory": {
-    "baseline_code_signature_text": "async def test_continuous_broker_grants_memory():",
-    "baseline_code_structure_hash": "41d24e96d0059f797344c90af4123b63c50d1908787084a92962b8e5b6e43652"
-  },
-  "test_continuous_broker_recirculates_large_request": {
-    "baseline_code_signature_text": "async def test_continuous_broker_recirculates_large_request():",
-    "baseline_code_structure_hash": "a24eceffe1df2ec2bd20ac1320b37585381efa7bee9fed4ab21daa83f1701946"
-  },
-  "test_continuous_broker_replenish_and_grant": {
-    "baseline_code_signature_text": "async def test_continuous_broker_replenish_and_grant():",
-    "baseline_code_structure_hash": "cefd1f3832a00de5c186a5176a88c89736841da43a60e5259b6f206d5fb4fab9"
-  },
-  "test_continuous_reclaimer_replenish": {
+  "py://packages/cascade-std/tests/unit/resource/test_continuous.py#test_continuous_reclaimer_replenish": {
     "baseline_code_signature_text": "def test_continuous_reclaimer_replenish():",
     "baseline_code_structure_hash": "04751dcb8fdba6a5c76350c50fe86f3dffafffe4082887e172c4b065b65f8c94"
   }

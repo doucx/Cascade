@@ -1,30 +1,38 @@
 {
-  "BleacherSpec": {
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec": {
+    "baseline_code_signature_text": "class BleacherSpec(PhysicsSpec):",
+    "baseline_code_structure_hash": "6b9b25e5e96dbdde750f9aeda0e2632a4fa4a5806a221a895c4c43d7072c7ba9",
     "baseline_yaml_content_hash": "79a8d61f436814c12e98e24bb86dabd73baf87709b5e49d2ed029243a057f700"
   },
-  "BleacherSpec.args": {},
-  "BleacherSpec.condition": {},
-  "BleacherSpec.context_output": {},
-  "BleacherSpec.obs_output": {},
-  "BleacherSpec.pulse": {},
-  "BleacherSpec.trace_output": {},
-  "BleacherSpec.worker_input": {},
-  "ObservabilitySpec": {
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.args": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.condition": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.context_output": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.obs_output": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.pulse": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.trace_output": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.worker_input": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#ObservabilitySpec": {
+    "baseline_code_signature_text": "class ObservabilitySpec(PhysicsSpec):",
+    "baseline_code_structure_hash": "68a5e03adac245755934c277fd4b5e7b03c6919bf4d5adaabcbf5142941e9357",
     "baseline_yaml_content_hash": "f19754b3695f829d3d99ebdb402349cddabf58d4e328fac51d9afe0dbdd8fa18"
   },
-  "ObservabilitySpec.event_token": {},
-  "StainerSpec": {
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#ObservabilitySpec.event_token": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec": {
+    "baseline_code_signature_text": "class StainerSpec(PhysicsSpec):",
+    "baseline_code_structure_hash": "763ebdb6c232b64fdf8706ffc99e3633a46ecdae4f49821bd6a0f9456ecfe58d",
     "baseline_yaml_content_hash": "465ae581137d4c2d6dc17cd281182c3f11fee04e3f31528345ec25598db616a0"
   },
-  "StainerSpec.context_input": {},
-  "StainerSpec.obs_output": {},
-  "StainerSpec.output_default": {},
-  "StainerSpec.output_error": {},
-  "StainerSpec.trace_input": {},
-  "StainerSpec.worker_result": {},
-  "WorkerSpec": {
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.context_input": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.obs_output": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.output_default": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.output_error": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.trace_input": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.worker_result": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#WorkerSpec": {
+    "baseline_code_signature_text": "class WorkerSpec(PhysicsSpec):",
+    "baseline_code_structure_hash": "86f4bbe37f4547c8cd35f4cb9e5d7beb9015ac34647c7a6bcd1406acf5a804ed",
     "baseline_yaml_content_hash": "3d106ded2c35e86f3a29c31b419d052ef546aded806fc49926275c32c690d9cf"
   },
-  "WorkerSpec.worker_input": {},
-  "WorkerSpec.worker_result": {}
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#WorkerSpec.worker_input": {},
+  "py://packages/cascade-std/src/cascade/std/specs/triad.py#WorkerSpec.worker_result": {}
 }

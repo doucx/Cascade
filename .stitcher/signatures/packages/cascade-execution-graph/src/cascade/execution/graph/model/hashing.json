@@ -1,14 +1,17 @@
 {
-  "BlueprintHasher": {},
-  "BlueprintHasher._get_merkle_hash": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/hashing.py#BlueprintHasher": {
+    "baseline_code_signature_text": "class BlueprintHasher:",
+    "baseline_code_structure_hash": "be5cf4121339e9b4776adef2717795d046ee3b730cd2821ce9b8883714d6857c"
+  },
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/hashing.py#BlueprintHasher._get_merkle_hash": {
     "baseline_code_signature_text": "def _get_merkle_hash(self, components: List[str]) -> str:",
     "baseline_code_structure_hash": "f6f4c15396ae743d076c4bcd2e7abf1e927b864e3fb94a364c3089b1320a006b"
   },
-  "BlueprintHasher._get_node_components": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/hashing.py#BlueprintHasher._get_node_components": {
     "baseline_code_signature_text": "def _get_node_components(self, node: Node, graph: Graph) -> List[str]:",
     "baseline_code_structure_hash": "932f30fcfad600cc1cd629b5cf88b91e0d402e668cfcf594a3aa7e69bc90dae2"
   },
-  "BlueprintHasher.compute_hash": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/hashing.py#BlueprintHasher.compute_hash": {
     "baseline_code_signature_text": "def compute_hash(self, graph: Graph) -> str:",
     "baseline_code_structure_hash": "6a89200c584c284c55913c4278566ef788c834063fe08f5d3acd2d53bb6711d5"
   }

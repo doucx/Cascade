@@ -1,57 +1,78 @@
 {
-  "Edge": {},
-  "Edge.arg_name": {},
-  "Edge.edge_type": {},
-  "Edge.jump_selector": {},
-  "Edge.router": {},
-  "Edge.source": {},
-  "Edge.target": {},
-  "EdgeType": {},
-  "EdgeType.CONDITION": {},
-  "EdgeType.CONSTRAINT": {},
-  "EdgeType.DATA": {},
-  "EdgeType.IMPLICIT": {},
-  "EdgeType.ITERATIVE_JUMP": {},
-  "EdgeType.POTENTIAL": {},
-  "EdgeType.ROUTER_ROUTE": {},
-  "EdgeType.SEQUENCE": {},
-  "Graph": {},
-  "Graph._node_index": {},
-  "Graph.add_edge": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge": {
+    "baseline_code_signature_text": "class Edge:",
+    "baseline_code_structure_hash": "a2db2dc1332fe932f3984fe13052beeaaa9e01142a5f6b1974c8e87ab7021234"
+  },
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.arg_name": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.edge_type": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.jump_selector": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.router": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.source": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.target": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType": {
+    "baseline_code_signature_text": "class EdgeType(Enum):",
+    "baseline_code_structure_hash": "a52c0ea42c5152fab21dc5d3688fc32d8dbf00a91e5fc01af07a9b0ea5a718b5"
+  },
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.CONDITION": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.CONSTRAINT": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.DATA": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.IMPLICIT": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.ITERATIVE_JUMP": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.POTENTIAL": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.ROUTER_ROUTE": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.SEQUENCE": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph": {
+    "baseline_code_signature_text": "class Graph:",
+    "baseline_code_structure_hash": "46ec2314af218f08b3fef817cccc9eb47cd1cd64ca97fda556d9645dede4bbe8"
+  },
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph._node_index": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.add_edge": {
     "baseline_code_signature_text": "def add_edge(self, edge: Edge):",
     "baseline_code_structure_hash": "eb0f74293d5b404252dae86717c20757ecd6988a11ca1a354389324ba3a7de29"
   },
-  "Graph.add_node": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.add_node": {
     "baseline_code_signature_text": "def add_node(self, node: Node):",
     "baseline_code_structure_hash": "ba32af9058bd5b43729639266bee73ea36eb3ed91bee43d5f1d4cc6e40ac1dea"
   },
-  "Graph.edges": {},
-  "Graph.get_node": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.edges": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.get_node": {
     "baseline_code_signature_text": "def get_node(self, node_id: str) -> Optional[Node]:",
     "baseline_code_structure_hash": "4fc5ef0a47ba67cb70da2bd6b80d496e796a3d095abfd038611066e93ddc360c"
   },
-  "Graph.nodes": {},
-  "MapNode": {},
-  "Node": {},
-  "Node.__eq__": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.nodes": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#MapNode": {
+    "baseline_code_signature_text": "class MapNode(Node):",
+    "baseline_code_structure_hash": "55a8d657c0fa2485bd748967e6dd8ddc8529b9b242c961ae549b191e5e06d843"
+  },
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node": {
+    "baseline_code_signature_text": "class Node:",
+    "baseline_code_structure_hash": "330edd1b7a6280e5b72587885ec675aaf979d82e2efc843e551eacaf909b5e49"
+  },
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.__eq__": {
     "baseline_code_signature_text": "def __eq__(self, other):",
     "baseline_code_structure_hash": "158b3e7cb66eccd572d942985ef6c495179e8a05ca8e198740959d2db4852ec1"
   },
-  "Node.__hash__": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.__hash__": {
     "baseline_code_signature_text": "def __hash__(self):",
     "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
   },
-  "Node.cache_policy": {},
-  "Node.constraints": {},
-  "Node.current_node_instance_hash": {},
-  "Node.definition": {},
-  "Node.has_complex_inputs": {},
-  "Node.input_bindings": {},
-  "Node.name": {},
-  "Node.node_type": {},
-  "Node.retry_policy": {},
-  "ParamNode": {},
-  "ParamNode.has_complex_inputs": {},
-  "ParamNode.param_spec": {},
-  "TaskNode": {}
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.cache_policy": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.constraints": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.current_node_instance_hash": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.definition": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.has_complex_inputs": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.input_bindings": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.name": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.node_type": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.retry_policy": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#ParamNode": {
+    "baseline_code_signature_text": "class ParamNode(TaskNode):",
+    "baseline_code_structure_hash": "908d9cc0f94cb209f5689edfb0b9430c1ab08fc4b1a912936dba0c6d9aeb5ff2"
+  },
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#ParamNode.has_complex_inputs": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#ParamNode.param_spec": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#TaskNode": {
+    "baseline_code_signature_text": "class TaskNode(Node):",
+    "baseline_code_structure_hash": "29c3e4c5562e409e047b60407ba4cf3c2775a5417aba8d064860a745d6aec155"
+  }
 }

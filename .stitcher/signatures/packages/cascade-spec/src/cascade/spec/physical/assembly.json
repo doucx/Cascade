@@ -1,16 +1,24 @@
 {
-  "Assembly": {
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#Assembly": {
+    "baseline_code_signature_text": "class Assembly:",
+    "baseline_code_structure_hash": "0392c73b14e4b081eea97f1f6ab3ad5a360131f12fb8f253fb81c46aa28cc1a3",
     "baseline_yaml_content_hash": "c5f692966065a93228cae2aa9b577cbdd2f07279a7df5675f9e1baa1ebdd1334"
   },
-  "Assembly.graph": {},
-  "Assembly.metadata": {},
-  "Assembly.symbol_table": {},
-  "CompilationArtifact": {},
-  "CompilationArtifact.assembly": {},
-  "CompilationArtifact.manifest": {},
-  "CompilationManifest": {},
-  "CompilationManifest.entry_points": {},
-  "CompilationManifest.exit_points": {},
-  "CompilationManifest.logical_to_physical_map": {},
-  "SymbolTable": {}
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#Assembly.graph": {},
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#Assembly.metadata": {},
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#Assembly.symbol_table": {},
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#CompilationArtifact": {
+    "baseline_code_signature_text": "class CompilationArtifact:",
+    "baseline_code_structure_hash": "4c626f048244f4fb0943d387ea5ddce53a8b8b64ede84dfc5fad8ed4b236808c"
+  },
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#CompilationArtifact.assembly": {},
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#CompilationArtifact.manifest": {},
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#CompilationManifest": {
+    "baseline_code_signature_text": "class CompilationManifest:",
+    "baseline_code_structure_hash": "b2411347a5648073d9a109f3bf28bdafefe0399ba710c66077f152e8033c0973"
+  },
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#CompilationManifest.entry_points": {},
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#CompilationManifest.exit_points": {},
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#CompilationManifest.logical_to_physical_map": {},
+  "py://packages/cascade-spec/src/cascade/spec/physical/assembly.py#SymbolTable": {}
 }

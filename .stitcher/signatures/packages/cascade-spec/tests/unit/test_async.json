@@ -1,13 +1,13 @@
 {
-  "test_async_task_returns_lazy_result": {
+  "py://packages/cascade-spec/tests/unit/test_async.py#test_async_task_returns_lazy_result": {
     "baseline_code_signature_text": "def test_async_task_returns_lazy_result():",
     "baseline_code_structure_hash": "ffacbd5e527a4be6dc29916be46bc74853f8112dbf528cda44d86ca474ac4ffe"
   },
-  "test_task_detects_async_function": {
+  "py://packages/cascade-spec/tests/unit/test_async.py#test_task_detects_async_function": {
     "baseline_code_signature_text": "def test_task_detects_async_function():",
     "baseline_code_structure_hash": "5acac080c593f9feea07a340fd0ca3e82de293191bf0d4c54d491909891325d7"
   },
-  "test_task_detects_sync_function": {
+  "py://packages/cascade-spec/tests/unit/test_async.py#test_task_detects_sync_function": {
     "baseline_code_signature_text": "def test_task_detects_sync_function():",
     "baseline_code_structure_hash": "e37745bfca6f3a89b4d2d57b856e2b978311c8799f5626da051e4e7e1f0c8a3b"
   }

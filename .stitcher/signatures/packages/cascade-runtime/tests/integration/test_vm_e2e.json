@@ -1,53 +1,53 @@
 {
-  "add": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#add": {
     "baseline_code_signature_text": "def add(a: int, b: int) -> int:",
     "baseline_code_structure_hash": "6a0e278928c0b8f86e6fc8d18606e21229844e6b16bef22297ac533564b3dcc6"
   },
-  "async_mul": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#async_mul": {
     "baseline_code_signature_text": "async def async_mul(a: int, b: int) -> int:",
     "baseline_code_structure_hash": "2a68fd0ba2c174d248af008c38984479edaf2fb4028b96584e3b57d5eefc1cb7"
   },
-  "bus": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#bus": {
     "baseline_code_signature_text": "def bus():",
     "baseline_code_structure_hash": "e0056c6787ec9a880d02a778f4e9ce151a245f1c5224d9e27fd2e185bea1c394"
   },
-  "engine": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#engine": {
     "baseline_code_signature_text": "def engine(executor, bus, strategy):",
     "baseline_code_structure_hash": "56dadea29122cf11f5fa26e4404c39c108a64de48a9296fff785d7ee8b17a5c5"
   },
-  "executor": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#executor": {
     "baseline_code_signature_text": "def executor():",
     "baseline_code_structure_hash": "4bc00e2b33ad354c52ddffbf516a2f6785f11bd07ac70929bea52d7e20f19b3c"
   },
-  "fail": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#fail": {
     "baseline_code_signature_text": "def fail(msg: str):",
     "baseline_code_structure_hash": "3b351e94fbc7abae5a45778e16c9b6e03b03a43cacbc6bbc1ffc692f87f0c4b5"
   },
-  "strategy": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#strategy": {
     "baseline_code_signature_text": "def strategy(executor, bus):",
     "baseline_code_structure_hash": "70523266c2e45ebca9514f25e398a82c518fd1463926d672bccd0d2ca0f9ec85"
   },
-  "test_vm_async_execution": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#test_vm_async_execution": {
     "baseline_code_signature_text": "async def test_vm_async_execution(engine):",
     "baseline_code_structure_hash": "523455752b65deecbafe7e730634d2a2651312fb67bd5f9fd33f905dd28c800f",
     "baseline_yaml_content_hash": "f61bf6ab3c095b31128d1777861f2accecd7f9c4be0c19d587cf7f2233bda53e"
   },
-  "test_vm_dependency_chain": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#test_vm_dependency_chain": {
     "baseline_code_signature_text": "async def test_vm_dependency_chain(engine):",
     "baseline_code_structure_hash": "03ab02f7e64b71767dfea682d09231b15d8eb9ea34c406cab888011b8f49b94c",
     "baseline_yaml_content_hash": "494e9b23d8643e41cd9eb411932ca1777b8d5977fc1f15e978481ba582d8213f"
   },
-  "test_vm_error_propagation": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#test_vm_error_propagation": {
     "baseline_code_signature_text": "async def test_vm_error_propagation(engine):",
     "baseline_code_structure_hash": "908dc4e25f80b54f6bcacb3d9642bbfd6d6a2d8428b6c337b4e6b953d4238026",
     "baseline_yaml_content_hash": "3d5b921490f2a176675abacb64695471e4851443006374d2f7b7f155ef8e88c7"
   },
-  "test_vm_list_output": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#test_vm_list_output": {
     "baseline_code_signature_text": "async def test_vm_list_output(engine):",
     "baseline_code_structure_hash": "a6ecf7e98c1ba194bcc1ad28e700980f6dc5c25384efd67071b1f10507e109f0",
     "baseline_yaml_content_hash": "d9e8906451ebc6ec64b78e0a12d371e6a92783c36ec70b7860c52d513200dd38"
   },
-  "test_vm_simple_execution": {
+  "py://packages/cascade-runtime/tests/integration/test_vm_e2e.py#test_vm_simple_execution": {
     "baseline_code_signature_text": "async def test_vm_simple_execution(engine):",
     "baseline_code_structure_hash": "d404cb7aa47e49323a3e45cd6a300b04ddcc95a5ea717dcf739aedda4d97f2b8",
     "baseline_yaml_content_hash": "4cb1214e01632bda0aa12a2ac539258d11c59a99d92def74de9c3c7e80c7167e"

@@ -1,9 +1,9 @@
 {
-  "empty_graph_ir": {
+  "py://packages/cascade-compiler/tests/unit/backend/test_builder_observability.py#empty_graph_ir": {
     "baseline_code_signature_text": "def empty_graph_ir():",
     "baseline_code_structure_hash": "cbe0c5d1be0e0fbeb42da2ad10a881f09ba5a78733948d1d446ee8f24ba4acb6"
   },
-  "test_builder_creates_observer_sidecar": {
+  "py://packages/cascade-compiler/tests/unit/backend/test_builder_observability.py#test_builder_creates_observer_sidecar": {
     "baseline_code_signature_text": "def test_builder_creates_observer_sidecar(empty_graph_ir):",
     "baseline_code_structure_hash": "ed73afb888230e48a6e82a759a2575b66a6d412057b7423a806f7226f0dada82"
   }

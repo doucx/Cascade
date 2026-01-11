@@ -1,22 +1,28 @@
 {
-  "LookupProvider": {},
-  "LookupProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/config.py#LookupProvider": {
+    "baseline_code_signature_text": "class LookupProvider(Provider):",
+    "baseline_code_structure_hash": "7dcc21498a9ab49bf56aed2b88433540be6b895d942ef8771a2c34f73424bd4d"
+  },
+  "py://packages/cascade-library/src/cascade/providers/config.py#LookupProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "LookupProvider.name": {},
-  "YamlLoaderProvider": {},
-  "YamlLoaderProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/config.py#LookupProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/config.py#YamlLoaderProvider": {
+    "baseline_code_signature_text": "class YamlLoaderProvider(Provider):",
+    "baseline_code_structure_hash": "8a077ad979f3546c4c8c1224c62e68b8aa68dbee670a4367e40cabc5496bee61"
+  },
+  "py://packages/cascade-library/src/cascade/providers/config.py#YamlLoaderProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "YamlLoaderProvider.name": {},
-  "_lookup_task": {
+  "py://packages/cascade-library/src/cascade/providers/config.py#YamlLoaderProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/config.py#_lookup_task": {
     "baseline_code_signature_text": "def _lookup_task(source: Dict[str, Any], key: str) -> Any:",
     "baseline_code_structure_hash": "c874d93609ed1219a37eecaf89d13c26b892795b521da9792f2aa6f02de8760a",
     "baseline_yaml_content_hash": "637d370fa0ef50cacb0775571c68a2050754506c4e5b2e8004e88a24da200b86"
   },
-  "_read_yaml_task": {
+  "py://packages/cascade-library/src/cascade/providers/config.py#_read_yaml_task": {
     "baseline_code_signature_text": "async def _read_yaml_task(path: str) -> Dict[str, Any]:",
     "baseline_code_structure_hash": "825a80e312536df5abc94571c7fd496a2b979ec51b855309560ccc014c7653e0",
     "baseline_yaml_content_hash": "ca9509d9946f1f8d481059ae766449c11dec7eb34bd77533e3561c4c7b1569a3"

@@ -1,39 +1,39 @@
 {
-  "_get_connector": {
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#_get_connector": {
     "baseline_code_signature_text": "def _get_connector(backend: str, hostname: str, port: int) -> Connector:",
     "baseline_code_structure_hash": "af6b5e09ce735a3711cb70dd0bdfe90e40659814e26450a3c0d3bd703647b8a2"
   },
-  "_publish_limit": {
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#_publish_limit": {
     "baseline_code_signature_text": "async def _publish_limit(scope: str, concurrency: int | None, rate: str | None, ttl: int | None, backend: str, hostname: str, port: int):",
     "baseline_code_structure_hash": "b8aa1eab528ef77f07df3faccecd0ce9958b1b830b6735434f198f717c05b470",
     "baseline_yaml_content_hash": "3b20b6427114f9878722628bedfb5df72893d8beb7618e8a8c33e5a45773548c"
   },
-  "_publish_pause": {
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#_publish_pause": {
     "baseline_code_signature_text": "async def _publish_pause(scope: str, ttl: int | None, backend: str, hostname: str, port: int):",
     "baseline_code_structure_hash": "db6535c9685e4643af64bf68bcd986cea2afeb3d60e6df0fd1c651861f54ca95",
     "baseline_yaml_content_hash": "e71e29bd63f3190b6a60c36e8ca0d434c36904468b326fdf6a767f6b046b40bf"
   },
-  "_publish_resume": {
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#_publish_resume": {
     "baseline_code_signature_text": "async def _publish_resume(scope: str, backend: str, hostname: str, port: int):",
     "baseline_code_structure_hash": "2bb2e88ac4f0b1feaec65cd63ed7838c615e8404b5d36e72c70c42cdf9b90700",
     "baseline_yaml_content_hash": "c315d933c65945d42cd361c8b1942dc26d7c60d2f1678d6dcc08d58765179866"
   },
-  "app": {},
-  "main": {
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#app": {},
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#main": {
     "baseline_code_signature_text": "def main():",
     "baseline_code_structure_hash": "ec3ee86290baaf2be43d796e40266959fcd8b2d57b6599f49808563639b00d28"
   },
-  "pause": {
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#pause": {
     "baseline_code_signature_text": "def pause(scope: str = typer.Argument('global', help=\"The scope to pause (e.g., 'global', 'project:etl', 'task:api_call').\"), ttl: int = typer.Option(None, '--ttl', help='Time to live in seconds. Pause expires automatically.'), backend: str = typer.Option('mqtt', '--backend', help=\"Control plane backend ('mqtt' or 'sqlite').\"), hostname: str = typer.Option('localhost', '--host', help='MQTT broker hostname.'), port: int = typer.Option(1883, '--port', help='MQTT broker port.')):",
     "baseline_code_structure_hash": "67cfb22fc4eb018588da26609bb6139b882011da1b1214edf0fc9302e49f37ba",
     "baseline_yaml_content_hash": "75a864a4e6c63a797eab5922271f24d9d63beeb0f5d90b5291fbe5a276321238"
   },
-  "resume": {
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#resume": {
     "baseline_code_signature_text": "def resume(scope: str = typer.Argument('global', help=\"The scope to resume (e.g., 'global', 'project:etl', 'task:api_call').\"), backend: str = typer.Option('mqtt', '--backend', help=\"Control plane backend ('mqtt' or 'sqlite').\"), hostname: str = typer.Option('localhost', '--host', help='MQTT broker hostname.'), port: int = typer.Option(1883, '--port', help='MQTT broker port.')):",
     "baseline_code_structure_hash": "f8bc44ac74ab19293dab88c3a8e2bde6ac88feebae475591a0b94612d74d1c3b",
     "baseline_yaml_content_hash": "82093ade6ca0ac7ed5afd676fde66bc4e9aee7bfddb1e8ecd29e804696384479"
   },
-  "set_limit": {
+  "py://packages/cascade-cli-controller/src/cascade/cli/controller/app.py#set_limit": {
     "baseline_code_signature_text": "def set_limit(scope: str = typer.Option(..., '--scope', help=\"The scope to apply the limit to (e.g., 'global', 'task:api_call').\"), concurrency: int = typer.Option(None, '--concurrency', help='The maximum number of concurrent tasks.'), rate: str = typer.Option(None, '--rate', help=\"The rate limit (e.g., '10/m', '5/s').\"), ttl: int = typer.Option(None, '--ttl', help='Time to live in seconds. Constraint expires automatically.'), backend: str = typer.Option('mqtt', '--backend', help=\"Control plane backend ('mqtt' or 'local').\"), hostname: str = typer.Option('localhost', '--host', help='MQTT broker hostname.'), port: int = typer.Option(1883, '--port', help='MQTT broker port.')):",
     "baseline_code_structure_hash": "3e97b280f02c2a5d48474eaf7398fe58f23ab93b67aa8b52e9cb48d9d4458283",
     "baseline_yaml_content_hash": "97daaa7fbf8756b5f7b860b054f650dbe4a7016ef97f11503e4706413f9658ff"

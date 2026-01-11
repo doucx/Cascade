@@ -1,71 +1,75 @@
 {
-  "HumanReadableLogSubscriber": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber": {
+    "baseline_code_signature_text": "class HumanReadableLogSubscriber:",
+    "baseline_code_structure_hash": "1644c25c6ec44c4f9e74748e55897b75a0f46d56f4c1f24dd9c6d04394fac914",
     "baseline_yaml_content_hash": "ce3745aec3d8a8853b73841237cc6bb11d5ad49bd3709328603fc01ed0a53894"
   },
-  "HumanReadableLogSubscriber.__init__": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.__init__": {
     "baseline_code_signature_text": "def __init__(self, event_bus: EventBus):",
     "baseline_code_structure_hash": "7c64ca8725e6125f4a196386e81d9d5984f0e520f1f6c5acc908615a8f5b6b3a"
   },
-  "HumanReadableLogSubscriber.on_connector_connected": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_connector_connected": {
     "baseline_code_signature_text": "def on_connector_connected(self, event: ConnectorConnected):",
     "baseline_code_structure_hash": "25560b697eef06dda8bb7028d77ede5e98cd5d245575c360fc299992755df5f5"
   },
-  "HumanReadableLogSubscriber.on_connector_disconnected": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_connector_disconnected": {
     "baseline_code_signature_text": "def on_connector_disconnected(self, event: ConnectorDisconnected):",
     "baseline_code_structure_hash": "5c4d6ac1ccaa13016535fc89df2754fa5bda0eead67f7a47855b00a34f4fa260"
   },
-  "HumanReadableLogSubscriber.on_run_finished": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_run_finished": {
     "baseline_code_signature_text": "def on_run_finished(self, event: RunFinished):",
     "baseline_code_structure_hash": "95df213933ca0a0d84e20a9912503c588c5165f6614029c95edc7c4ceb147084"
   },
-  "HumanReadableLogSubscriber.on_run_started": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_run_started": {
     "baseline_code_signature_text": "def on_run_started(self, event: RunStarted):",
     "baseline_code_structure_hash": "30c2dedca9f449d736b18d7b4a1f60e5425976bdb887518ce7dc0d4e6cd38e9c"
   },
-  "HumanReadableLogSubscriber.on_static_analysis_warning": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_static_analysis_warning": {
     "baseline_code_signature_text": "def on_static_analysis_warning(self, event: StaticAnalysisWarning):",
     "baseline_code_structure_hash": "fecd778db96d10e8042f8766bffac8bc5b5709692977517c368a9079e50b2b76"
   },
-  "HumanReadableLogSubscriber.on_task_blocked": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_task_blocked": {
     "baseline_code_signature_text": "def on_task_blocked(self, event: TaskBlocked):",
     "baseline_code_structure_hash": "233a2ec903aebb9855565b56dfdb171f6adb8af13aeccfdb4f013a376ece326b"
   },
-  "HumanReadableLogSubscriber.on_task_finished": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_task_finished": {
     "baseline_code_signature_text": "def on_task_finished(self, event: TaskExecutionFinished):",
     "baseline_code_structure_hash": "9b46b9f12dcfb21acedd9995bf4e892b418c8058d87317df8564af87b008151d"
   },
-  "HumanReadableLogSubscriber.on_task_retrying": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_task_retrying": {
     "baseline_code_signature_text": "def on_task_retrying(self, event: TaskRetrying):",
     "baseline_code_structure_hash": "e75b3f0a5cf35e13b1dd673d99f5e6353be0fde0e68659f8631bb43e59719772"
   },
-  "HumanReadableLogSubscriber.on_task_skipped": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_task_skipped": {
     "baseline_code_signature_text": "def on_task_skipped(self, event: TaskSkipped):",
     "baseline_code_structure_hash": "53dd23da455c6cb94123fd9b0d8878505c3b2c80b1771151d7eacce6474f878e"
   },
-  "HumanReadableLogSubscriber.on_task_started": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#HumanReadableLogSubscriber.on_task_started": {
     "baseline_code_signature_text": "def on_task_started(self, event: TaskExecutionStarted):",
     "baseline_code_structure_hash": "694bc45e124b092c7114b5599909651680105bea9cdcb939dbf1859eded44b73"
   },
-  "TelemetrySubscriber": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#TelemetrySubscriber": {
+    "baseline_code_signature_text": "class TelemetrySubscriber:",
+    "baseline_code_structure_hash": "0d6f30bc3bafcf7ac1c6585fc544675cd55ccc2d6250c756b67364f9dd71573c",
     "baseline_yaml_content_hash": "26d0304f5880fb874b31cc3091afe0185c5a0e2654f63b18a084f68597679c6b"
   },
-  "TelemetrySubscriber.__init__": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#TelemetrySubscriber.__init__": {
     "baseline_code_signature_text": "def __init__(self, event_bus: EventBus, connector: Connector):",
     "baseline_code_structure_hash": "ea2ca0a3928ba018fb476336ac6f2a2a6aed6ec6a5f9dde94c7a27d2d917dc2a"
   },
-  "TelemetrySubscriber._connector": {},
-  "TelemetrySubscriber._create_header": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#TelemetrySubscriber._connector": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#TelemetrySubscriber._create_header": {
     "baseline_code_signature_text": "def _create_header(self, run_id: str) -> dict:",
     "baseline_code_structure_hash": "ebd815eaeabc67f62e30efbffc68bbeba8850dbef64e5ec662f28814715534f2"
   },
-  "TelemetrySubscriber._pending_tasks": {},
-  "TelemetrySubscriber._source_id": {},
-  "TelemetrySubscriber.on_event": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#TelemetrySubscriber._pending_tasks": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#TelemetrySubscriber._source_id": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#TelemetrySubscriber.on_event": {
     "baseline_code_signature_text": "def on_event(self, event: Event):",
     "baseline_code_structure_hash": "08af49bf34e78b9cb1fd49e117d0101be5ab4347b3bc8b8af96f77e1a30c0d30",
     "baseline_yaml_content_hash": "013def771e1344695d470ce5878e340420c0b721d17e0327b71fdfdeda727c65"
   },
-  "TelemetrySubscriber.shutdown": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py#TelemetrySubscriber.shutdown": {
     "baseline_code_signature_text": "async def shutdown(self):",
     "baseline_code_structure_hash": "f39a6d3099b80714a2c6bedfcde7e9a7b35e38cc1891194239c51d9adb3f6f89",
     "baseline_yaml_content_hash": "db9b9a733d4d7a853c317059ad7bb13a073376f5d94a870ef1ffd70013cbd5a5"

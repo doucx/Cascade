@@ -1,19 +1,19 @@
 {
-  "missing_task": {
+  "py://packages/cascade-vm/tests/integration/test_linker_validation.py#missing_task": {
     "baseline_code_signature_text": "def missing_task():",
     "baseline_code_structure_hash": "3a038b7fb340d0d1edd1280555d9f75fe801d26eed449fcb418201f0b2180fdd"
   },
-  "test_blind_optimism_without_linker": {
+  "py://packages/cascade-vm/tests/integration/test_linker_validation.py#test_blind_optimism_without_linker": {
     "baseline_code_signature_text": "async def test_blind_optimism_without_linker():",
     "baseline_code_structure_hash": "f3fc6d5da838ed909f41a45593bc2b2cb40778ec3428a77ab6d058d4c24b2850",
     "baseline_yaml_content_hash": "9976c4df144ba02f979ae7167a2529b580476bca24ac7f363037870c449ba656"
   },
-  "test_linker_enforces_integrity": {
+  "py://packages/cascade-vm/tests/integration/test_linker_validation.py#test_linker_enforces_integrity": {
     "baseline_code_signature_text": "async def test_linker_enforces_integrity():",
     "baseline_code_structure_hash": "afe99d902a0aa08990f503c3398bb108b062911e4c154a6354776203d34d1073",
     "baseline_yaml_content_hash": "3ba146a8fcfa7ce8fb0675dd781fea28ab54f7748e3144b67ae244d3d4a33024"
   },
-  "test_runner_from_assembly_enforces_linker": {
+  "py://packages/cascade-vm/tests/integration/test_linker_validation.py#test_runner_from_assembly_enforces_linker": {
     "baseline_code_signature_text": "async def test_runner_from_assembly_enforces_linker():",
     "baseline_code_structure_hash": "b68286fc8200c812f79a31872d95c47e269e4022dfe25d7f01a8a0c88be94198",
     "baseline_yaml_content_hash": "2f67dc0a132e60195291f40532a43d5a07ed037c70dccdacd243d54eac46f95c"

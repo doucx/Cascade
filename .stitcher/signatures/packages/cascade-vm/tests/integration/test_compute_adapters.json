@@ -1,71 +1,71 @@
 {
-  "async_add": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#async_add": {
     "baseline_code_signature_text": "async def async_add(a, b):",
     "baseline_code_structure_hash": "4b55543cf2b76b930fbb811d6c5654caa884e39188fa2e423624717915251a2c"
   },
-  "inbound_queue": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#inbound_queue": {
     "baseline_code_signature_text": "def inbound_queue():",
     "baseline_code_structure_hash": "bff61df84030d313d56da34d86c43e2f1b5976eb6ff817186a31619bfe4dcda2"
   },
-  "mock_executor": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#mock_executor": {
     "baseline_code_signature_text": "def mock_executor():",
     "baseline_code_structure_hash": "d1cd49d2cab9a5557f3e809b2599555786331efc64ee6143b8af997433e5550d"
   },
-  "outbound_queue": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#outbound_queue": {
     "baseline_code_signature_text": "def outbound_queue():",
     "baseline_code_structure_hash": "f188a68a77cf8f294a51ef0134c11a4a21c4538f2ae66521576468792e256d04"
   },
-  "registry": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#registry": {
     "baseline_code_signature_text": "def registry():",
     "baseline_code_structure_hash": "80dbfb26b2188869ce80123f76f3b06999b40c3bc7d6b43176c60ec17f2d2744"
   },
-  "service": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#service": {
     "baseline_code_signature_text": "def service(mock_executor, store, registry, inbound_queue, outbound_queue, wakeup_event):",
     "baseline_code_structure_hash": "087cf4ec6bd431741475cfd2f210093303dca98c2a4b9b8051d7e58e0018c4f3"
   },
-  "service_task": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#service_task": {
     "baseline_code_signature_text": "async def service_task(service):",
     "baseline_code_structure_hash": "5134ed2695c03d8e7337659c32cdb48c15e107569da5d1b5ffa086746155ba1d",
     "baseline_yaml_content_hash": "ab96ef65f525067b49fda47867ef239443d483175452af099da5f8f770a2c15f"
   },
-  "store": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#store": {
     "baseline_code_signature_text": "def store():",
     "baseline_code_structure_hash": "ae4a0926a903921e2b475a129fae521eafa0461e3fcd8abb28f4624bfc529e76"
   },
-  "sync_add": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#sync_add": {
     "baseline_code_signature_text": "def sync_add(a, b):",
     "baseline_code_structure_hash": "e4da6e3e013c653cf45cbaf0ab973ddbdd182f6b2d9eeae0f7f16a6604d61965"
   },
-  "sync_compute_task": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#sync_compute_task": {
     "baseline_code_signature_text": "def sync_compute_task(x):",
     "baseline_code_structure_hash": "eb50d70371318c3f66924899c5829cabd301354f4aa4b95488608c201616a901"
   },
-  "test_execution_failure": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_execution_failure": {
     "baseline_code_signature_text": "async def test_execution_failure(service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor):",
     "baseline_code_structure_hash": "f1589aa4f981ddfd6549a7d5cf581fde36858540216f9a689aa26d10b14fbad1",
     "baseline_yaml_content_hash": "2d7c4454a0048df7407d8546dbd68220666bf33a8147e75893dc37c12f9b825b"
   },
-  "test_is_idle_state_changes": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_is_idle_state_changes": {
     "baseline_code_signature_text": "async def test_is_idle_state_changes(service, service_task, inbound_queue, outbound_queue):",
     "baseline_code_structure_hash": "408c529f192bc2271e1c1bc7537f0d0911593b7995e647df624cd61fa104d3c4",
     "baseline_yaml_content_hash": "e0fe4fc1e53ec098cc9cbbd4a188cc812d4b395dc9ea713a0b1b5e31a3031105"
   },
-  "test_process_async_task": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_process_async_task": {
     "baseline_code_signature_text": "async def test_process_async_task(service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor):",
     "baseline_code_structure_hash": "139877a8551f18f599623a49427d83dad89b76301930ac2483ec7ecc0a5baf12",
     "baseline_yaml_content_hash": "afc997fcbb27effd6b30e0b5336c04db3ab5e6e6720ecd2632d992b145394b8a"
   },
-  "test_process_sync_task": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_process_sync_task": {
     "baseline_code_signature_text": "async def test_process_sync_task(service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor):",
     "baseline_code_structure_hash": "c8229c6501d65d29ac8acefa5663a274dc5745fc32a2c9c3a83c65bb9a44cf30",
     "baseline_yaml_content_hash": "58050b196810e713b1bb87a34affceeeca7839c02cebe627a1788c7948bd3db2"
   },
-  "test_task_with_compute_mode": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_task_with_compute_mode": {
     "baseline_code_signature_text": "async def test_task_with_compute_mode(service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor):",
     "baseline_code_structure_hash": "6ad1fabe11da2527138faf39fb0399afcbde8cf96f2f7ac42f8a206e94df2d50",
     "baseline_yaml_content_hash": "0e9a66b71875ff510025ad58f52640188523f5c769784239af9595232c777ec3"
   },
-  "wakeup_event": {
+  "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#wakeup_event": {
     "baseline_code_signature_text": "def wakeup_event():",
     "baseline_code_structure_hash": "fb59021729df4a55344e915d3cc3312c2d8ac8f373a2f8db18839f36d1ae4d16"
   }

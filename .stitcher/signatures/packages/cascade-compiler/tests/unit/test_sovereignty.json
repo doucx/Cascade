@@ -1,5 +1,5 @@
 {
-  "test_expander_generates_sovereign_ports": {
+  "py://packages/cascade-compiler/tests/unit/test_sovereignty.py#test_expander_generates_sovereign_ports": {
     "baseline_code_signature_text": "def test_expander_generates_sovereign_ports():",
     "baseline_code_structure_hash": "0e33f67b9b976edb922d8791096184e7b4ed3927a95ace518f519de5b4772964"
   }

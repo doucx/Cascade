@@ -1,8 +1,11 @@
 {
-  "ExpansionContext": {},
-  "ExpansionContext.environment": {},
-  "ExpansionContext.graph_ir": {},
-  "ExpansionContext.physical_graph": {},
-  "ExpansionContext.subgraphs": {},
-  "ExpansionContext.wire": {}
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext": {
+    "baseline_code_signature_text": "class ExpansionContext:",
+    "baseline_code_structure_hash": "beb3540e06c7074ac151bc4e9c197664e0a44a875c83911b8725c9937f0f8243"
+  },
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.environment": {},
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.graph_ir": {},
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.physical_graph": {},
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.subgraphs": {},
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.wire": {}
 }

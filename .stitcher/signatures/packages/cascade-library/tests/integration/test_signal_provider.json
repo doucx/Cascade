@@ -1,20 +1,20 @@
 {
-  "engine": {
+  "py://packages/cascade-library/tests/integration/test_signal_provider.py#engine": {
     "baseline_code_signature_text": "def engine(local_connector):",
     "baseline_code_structure_hash": "e02f742f763f9d0a2d50b19386585a278d28be603dbf0399de80d721ff498984",
     "baseline_yaml_content_hash": "40d9a5a7274b997f1797bdaf9ef424ac759bb96d51a99eebde43225651f10dc3"
   },
-  "local_connector": {
+  "py://packages/cascade-library/tests/integration/test_signal_provider.py#local_connector": {
     "baseline_code_signature_text": "def local_connector():",
     "baseline_code_structure_hash": "711974891085e86d6efb5c35b9bf04464ae48dfafd88132a169f6a39702fb6d0",
     "baseline_yaml_content_hash": "02140cb330d80e8f286a21f1a52d02d979aebaeea6be3a712bf8f96afd2b5c84"
   },
-  "test_recv_blocks_and_wakes_up": {
+  "py://packages/cascade-library/tests/integration/test_signal_provider.py#test_recv_blocks_and_wakes_up": {
     "baseline_code_signature_text": "async def test_recv_blocks_and_wakes_up(engine, local_connector):",
     "baseline_code_structure_hash": "6acaa1bb829c3a83d4c0b326480d60d909b29e37c91324134b2218c5441e4920",
     "baseline_yaml_content_hash": "a50fd2e9dd891c2486199d489955f9739ca9c15d8d2b3dfcec1184ee78278253"
   },
-  "test_recv_times_out": {
+  "py://packages/cascade-library/tests/integration/test_signal_provider.py#test_recv_times_out": {
     "baseline_code_signature_text": "async def test_recv_times_out(engine):",
     "baseline_code_structure_hash": "ac43e79be6c0574fa4e3119b120e9cf9cfd92ab6332eaab3aaad68816ec78aa3",
     "baseline_yaml_content_hash": "bdfec76649b918e96e2fe5d2ca1300ef0c2d0c5145ebee73165d20c3cc8bad9d"

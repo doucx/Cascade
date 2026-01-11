@@ -1,13 +1,13 @@
 {
-  "add": {
+  "py://packages/cascade-compiler/tests/integration/test_graph_purity.py#add": {
     "baseline_code_signature_text": "def add(a: int, b: int) -> int:",
     "baseline_code_structure_hash": "6a0e278928c0b8f86e6fc8d18606e21229844e6b16bef22297ac533564b3dcc6"
   },
-  "square": {
+  "py://packages/cascade-compiler/tests/integration/test_graph_purity.py#square": {
     "baseline_code_signature_text": "def square(n: int) -> int:",
     "baseline_code_structure_hash": "cbe0ba853b2d4995d621005d310d766fee07751eea08f4a1144a594f447d0a86"
   },
-  "test_graph_is_serializable_and_pure": {
+  "py://packages/cascade-compiler/tests/integration/test_graph_purity.py#test_graph_is_serializable_and_pure": {
     "baseline_code_signature_text": "def test_graph_is_serializable_and_pure():",
     "baseline_code_structure_hash": "91fb1d936d81c62d8e7a7f16a335bbcf581e9b41d10e112c911c70aa6054d05b",
     "baseline_yaml_content_hash": "d7c024bb16303189faad70fa1c9139ba96b69c5ff10d0d9dc50a6f61bd9d8d1e"

@@ -1,14 +1,16 @@
 {
-  "LocalExecutor": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/executors/local.py#LocalExecutor": {
+    "baseline_code_signature_text": "class LocalExecutor:",
+    "baseline_code_structure_hash": "6206fd0c201eb9a9b253ec94e2a5b4dcdeb238e97b98635833ca85419835775d",
     "baseline_yaml_content_hash": "f5dfe5a64dbd130850f936e3cc431d955ba90773f9382d7c1db599c14e3c773d"
   },
-  "LocalExecutor.__init__": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/executors/local.py#LocalExecutor.__init__": {
     "baseline_code_signature_text": "def __init__(self):",
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
   },
-  "LocalExecutor._blocking_executor": {},
-  "LocalExecutor._compute_executor": {},
-  "LocalExecutor.execute": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/executors/local.py#LocalExecutor._blocking_executor": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/io/executors/local.py#LocalExecutor._compute_executor": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/io/executors/local.py#LocalExecutor.execute": {
     "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
     "baseline_code_structure_hash": "42c33adc443e46043352bc8c2c8f3dc4febb95531e696f8dc5fd657b4ef76d58",
     "baseline_yaml_content_hash": "9aac987dbf0023c6e1d401d0d53b30e7ccd93ec96f1ca0a4426b2c72f355705b"

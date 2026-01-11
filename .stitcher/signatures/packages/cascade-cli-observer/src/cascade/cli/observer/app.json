@@ -1,47 +1,47 @@
 {
-  "_get_status": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_get_status": {
     "baseline_code_signature_text": "async def _get_status(backend: str, hostname: str, port: int):",
     "baseline_code_structure_hash": "aef0b2ecfa0b98c6787ea928723e4a265b5a92b9f6481e22d88a39ffa813b141",
     "baseline_yaml_content_hash": "d4e56fe43b89360d7deb4f149e6c67619a723e05c16d2e334239f9c86d562865"
   },
-  "_get_status_sqlite": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_get_status_sqlite": {
     "baseline_code_signature_text": "async def _get_status_sqlite():",
     "baseline_code_structure_hash": "928a4093837066bed1c96f2d02434111d6f62b19808ad2519c6f8030cf0f7a68",
     "baseline_yaml_content_hash": "6094974340774e1703031d9a9e9b7ccd138c9e53eeb605e86c3b02b6ceb2b1ed"
   },
-  "_render_constraints_table": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_render_constraints_table": {
     "baseline_code_signature_text": "def _render_constraints_table(constraints: list[GlobalConstraint]):",
     "baseline_code_structure_hash": "17da98740ea40bce8c24f02574227fb345afefaf6ed68deed1df5933c7668a7c",
     "baseline_yaml_content_hash": "6935912c90a83ab6fd4e6468c5b21c155b9a1d32ef8085022ace289dd914fc33"
   },
-  "_run_mqtt_watcher": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_run_mqtt_watcher": {
     "baseline_code_signature_text": "async def _run_mqtt_watcher(project: str, hostname: str, port: int):",
     "baseline_code_structure_hash": "13056327a8b39fc7b777645edb48429d1ded1cc2cea4221fd001b5deb0f994a3",
     "baseline_yaml_content_hash": "b5658685d6a6a3b15de0134f90c3ffeaf378edd0cb3c8d7a55d5b02e673a2e83"
   },
-  "_run_uds_watcher": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_run_uds_watcher": {
     "baseline_code_signature_text": "async def _run_uds_watcher():",
     "baseline_code_structure_hash": "e1a7cf130d9304845a91cb26cb74fb4e58d8f5e478579e2f1eb86f6cf98ee985",
     "baseline_yaml_content_hash": "917a6689cc309ed4de1dc6098f31bfa4ad3da2fa3b85c41e24d9326304488597"
   },
-  "app": {},
-  "console": {},
-  "main": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#app": {},
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#console": {},
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#main": {
     "baseline_code_signature_text": "def main():",
     "baseline_code_structure_hash": "ec3ee86290baaf2be43d796e40266959fcd8b2d57b6599f49808563639b00d28"
   },
-  "on_message": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#on_message": {
     "baseline_code_signature_text": "async def on_message(topic: str, payload: dict):",
     "baseline_code_structure_hash": "8a49428abd1c6800a70f8f390eca68110aee50a980da244d902a5aba77d87275",
     "baseline_yaml_content_hash": "0a8e33713abcdf22c122348df6927dc5b403708f3dbf0677c682b59dead39c41"
   },
-  "seen_run_ids": {},
-  "status": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#seen_run_ids": {},
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#status": {
     "baseline_code_signature_text": "def status(backend: str = typer.Option('mqtt', '--backend', help=\"Control plane backend ('mqtt' or 'local').\"), hostname: str = typer.Option('localhost', help='MQTT broker hostname.'), port: int = typer.Option(1883, help='MQTT broker port.')):",
     "baseline_code_structure_hash": "cb8eaff76dbd13e615174a8f8878d6ae707ef6881b8121434e10f6866aef1963",
     "baseline_yaml_content_hash": "d4917a89993c9dce61015471caea72331216ff5bf26efb38f8bbc17426ba5e63"
   },
-  "watch": {
+  "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#watch": {
     "baseline_code_signature_text": "def watch(backend: str = typer.Option('mqtt', '--backend', help=\"Telemetry backend ('mqtt' or 'local').\"), project: str = typer.Option('default', '--project', help='The project ID to watch (MQTT only).'), hostname: str = typer.Option('localhost', '--host', help='MQTT broker hostname (MQTT only).'), port: int = typer.Option(1883, '--port', help='MQTT broker port (MQTT only).')):",
     "baseline_code_structure_hash": "321fd4e357fc04df945109d1e6d784e794e812b5a1b830394726ab86a3901aa9",
     "baseline_yaml_content_hash": "c28b5dbc1740d9325f140ac0731b506cf0ca97e4ea4d9a806e4d9dced636e073"

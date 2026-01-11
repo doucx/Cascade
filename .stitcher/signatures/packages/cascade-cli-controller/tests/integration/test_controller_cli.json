@@ -1,10 +1,10 @@
 {
-  "mock_publish_pause": {
+  "py://packages/cascade-cli-controller/tests/integration/test_controller_cli.py#mock_publish_pause": {
     "baseline_code_signature_text": "def mock_publish_pause():",
     "baseline_code_structure_hash": "3d3d25785d2885f504791897800e1aaada16c91c18093069856955cd9282600a"
   },
-  "runner": {},
-  "test_pause_command_dispatches_correctly": {
+  "py://packages/cascade-cli-controller/tests/integration/test_controller_cli.py#runner": {},
+  "py://packages/cascade-cli-controller/tests/integration/test_controller_cli.py#test_pause_command_dispatches_correctly": {
     "baseline_code_signature_text": "def test_pause_command_dispatches_correctly(mock_publish_pause):",
     "baseline_code_structure_hash": "9785c39567a157c5b12a89b84cf3374be68ea3953f24a7097b6639e7389bfe35",
     "baseline_yaml_content_hash": "2ca6d5facdb1f75d19db3192dd6343eb71cfd2de4213f1f3a6bda5888f1db43a"

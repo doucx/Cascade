@@ -1,20 +1,20 @@
 {
-  "local_bus": {
+  "py://packages/cascade-connector-local/tests/integration/test_local_connector.py#local_bus": {
     "baseline_code_signature_text": "def local_bus():",
     "baseline_code_structure_hash": "5386049f6b7a41cce8f0c909ac54e96ee0c99fac3b9af3c67b1319a7064558aa",
     "baseline_yaml_content_hash": "6511b343139c15021569ddbc0acfd0492d34a005974708e755c63ee15e9da183"
   },
-  "test_bus_connectivity_between_instances": {
+  "py://packages/cascade-connector-local/tests/integration/test_local_connector.py#test_bus_connectivity_between_instances": {
     "baseline_code_signature_text": "async def test_bus_connectivity_between_instances(local_bus):",
     "baseline_code_structure_hash": "f5797f77a2c9198794d552580884c450d48c9fe6d9171cb4baf0c50d9114d529",
     "baseline_yaml_content_hash": "7ad1cdb0d87171df57bcab4a0301a130bcad66d491ae24ef68f2e16907939034"
   },
-  "test_retained_messages": {
+  "py://packages/cascade-connector-local/tests/integration/test_local_connector.py#test_retained_messages": {
     "baseline_code_signature_text": "async def test_retained_messages(local_bus):",
     "baseline_code_structure_hash": "655c02da6edef891d46ae2f47619e408e0bbe2134b01d6448195d72ee4806369",
     "baseline_yaml_content_hash": "cf25be2b0aa883fead93d7316251292348574efe3198905edc1528bfa2b1183d"
   },
-  "test_wildcards_and_clearing_retain": {
+  "py://packages/cascade-connector-local/tests/integration/test_local_connector.py#test_wildcards_and_clearing_retain": {
     "baseline_code_signature_text": "async def test_wildcards_and_clearing_retain(local_bus):",
     "baseline_code_structure_hash": "341d3f6a8abdb7dad3255950f468c8ee896e72f3baf727f598d1a3c551c89930",
     "baseline_yaml_content_hash": "ccaf4673fdbd7f2a55fcb84f0f87b1c8ad803f34373d6999a9a7e2568ed0c61e"

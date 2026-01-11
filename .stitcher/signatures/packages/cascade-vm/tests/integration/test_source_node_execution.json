@@ -1,20 +1,11 @@
 {
-  "mock_worker": {
-    "baseline_code_signature_text": "def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "4c76656290a372a8c20a03926bc9909cd1a823e8d5f2d9d7ce0ef4f7214ef5a9"
-  },
-  "source_task": {
+  "py://packages/cascade-vm/tests/integration/test_source_node_execution.py#source_task": {
     "baseline_code_signature_text": "def source_task():",
     "baseline_code_structure_hash": "fc646cf4c0a86d9bd7eb38e3f79ab5692fc2946c8773cabdc562ff227bbb1095",
     "baseline_yaml_content_hash": "ef48cb6bb55d02ba923c73a2494d869856e0f72c311368244cdd63525377b88b"
   },
-  "test_source_node_is_triggered_by_pulse": {
+  "py://packages/cascade-vm/tests/integration/test_source_node_execution.py#test_source_node_is_triggered_by_pulse": {
     "baseline_code_signature_text": "async def test_source_node_is_triggered_by_pulse():",
     "baseline_code_structure_hash": "d2838aec3fc527ce32e112a2abd34c2e2ab35513f10fff10ddef1b422ae43312"
-  },
-  "wait_for_idle": {
-    "baseline_code_signature_text": "async def wait_for_idle(runner: EventDrivenRunner, timeout: float = 1.0):",
-    "baseline_code_structure_hash": "05cf8ce3b6c99cac62c1b51053e5249cf72fab5ba0cf19efac06d9b5fce82b5f",
-    "baseline_yaml_content_hash": "14c7ac9ebaad256679d3ae39d2aa985c21b35fb14eb47320746283474f6e2b8d"
   }
 }

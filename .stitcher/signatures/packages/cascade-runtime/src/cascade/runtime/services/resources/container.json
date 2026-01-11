@@ -1,48 +1,50 @@
 {
-  "ResourceContainer": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer": {
+    "baseline_code_signature_text": "class ResourceContainer:",
+    "baseline_code_structure_hash": "04cb782f089eacb17d93b43e476fb8abfd465355a1ce0a570a9528b16d0fddb3",
     "baseline_yaml_content_hash": "3f1b2f35cd90c34cc8bc181e697727a6243f8353e0cf4191eff307fba887c920"
   },
-  "ResourceContainer.__init__": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer.__init__": {
     "baseline_code_signature_text": "def __init__(self, bus: EventBus):",
     "baseline_code_structure_hash": "f0031b8dc0af4f513fb34481d680aaa74cb395a005af0bef448efa49d6f88ac7"
   },
-  "ResourceContainer._resource_providers": {},
-  "ResourceContainer._scan_item": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer._resource_providers": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer._scan_item": {
     "baseline_code_signature_text": "def _scan_item(self, item: Any, required: Set[str]):",
     "baseline_code_structure_hash": "a935ed1baca29981a8bf41bf5b49196144fd570df3136887bcdcaa966e2ed7dc",
     "baseline_yaml_content_hash": "e5c0ec09258638164daf608ca29ee77cac1b8888fc8bb2a0eba825339ea6d7a9"
   },
-  "ResourceContainer._teardown_resource": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer._teardown_resource": {
     "baseline_code_signature_text": "def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):",
     "baseline_code_structure_hash": "64d8236b5c6076f88595a88fe2113dd8410e34ffbe13519f5a35a7f0f46f9d75"
   },
-  "ResourceContainer.bus": {},
-  "ResourceContainer.get_provider": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer.bus": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer.get_provider": {
     "baseline_code_signature_text": "def get_provider(self, name: str) -> Callable:",
     "baseline_code_structure_hash": "3589f3683ae4c6beefd4b8616b8435c0540cbec9bf0c55fd3081b08a15237ed3",
     "baseline_yaml_content_hash": "3a0cfb7ee228b787bf4897f598061d39f79af353cfcd82014c3957b2aac138ec"
   },
-  "ResourceContainer.override": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer.override": {
     "baseline_code_signature_text": "def override(self, name: str, new_provider: Any) -> Generator[None, None, None]:",
     "baseline_code_structure_hash": "043dfbea79ea144459aeb8aaeb6a034a6dc4e72ce3e6556291abe0ff17ad891b",
     "baseline_yaml_content_hash": "25e7d88535a45a7cdad8aa1945ab759e2d7986dd898718e3c4b501f201adebb7"
   },
-  "ResourceContainer.override_provider": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer.override_provider": {
     "baseline_code_signature_text": "def override_provider(self, name: str, new_provider: Any):",
     "baseline_code_structure_hash": "45d1b598dda399c6de1b044203c8725ec20b51407f54235d5ad606478db19128",
     "baseline_yaml_content_hash": "4798bc99d97a02fbbb30c26a4aa9ccfd6e19add9df6e252956cdd1514e9e1393"
   },
-  "ResourceContainer.register": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer.register": {
     "baseline_code_signature_text": "def register(self, resource_def: ResourceDefinition):",
     "baseline_code_structure_hash": "156f5944fd1ebcf8849a88cf6422d18be15b5cb1477a39f4c3605dc400cb03de",
     "baseline_yaml_content_hash": "58a348b975c4be29924e2d07a0cd3449cd33caddbb685f300ef4febf965020c2"
   },
-  "ResourceContainer.scan": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer.scan": {
     "baseline_code_signature_text": "def scan(self, graph: Graph, executable_registry: Dict[str, Callable]) -> Set[str]:",
     "baseline_code_structure_hash": "211aecb941eea8488c97d15d0553fe4cc08578838be0d9560c7096722eb2c10d",
     "baseline_yaml_content_hash": "bac446617294ece3c0048802499956bcdbf947cd4a8b6e2a532245a5c4e18330"
   },
-  "ResourceContainer.setup": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/resources/container.py#ResourceContainer.setup": {
     "baseline_code_signature_text": "def setup(self, required_names: Set[str], active_resources: Dict[str, Any], run_stack: ExitStack, step_stack: ExitStack, run_id: str) -> None:",
     "baseline_code_structure_hash": "8510ca1ae3920ac6eb4cf4fdbc53af675450483a5d404ebc3d4808608af942e2",
     "baseline_yaml_content_hash": "12ecdea35c6359a5a45f5276c8a3b13a42f274f6d03cbdaace652fc007ae4b23"

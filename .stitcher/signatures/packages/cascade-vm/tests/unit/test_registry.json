@@ -1,30 +1,33 @@
 {
-  "TestCodeRegistry": {},
-  "TestCodeRegistry.test_get_missing_raises_key_error": {
+  "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry": {
+    "baseline_code_signature_text": "class TestCodeRegistry:",
+    "baseline_code_structure_hash": "068ba43b80e787f4e128b6bfb979a949f3e8c52af82669810691728d0c2676da"
+  },
+  "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry.test_get_missing_raises_key_error": {
     "baseline_code_signature_text": "def test_get_missing_raises_key_error(self):",
     "baseline_code_structure_hash": "016f26d3bc6e2e5631b9bf25da6f7594d137a83376e2ad458d5684a4e25d9813",
     "baseline_yaml_content_hash": "521849fbf08c6dcb8f2bf519cfce500c2580c032d556ed29aed429138a1f5acc"
   },
-  "TestCodeRegistry.test_register_and_get": {
+  "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry.test_register_and_get": {
     "baseline_code_signature_text": "def test_register_and_get(self):",
     "baseline_code_structure_hash": "da95298eb74c9a3ecb8d51eff63ffd8900e6f913a11c04b92f72df124175b5ba",
     "baseline_yaml_content_hash": "50edd96a293975a6e30d26d4d6f7cf590532201b6fa8c23fda7c7ba164baaed9"
   },
-  "TestCodeRegistry.test_reregister_collision_warns": {
+  "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry.test_reregister_collision_warns": {
     "baseline_code_signature_text": "def test_reregister_collision_warns(self, caplog):",
     "baseline_code_structure_hash": "0b097819a33fd9771e12eac1db5099e8c6543063df7430f4dd645153f0c448ac",
     "baseline_yaml_content_hash": "010876416456e21c524ebc16b470b78e15401055d1055ba07e1fe36ec2b8446b"
   },
-  "TestCodeRegistry.test_reregister_idempotent": {
+  "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry.test_reregister_idempotent": {
     "baseline_code_signature_text": "def test_reregister_idempotent(self, caplog):",
     "baseline_code_structure_hash": "6eeb705dc1e52bbcbe7acadc035060a1e7659abf4972bcd8e38d0a2f6dd8322f",
     "baseline_yaml_content_hash": "6ad585305fb88df68e8abba7d831c9fb3a86e83020521be16668d032bfc14708"
   },
-  "sample_task_one": {
+  "py://packages/cascade-vm/tests/unit/test_registry.py#sample_task_one": {
     "baseline_code_signature_text": "def sample_task_one():",
     "baseline_code_structure_hash": "d5feefa8135d3598dd4043f34db4b616ade499b40c9d383ca2e61e51a8c3087d"
   },
-  "sample_task_two": {
+  "py://packages/cascade-vm/tests/unit/test_registry.py#sample_task_two": {
     "baseline_code_signature_text": "def sample_task_two():",
     "baseline_code_structure_hash": "abdde6b9c577442ec69e4b621eadacca3dbdb5fb8c0ca808290d340a85c621b0"
   }

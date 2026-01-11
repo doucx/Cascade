@@ -1,15 +1,15 @@
 {
-  "test_template_missing_dependency_install": {
+  "py://packages/cascade-library/tests/integration/test_template.py#test_template_missing_dependency_install": {
     "baseline_code_signature_text": "def test_template_missing_dependency_install():",
     "baseline_code_structure_hash": "d5a7518d8c46b38de00258cf9c2fadc783b780465cf858ff2fae6e9acc43ba50",
     "baseline_yaml_content_hash": "80f5f86df5e3c21c1150f7e50070f54d5d9e8872e0ce5ae99846f4a626168b36"
   },
-  "test_template_with_lazy_result": {
+  "py://packages/cascade-library/tests/integration/test_template.py#test_template_with_lazy_result": {
     "baseline_code_signature_text": "def test_template_with_lazy_result():",
     "baseline_code_structure_hash": "83222db0c7a94839e5c116dc1cb63f124897f7c9f73d17154aba1058a3ba0616",
     "baseline_yaml_content_hash": "065f66359b463707475295748c1951645d921a02846c7afe1d55033180df3c06"
   },
-  "test_template_with_literals": {
+  "py://packages/cascade-library/tests/integration/test_template.py#test_template_with_literals": {
     "baseline_code_signature_text": "def test_template_with_literals():",
     "baseline_code_structure_hash": "f6e9ba5bd3552cc019719878896784be7b39e2573dca5b9a128bdd4a8d72e68a",
     "baseline_yaml_content_hash": "fb16067615926b5e3c9298434b061e751a8bcfbe209f42789be9346cfb4541e0"

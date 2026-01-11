@@ -1,5 +1,5 @@
 {
-  "resource_requestor": {
+  "py://packages/cascade-std/src/cascade/std/resource/requestor.py#resource_requestor": {
     "baseline_code_signature_text": "def resource_requestor(io: ResourceRequestorSpec.IO, node: PhysicsNode, resources: Any) -> None:",
     "baseline_code_structure_hash": "1d92ea21438ad15b068abc335a6e8827d5c3584c53172bb301134e6cd1637e3e",
     "baseline_yaml_content_hash": "54cb049ea20edb7cd975ba09d65e8b15bcbe6f96f599219e641068f3232f3980"

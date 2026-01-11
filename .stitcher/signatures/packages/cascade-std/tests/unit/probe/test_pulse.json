@@ -1,6 +1,0 @@
-{
-  "test_pulse_generator_passes_token_forward": {
-    "baseline_code_signature_text": "def test_pulse_generator_passes_token_forward():",
-    "baseline_code_structure_hash": "584c84db790693a734aa285f00d9f77c98e1c75f155a656159a0139e3eb07a1e"
-  }
-}

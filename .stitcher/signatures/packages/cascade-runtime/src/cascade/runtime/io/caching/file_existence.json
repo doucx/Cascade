@@ -1,23 +1,25 @@
 {
-  "FileExistenceCache": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/caching/file_existence.py#FileExistenceCache": {
+    "baseline_code_signature_text": "class FileExistenceCache:",
+    "baseline_code_structure_hash": "4a429d8786769ae6eb384b1d93e970db2b72f2a43ffd06599cb96de481363cfb",
     "baseline_yaml_content_hash": "67d720f3ecca0211c40b820ce413f855cd5a4bc5a63d7d5e8f7029990f58245c"
   },
-  "FileExistenceCache.__init__": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/caching/file_existence.py#FileExistenceCache.__init__": {
     "baseline_code_signature_text": "def __init__(self, target_path: Union[str, Callable[[Dict[str, Any]], str]]):",
     "baseline_code_structure_hash": "08dc6fb12535369ca6c79160769071c902ca18024066dc84be86966ee9d80d65",
     "baseline_yaml_content_hash": "0fafc4e4db26b23a56542da68ad4d95f9b9d02214d38abe01d44f88f3c1e825a"
   },
-  "FileExistenceCache._resolve_path": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/caching/file_existence.py#FileExistenceCache._resolve_path": {
     "baseline_code_signature_text": "def _resolve_path(self, inputs: Dict[str, Any]) -> str:",
     "baseline_code_structure_hash": "b45ba7d3928b2adb06fe8645d0ef3ab603d8a73eee61b039c20fcc1cee20a86c"
   },
-  "FileExistenceCache.check": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/caching/file_existence.py#FileExistenceCache.check": {
     "baseline_code_signature_text": "async def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:",
     "baseline_code_structure_hash": "322c4936483cab3a21d31b06e7586d7befaeaedb3968550b7e39bb57e265e792"
   },
-  "FileExistenceCache.save": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/caching/file_existence.py#FileExistenceCache.save": {
     "baseline_code_signature_text": "async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:",
     "baseline_code_structure_hash": "f546c4844285c0c1ba655ce7a64d193904a664a659480b6558ac6944127771f2"
   },
-  "FileExistenceCache.target_path": {}
+  "py://packages/cascade-runtime/src/cascade/runtime/io/caching/file_existence.py#FileExistenceCache.target_path": {}
 }

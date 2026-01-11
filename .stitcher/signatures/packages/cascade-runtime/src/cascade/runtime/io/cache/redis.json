@@ -1,18 +1,20 @@
 {
-  "RedisCacheBackend": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/cache/redis.py#RedisCacheBackend": {
+    "baseline_code_signature_text": "class RedisCacheBackend:",
+    "baseline_code_structure_hash": "9ce157c72d92965f29f982254a58f2155603f56ab3fdb6a36597f8ff08ab106e",
     "baseline_yaml_content_hash": "143c000dc4b43f24b34427beaca498959ae7a1ec2f0ec116c2a044bf0ccecd3f"
   },
-  "RedisCacheBackend.__init__": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/cache/redis.py#RedisCacheBackend.__init__": {
     "baseline_code_signature_text": "def __init__(self, client: Any, prefix: str = 'cascade:cache:'):",
     "baseline_code_structure_hash": "67ca96c9f7910af793858aec82c1e85d22988b4183ecf23ba935910354aa1264"
   },
-  "RedisCacheBackend._client": {},
-  "RedisCacheBackend._prefix": {},
-  "RedisCacheBackend.get": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/cache/redis.py#RedisCacheBackend._client": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/io/cache/redis.py#RedisCacheBackend._prefix": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/io/cache/redis.py#RedisCacheBackend.get": {
     "baseline_code_signature_text": "async def get(self, key: str) -> Optional[Any]:",
     "baseline_code_structure_hash": "0263c0801dbd274812febe322c51e71f4302e88c2beffb3eb7b90cd0b14d1b81"
   },
-  "RedisCacheBackend.set": {
+  "py://packages/cascade-runtime/src/cascade/runtime/io/cache/redis.py#RedisCacheBackend.set": {
     "baseline_code_signature_text": "async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:",
     "baseline_code_structure_hash": "5cbbe649289a0cf5b98f366b906705cde113ad0ec23b5139aab01e9c2e618b89"
   }

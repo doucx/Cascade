@@ -1,13 +1,13 @@
 {
-  "test_router_invalid_selection": {
+  "py://packages/cascade-spec/tests/integration/test_routing.py#test_router_invalid_selection": {
     "baseline_code_signature_text": "def test_router_invalid_selection():",
     "baseline_code_structure_hash": "e642a08f4eac33feb5413a4d661f37ac777f70bb5ae16e0fe380a2279287b825"
   },
-  "test_router_selects_correct_path": {
+  "py://packages/cascade-spec/tests/integration/test_routing.py#test_router_selects_correct_path": {
     "baseline_code_signature_text": "def test_router_selects_correct_path():",
     "baseline_code_structure_hash": "396634845dc52be46da156b2625b9834a256be7fdb5b548c651a9081a84d5dfb"
   },
-  "test_router_with_params": {
+  "py://packages/cascade-spec/tests/integration/test_routing.py#test_router_with_params": {
     "baseline_code_signature_text": "def test_router_with_params():",
     "baseline_code_structure_hash": "633e881d968ec88095c74752797312b74b96579aa59165e993c688ff366fa5c8"
   }

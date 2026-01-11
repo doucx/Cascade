@@ -1,61 +1,91 @@
 {
-  "FsExistsProvider": {},
-  "FsExistsProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#FsExistsProvider": {
+    "baseline_code_signature_text": "class FsExistsProvider(Provider):",
+    "baseline_code_structure_hash": "32ba1935c48bc388b18ae939f3ceb03695d0ceda5459b1eb957de95bfdba4508"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#FsExistsProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "FsExistsProvider.name": {},
-  "IoLocalExistsProvider": {},
-  "IoLocalExistsProvider.name": {},
-  "IoLocalReadBytesProvider": {},
-  "IoLocalReadBytesProvider.name": {},
-  "IoLocalReadTextProvider": {},
-  "IoLocalReadTextProvider.name": {},
-  "IoLocalWriteBytesProvider": {},
-  "IoLocalWriteBytesProvider.name": {},
-  "IoLocalWriteTextProvider": {},
-  "IoLocalWriteTextProvider.name": {},
-  "ReadBytesProvider": {},
-  "ReadBytesProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#FsExistsProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalExistsProvider": {
+    "baseline_code_signature_text": "class IoLocalExistsProvider(FsExistsProvider):",
+    "baseline_code_structure_hash": "42077e55c5f2d23160cbf338ea99ff2414f1d5de966b14bdb3c91c36c1b2e655"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalExistsProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalReadBytesProvider": {
+    "baseline_code_signature_text": "class IoLocalReadBytesProvider(ReadBytesProvider):",
+    "baseline_code_structure_hash": "d8592ff4c43f83f86c1aaf159384aaa893fa6037c83775afcd13cf331f64e86f"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalReadBytesProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalReadTextProvider": {
+    "baseline_code_signature_text": "class IoLocalReadTextProvider(ReadTextProvider):",
+    "baseline_code_structure_hash": "3264dd8278a3b8ac4c0a41965704506fe52c52e6f3734c7f7a5265bdcda87c3f"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalReadTextProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalWriteBytesProvider": {
+    "baseline_code_signature_text": "class IoLocalWriteBytesProvider(WriteBytesProvider):",
+    "baseline_code_structure_hash": "32c8b953af03ea3533201e12c8a52eecf81a6305d8b82afc47933c657c147b7f"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalWriteBytesProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalWriteTextProvider": {
+    "baseline_code_signature_text": "class IoLocalWriteTextProvider(WriteTextProvider):",
+    "baseline_code_structure_hash": "b7700c575c22609373ef3673e4350999390798c00d81b509c35498554a7b2555"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#IoLocalWriteTextProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#ReadBytesProvider": {
+    "baseline_code_signature_text": "class ReadBytesProvider(Provider):",
+    "baseline_code_structure_hash": "1095c90128956cd3bb87f5ebe8e28352d83c84cbb4f9173038ea0cad72f1f3b0"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#ReadBytesProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "ReadBytesProvider.name": {},
-  "ReadTextProvider": {},
-  "ReadTextProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#ReadBytesProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#ReadTextProvider": {
+    "baseline_code_signature_text": "class ReadTextProvider(Provider):",
+    "baseline_code_structure_hash": "0201567477856f42fe5f56fa2f63086e5ab85b5f71a1b91189ec3b889329b1bd"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#ReadTextProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "ReadTextProvider.name": {},
-  "WriteBytesProvider": {},
-  "WriteBytesProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#ReadTextProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#WriteBytesProvider": {
+    "baseline_code_signature_text": "class WriteBytesProvider(Provider):",
+    "baseline_code_structure_hash": "24c74e91a5999eb56387eee5fa324711da2472a700ed3d7f4f0e891b91b013cf"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#WriteBytesProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "WriteBytesProvider.name": {},
-  "WriteTextProvider": {},
-  "WriteTextProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#WriteBytesProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#WriteTextProvider": {
+    "baseline_code_signature_text": "class WriteTextProvider(Provider):",
+    "baseline_code_structure_hash": "c12c3026b8c9170a2765301300b4cef7f2c6e5c5851f84b9734e47503e47249d"
+  },
+  "py://packages/cascade-library/src/cascade/providers/io.py#WriteTextProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "WriteTextProvider.name": {},
-  "_exists_task": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#WriteTextProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/io.py#_exists_task": {
     "baseline_code_signature_text": "async def _exists_task(path: str) -> bool:",
     "baseline_code_structure_hash": "a820359bf1f69ff19f4d8068f3b55673c5484e4c0916e53b0d4c8a8e77e2d082"
   },
-  "_read_bytes_task": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#_read_bytes_task": {
     "baseline_code_signature_text": "async def _read_bytes_task(path: str) -> bytes:",
     "baseline_code_structure_hash": "5bc308728d46f1b27e6696b62d586c8ca659234339e728a0bf837fb37ee8982e"
   },
-  "_read_text_task": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#_read_text_task": {
     "baseline_code_signature_text": "async def _read_text_task(path: str, encoding: str = 'utf-8') -> str:",
     "baseline_code_structure_hash": "69b862af4123ec187ff1370f584a41c71638ac3b9b9f38d08f6ddb95744552e9"
   },
-  "_write_bytes_task": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#_write_bytes_task": {
     "baseline_code_signature_text": "async def _write_bytes_task(path: str, content: bytes) -> None:",
     "baseline_code_structure_hash": "d27b969a1cf1e51e5dbdfd37fe890003d157ccbae59f23170d8d02520094a214"
   },
-  "_write_text_task": {
+  "py://packages/cascade-library/src/cascade/providers/io.py#_write_text_task": {
     "baseline_code_signature_text": "async def _write_text_task(path: str, content: str, encoding: str = 'utf-8') -> None:",
     "baseline_code_structure_hash": "fc6968cbfb8cef8ad9c3b21d017c53e9bb08ebe036ffcbb9e299047624048638"
   }

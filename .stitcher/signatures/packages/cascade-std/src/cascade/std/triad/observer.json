@@ -1,8 +1,5 @@
 {
-  "ObservedEvent": {},
-  "ObservedEvent.event_type": {},
-  "ObservedEvent.trace_data": {},
-  "standard_observer": {
+  "py://packages/cascade-std/src/cascade/std/triad/observer.py#standard_observer": {
     "baseline_code_signature_text": "def standard_observer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
     "baseline_code_structure_hash": "24ec1527a1b41bd235fc71fc84d7df263c22aa7a13beb0bbdb23350662d07626",
     "baseline_yaml_content_hash": "07cf97157cb73587a0f1255090e0fa615386289d9dd2f4d06658dd81b6b35713"

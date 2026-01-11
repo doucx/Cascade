@@ -1,12 +1,14 @@
 {
-  "GraphDumper": {
+  "py://packages/cascade-compiler/src/cascade/compiler/utils/visualizer.py#GraphDumper": {
+    "baseline_code_signature_text": "class GraphDumper:",
+    "baseline_code_structure_hash": "fdcae98323e19169630034fa6e70c97b70afe674234cfe16a3a2da77495f71aa",
     "baseline_yaml_content_hash": "ce3a4f4ae2ef5ad014a6f549e5fbd7f202af655ac140a1382dc743314d9281b4"
   },
-  "GraphDumper._get_node_attributes": {
+  "py://packages/cascade-compiler/src/cascade/compiler/utils/visualizer.py#GraphDumper._get_node_attributes": {
     "baseline_code_signature_text": "def _get_node_attributes(self, node: PhysicsNode) -> dict:",
     "baseline_code_structure_hash": "9b48b15b4068ec039f90e6453367459c3549bb962d5e20be487ca58a4a69fff5"
   },
-  "GraphDumper.to_dot": {
+  "py://packages/cascade-compiler/src/cascade/compiler/utils/visualizer.py#GraphDumper.to_dot": {
     "baseline_code_signature_text": "def to_dot(self, graph: BipartiteGraph) -> str:",
     "baseline_code_structure_hash": "5f9e8705f8b7911f5b29f26cad4fcfd8a0bd035c349e63fe7c8434a301087d54"
   }

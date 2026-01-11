@@ -1,5 +1,5 @@
 {
-  "test_native_solver_diamond_graph": {
+  "py://packages/cascade-runtime/tests/unit/test_solver_native.py#test_native_solver_diamond_graph": {
     "baseline_code_signature_text": "def test_native_solver_diamond_graph():",
     "baseline_code_structure_hash": "3e5f97a69aea84a2a21ef2b077edc19ecbca77fcfa680bd3480dc94a41331fb0"
   }

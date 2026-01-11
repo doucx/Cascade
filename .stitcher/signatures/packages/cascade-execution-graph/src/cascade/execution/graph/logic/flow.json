@@ -1,40 +1,42 @@
 {
-  "FlowManager": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager": {
+    "baseline_code_signature_text": "class FlowManager:",
+    "baseline_code_structure_hash": "59df524a120426738df6d42b2a0cadf6c37c60d69fa86d6d0705e2e5b883197c",
     "baseline_yaml_content_hash": "38fca015aab917660a562b754ae2a581e747e8d2a5b70aa69e0be0a5bbaac182"
   },
-  "FlowManager.__init__": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.__init__": {
     "baseline_code_signature_text": "def __init__(self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]):",
     "baseline_code_structure_hash": "5c30c681999c07b48466f2e88c7fb8c52702b80cb40883b0d68025815e4348e6"
   },
-  "FlowManager._decrement_demand_and_prune": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager._decrement_demand_and_prune": {
     "baseline_code_signature_text": "async def _decrement_demand_and_prune(self, node_id: str, state_backend: StateBackend):",
     "baseline_code_structure_hash": "3f630b2c79774b895ec485964ce2bfc316639d7cc01971d60b602000d15a5b2c",
     "baseline_yaml_content_hash": "fbfb36ed01ba85f418e23e5d611ce11153eb398455fb8119fa8a913ca338a3f5"
   },
-  "FlowManager._get_node_from_instance": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager._get_node_from_instance": {
     "baseline_code_signature_text": "def _get_node_from_instance(self, instance: Any) -> Optional[Node]:",
     "baseline_code_structure_hash": "3a2a3fb6ffbe2daccc9d5d961d1957e4e1189971d2c6c485b33dfa58cfd90da8",
     "baseline_yaml_content_hash": "c69645547be53108915574e6f6b240b727d6bef218da9c6cf523f7bf6ffdc5c7"
   },
-  "FlowManager._process_router_decision": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager._process_router_decision": {
     "baseline_code_signature_text": "async def _process_router_decision(self, edge: Edge, selector_value: Any, state_backend: StateBackend):",
     "baseline_code_structure_hash": "fd527827501b77da346f57446edc9cd0796af965103d44777ca72222d834e5a0"
   },
-  "FlowManager.downstream_demand": {},
-  "FlowManager.graph": {},
-  "FlowManager.in_edges": {},
-  "FlowManager.instance_map": {},
-  "FlowManager.register_result": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.downstream_demand": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.graph": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.in_edges": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.instance_map": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.register_result": {
     "baseline_code_signature_text": "async def register_result(self, node_id: str, result: Any, state_backend: StateBackend):",
     "baseline_code_structure_hash": "f5d7930a315ee6d7182b70916e9ef1963326e473b1584d44a28a8c4bf43141ec",
     "baseline_yaml_content_hash": "ee9a242cd6c0c0ab0dc143a5faea161628b9bf083cad86c714fe5d7d214a3f7b"
   },
-  "FlowManager.route_source_map": {},
-  "FlowManager.routers_by_selector": {},
-  "FlowManager.should_skip": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.route_source_map": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.routers_by_selector": {},
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.should_skip": {
     "baseline_code_signature_text": "async def should_skip(self, node: Node, state_backend: StateBackend) -> Optional[str]:",
     "baseline_code_structure_hash": "21c1abd6a4fc30188e981c0ed3799e4276a98fabae395299b67a14ce95afa996",
     "baseline_yaml_content_hash": "fa68e53770b5853550160fb78f4200d8f72f14fb357b334b38ebcfe04edd2870"
   },
-  "FlowManager.target_node_id": {}
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.target_node_id": {}
 }

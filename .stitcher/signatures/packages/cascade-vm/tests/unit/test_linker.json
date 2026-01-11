@@ -1,29 +1,29 @@
 {
-  "assembly": {
+  "py://packages/cascade-vm/tests/unit/test_linker.py#assembly": {
     "baseline_code_signature_text": "def assembly() -> Assembly:",
     "baseline_code_structure_hash": "2989df05a9ec401c25d27fea4533e45f3f439d0e2b0e9e5cfdb0e906289f86fe"
   },
-  "code_registry": {
+  "py://packages/cascade-vm/tests/unit/test_linker.py#code_registry": {
     "baseline_code_signature_text": "def code_registry() -> CodeRegistry:",
     "baseline_code_structure_hash": "a16f2f8e6c26b32728128a57fdff14b8243838d7a2309ce4de58b89e8549dd19"
   },
-  "dummy_task_a": {
+  "py://packages/cascade-vm/tests/unit/test_linker.py#dummy_task_a": {
     "baseline_code_signature_text": "def dummy_task_a():",
     "baseline_code_structure_hash": "c8d36df413e2ef70a716b15fb4fba5cd87107dfcd05059ea71205c450df91c90"
   },
-  "dummy_task_b": {
+  "py://packages/cascade-vm/tests/unit/test_linker.py#dummy_task_b": {
     "baseline_code_signature_text": "def dummy_task_b():",
     "baseline_code_structure_hash": "f82a795faae92f435e6807e060df1ef9731828f02186fd6a3cb7e4f41e9b985e"
   },
-  "test_linker_raises_on_missing_code": {
+  "py://packages/cascade-vm/tests/unit/test_linker.py#test_linker_raises_on_missing_code": {
     "baseline_code_signature_text": "def test_linker_raises_on_missing_code(assembly, code_registry):",
     "baseline_code_structure_hash": "1224079e93e272f19b3a0ca22d75d821460c05539f7f88903e40a5aa090a4a56"
   },
-  "test_linker_raises_on_multiple_missing_codes": {
+  "py://packages/cascade-vm/tests/unit/test_linker.py#test_linker_raises_on_multiple_missing_codes": {
     "baseline_code_signature_text": "def test_linker_raises_on_multiple_missing_codes():",
     "baseline_code_structure_hash": "bdd70425f1731bdd2baa14dd6b6ed67be19fe389f597a85e931d12a824c02688"
   },
-  "test_linker_success_with_all_code_present": {
+  "py://packages/cascade-vm/tests/unit/test_linker.py#test_linker_success_with_all_code_present": {
     "baseline_code_signature_text": "def test_linker_success_with_all_code_present(assembly, code_registry):",
     "baseline_code_structure_hash": "5e13153170d25b3fbb74360a89f79668ca98957c6d73e8ecaf4975159b8bd617"
   }

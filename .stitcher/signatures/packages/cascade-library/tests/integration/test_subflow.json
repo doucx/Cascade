@@ -1,20 +1,20 @@
 {
-  "subflow_file": {
+  "py://packages/cascade-library/tests/integration/test_subflow.py#subflow_file": {
     "baseline_code_signature_text": "def subflow_file(tmp_path):",
     "baseline_code_structure_hash": "5a09ce34e61ac13f281ee2ee2cc1ef442e5525c42f87690853cadfffcbe93c69",
     "baseline_yaml_content_hash": "fda543724771c305a23c45a3faa3779e561bc1c30f84d79a777528b4f6b4a3b9"
   },
-  "test_subflow_execution": {
+  "py://packages/cascade-library/tests/integration/test_subflow.py#test_subflow_execution": {
     "baseline_code_signature_text": "async def test_subflow_execution(subflow_file):",
     "baseline_code_structure_hash": "f46208151014b1c3a54603ca7c568b5372d1c04f3f8b4f420214f70dd24321a4",
     "baseline_yaml_content_hash": "73f8205d915c3a4b3ee4d7fb8c96ba1dadd9a3cf7e1260fff457692a9715576a"
   },
-  "test_subflow_file_not_found": {
+  "py://packages/cascade-library/tests/integration/test_subflow.py#test_subflow_file_not_found": {
     "baseline_code_signature_text": "async def test_subflow_file_not_found():",
     "baseline_code_structure_hash": "832b7db59677678078b6a946b3f54a72d0a5d14f85fa54b6fc624274fd7ee702",
     "baseline_yaml_content_hash": "edeb5ba7f39289f0511a8288d4d19e597002f07c427bb46347917060405f8d6f"
   },
-  "test_subflow_target_not_found": {
+  "py://packages/cascade-library/tests/integration/test_subflow.py#test_subflow_target_not_found": {
     "baseline_code_signature_text": "async def test_subflow_target_not_found(subflow_file):",
     "baseline_code_structure_hash": "cea00d0533c647673eae5c84936c183e38eccc2cc5e77e65feb3c18d228d4869",
     "baseline_yaml_content_hash": "5d7f8ca4a5a2426d0ca60bb3603c39170e4f15b683c251d57b6ff75d1e3a4009"

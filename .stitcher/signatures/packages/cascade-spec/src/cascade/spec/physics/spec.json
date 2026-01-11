@@ -1,16 +1,20 @@
 {
-  "PhysicsSpec": {
+  "py://packages/cascade-spec/src/cascade/spec/physics/spec.py#PhysicsSpec": {
+    "baseline_code_signature_text": "class PhysicsSpec:",
+    "baseline_code_structure_hash": "2682563fd81131e28a7aa56d0af8bd6fae884c50fcd6ea3a3cf2b878fd264a19",
     "baseline_yaml_content_hash": "df07de4f299c7754efed21bb72d653789584dddc8dc9dafca475cc91bbc37ac2"
   },
-  "PhysicsSpec.input_ports": {},
-  "PhysicsSpec.output_ports": {},
-  "PhysicsSpecMeta": {
+  "py://packages/cascade-spec/src/cascade/spec/physics/spec.py#PhysicsSpec.input_ports": {},
+  "py://packages/cascade-spec/src/cascade/spec/physics/spec.py#PhysicsSpec.output_ports": {},
+  "py://packages/cascade-spec/src/cascade/spec/physics/spec.py#PhysicsSpecMeta": {
+    "baseline_code_signature_text": "class PhysicsSpecMeta(type):",
+    "baseline_code_structure_hash": "2d3dca24f277e29f63d2d7c9e97f64ba320ed9b8561c3a8b4d5b13c928c6fbe6",
     "baseline_yaml_content_hash": "16f6dedfd8201deb3744380b7124fa8798bec7b3c389b07f08d291b48d95cea7"
   },
-  "PhysicsSpecMeta.__new__": {
+  "py://packages/cascade-spec/src/cascade/spec/physics/spec.py#PhysicsSpecMeta.__new__": {
     "baseline_code_signature_text": "def __new__(mcs, name, bases, namespace):",
     "baseline_code_structure_hash": "d1bff72e23b0e3b4cec3f4b380f36e3db19be535143852182f40aae3ece814c0"
   },
-  "PhysicsSpecMeta.input_ports": {},
-  "PhysicsSpecMeta.output_ports": {}
+  "py://packages/cascade-spec/src/cascade/spec/physics/spec.py#PhysicsSpecMeta.input_ports": {},
+  "py://packages/cascade-spec/src/cascade/spec/physics/spec.py#PhysicsSpecMeta.output_ports": {}
 }

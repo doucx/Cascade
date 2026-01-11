@@ -1,7 +1,0 @@
-{
-  "const_probe": {
-    "baseline_code_signature_text": "def const_probe(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "50d563d4a1b72e0a01044fc62627d261dc39f8c2e4a3dc83460fa25d53dee1c6",
-    "baseline_yaml_content_hash": "1057926c5f699e249df67e6e75201603ea89412f4dfb469b33f755c46cd1aed7"
-  }
-}

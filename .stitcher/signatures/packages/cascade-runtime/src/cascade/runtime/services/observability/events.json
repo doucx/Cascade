@@ -1,108 +1,150 @@
 {
-  "ConnectorConnected": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#ConnectorConnected": {
+    "baseline_code_signature_text": "class ConnectorConnected(Event):",
+    "baseline_code_structure_hash": "4e21923fdff2adc5352bce5baa4a16b93f381b302a8557ea68bdc017c3d9aa10",
     "baseline_yaml_content_hash": "a287c27474a9d53328e9ebc46bd9572c8bbde8c44b778d7532d0016ffdac29a9"
   },
-  "ConnectorDisconnected": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#ConnectorDisconnected": {
+    "baseline_code_signature_text": "class ConnectorDisconnected(Event):",
+    "baseline_code_structure_hash": "480a1ab7cb99c0d02120e157ac0850e0006c3853cb41c995be72aae4070955c5",
     "baseline_yaml_content_hash": "19fd4c9c83f546122149c3d8797427f5319f8e01cf64b267733c612e6e8b3ff8"
   },
-  "Event": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#Event": {
+    "baseline_code_signature_text": "class Event:",
+    "baseline_code_structure_hash": "f6e849b1f78865d6819f3b3b35b4d21a3ba525fdf871a40c1d3239c0174ca29a",
     "baseline_yaml_content_hash": "b91735986a5f040819a1a79dac9e07b4f57954fdc92f97c0e39820b6007a384a"
   },
-  "Event.event_id": {},
-  "Event.from_ir": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#Event.event_id": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#Event.from_ir": {
     "baseline_code_signature_text": "def from_ir(ir: EventIR) -> Event:",
     "baseline_code_structure_hash": "9044e2feb2c4d85c8d7304cbc414b8c7ff3b7ecd640ba082b4e4e7b51d7f2391"
   },
-  "Event.run_id": {},
-  "Event.timestamp": {},
-  "PlanAnalysisFinished": {},
-  "PlanAnalysisFinished._get_payload": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#Event.run_id": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#Event.timestamp": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanAnalysisFinished": {
+    "baseline_code_signature_text": "class PlanAnalysisFinished(ToolEvent):",
+    "baseline_code_structure_hash": "54e64c3a7110db490c37967d72215b2a995a8c1411db2921846f8abfbe06058a"
+  },
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanAnalysisFinished._get_payload": {
     "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
     "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
   },
-  "PlanAnalysisFinished.total_steps": {},
-  "PlanAnalysisStarted": {},
-  "PlanAnalysisStarted._get_payload": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanAnalysisFinished.total_steps": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanAnalysisStarted": {
+    "baseline_code_signature_text": "class PlanAnalysisStarted(ToolEvent):",
+    "baseline_code_structure_hash": "d81a6d3812d3fb04221403ecc4d5355393e77785ea3eb3f8a1c874c723661d55"
+  },
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanAnalysisStarted._get_payload": {
     "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
     "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
   },
-  "PlanAnalysisStarted.target_node_id": {},
-  "PlanNodeInspected": {},
-  "PlanNodeInspected._get_payload": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanAnalysisStarted.target_node_id": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanNodeInspected": {
+    "baseline_code_signature_text": "class PlanNodeInspected(ToolEvent):",
+    "baseline_code_structure_hash": "94f70bdeea28bf74a9d548df837caa955a44d7f3ee812bbee2eaf871452d505e"
+  },
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanNodeInspected._get_payload": {
     "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
     "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
   },
-  "PlanNodeInspected.index": {},
-  "PlanNodeInspected.input_bindings": {},
-  "PlanNodeInspected.node_id": {},
-  "PlanNodeInspected.node_name": {},
-  "PlanNodeInspected.total_nodes": {},
-  "ResourceAcquired": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanNodeInspected.index": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanNodeInspected.input_bindings": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanNodeInspected.node_id": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanNodeInspected.node_name": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#PlanNodeInspected.total_nodes": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#ResourceAcquired": {
+    "baseline_code_signature_text": "class ResourceAcquired(ResourceEvent):",
+    "baseline_code_structure_hash": "7cb05c46241ae53051121f4ea85182bea33cdc6e6f9b27f92ce0b22a3beded97",
     "baseline_yaml_content_hash": "3122475986e163f3bd1645defacaf01f8b24551b828413b7c5f1fd568000c88f"
   },
-  "ResourceEvent": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#ResourceEvent": {
+    "baseline_code_signature_text": "class ResourceEvent(Event):",
+    "baseline_code_structure_hash": "142864708267fd5987f27167b124cd04ffc6a65f78c716af83f05a02f512b7b9",
     "baseline_yaml_content_hash": "15aebd02bd11e6b16ba4ef770888740682d9ad0263fe16765ffaeb673133c767"
   },
-  "ResourceEvent.resource_name": {},
-  "ResourceReleased": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#ResourceEvent.resource_name": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#ResourceReleased": {
+    "baseline_code_signature_text": "class ResourceReleased(ResourceEvent):",
+    "baseline_code_structure_hash": "364e8776cb00d2a21a1e6bfa1ffa02355793da141f4d5da8ac0ad5da405b2a95",
     "baseline_yaml_content_hash": "a7521b27a8697259e74ad6efdefd94aa5025e8d285a572e23a59c0bf31bd416a"
   },
-  "RunFinished": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#RunFinished": {
+    "baseline_code_signature_text": "class RunFinished(Event):",
+    "baseline_code_structure_hash": "3317af5980a1b87f4e24a97b4f7b4a94e6c773563375d96a61a14056e5a396a1",
     "baseline_yaml_content_hash": "fe44c81ce14927ce451293a876e9bf32484f181975a963544e8fa287579457e3"
   },
-  "RunFinished.duration": {},
-  "RunFinished.error": {},
-  "RunFinished.status": {},
-  "RunStarted": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#RunFinished.duration": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#RunFinished.error": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#RunFinished.status": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#RunStarted": {
+    "baseline_code_signature_text": "class RunStarted(Event):",
+    "baseline_code_structure_hash": "658ac67754d46a14b2afa704f341cfa8611a0732c922bf2d3a527767c8e87333",
     "baseline_yaml_content_hash": "b64bd0bf7e1cab2ad8df48ec58c79e8d6f2c96a146fdea1a51fa8fba4a164e71"
   },
-  "RunStarted.params": {},
-  "RunStarted.target_tasks": {},
-  "StaticAnalysisWarning": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#RunStarted.params": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#RunStarted.target_tasks": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#StaticAnalysisWarning": {
+    "baseline_code_signature_text": "class StaticAnalysisWarning(TaskEvent):",
+    "baseline_code_structure_hash": "1d77c7ff4dcbc4f2c81038628085c0a84b449de7567a25025ba18ffb28f1398c",
     "baseline_yaml_content_hash": "ff21ada34f84a43d8dab77af8a6ad4bbe53434d7c65adb67d7b944576a53fe23"
   },
-  "StaticAnalysisWarning.message": {},
-  "StaticAnalysisWarning.warning_code": {},
-  "TaskBlocked": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#StaticAnalysisWarning.message": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#StaticAnalysisWarning.warning_code": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskBlocked": {
+    "baseline_code_signature_text": "class TaskBlocked(TaskEvent):",
+    "baseline_code_structure_hash": "2954b7d53b883741ebe545ab0128aca05e4b303d0bf9e3aeaecf3c764cfa2c36",
     "baseline_yaml_content_hash": "88042baee5ef6482aca4ff06d6ba8cc74950fc133e1bfa0119ef29d9bb97600c"
   },
-  "TaskBlocked.reason": {},
-  "TaskEvent": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskBlocked.reason": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskEvent": {
+    "baseline_code_signature_text": "class TaskEvent(Event):",
+    "baseline_code_structure_hash": "b1a26455eef37111f3c15eee928f9e41a6b510a11b442006e67b633399b663f6",
     "baseline_yaml_content_hash": "bcfdd3c3168246a1d8198406962ae8cb08f28539fdba758d3ed6dd8e8e0fb10f"
   },
-  "TaskEvent.task_id": {},
-  "TaskEvent.task_name": {},
-  "TaskExecutionFinished": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskEvent.task_id": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskEvent.task_name": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskExecutionFinished": {
+    "baseline_code_signature_text": "class TaskExecutionFinished(TaskEvent):",
+    "baseline_code_structure_hash": "2978ae5a3a451614bdc119cc08685827e21d9a6ea1ca2c207e7fd809666b3d0b",
     "baseline_yaml_content_hash": "13a5ba80dc689f45c86bcf556c102e7381de89ef2da9a243d506724900f29f78"
   },
-  "TaskExecutionFinished.duration": {},
-  "TaskExecutionFinished.error": {},
-  "TaskExecutionFinished.result_preview": {},
-  "TaskExecutionFinished.status": {},
-  "TaskExecutionStarted": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskExecutionFinished.duration": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskExecutionFinished.error": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskExecutionFinished.result_preview": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskExecutionFinished.status": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskExecutionStarted": {
+    "baseline_code_signature_text": "class TaskExecutionStarted(TaskEvent):",
+    "baseline_code_structure_hash": "8de71bd9ef848699ee388d68c086271837ef85ff770d6dff762b16b7906a1007",
     "baseline_yaml_content_hash": "17cfb02ca2611b75f1b9a9a6a70f5c99d0f27e45d3b62b66a1e7cf340c5c8365"
   },
-  "TaskRetrying": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskRetrying": {
+    "baseline_code_signature_text": "class TaskRetrying(TaskEvent):",
+    "baseline_code_structure_hash": "50b6299cac3de80940e3bcc9d446e4d9962ac2fffaf6997bcc3dba7ccabac9ba",
     "baseline_yaml_content_hash": "c41b1c6958378de52be009251260151912820fdfb21c147708d51359298ce774"
   },
-  "TaskRetrying.attempt": {},
-  "TaskRetrying.delay": {},
-  "TaskRetrying.error": {},
-  "TaskRetrying.max_attempts": {},
-  "TaskSkipped": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskRetrying.attempt": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskRetrying.delay": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskRetrying.error": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskRetrying.max_attempts": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskSkipped": {
+    "baseline_code_signature_text": "class TaskSkipped(TaskEvent):",
+    "baseline_code_structure_hash": "bb5912d354376482fceb1f6a615340629078837f6ffbc59a07b8259f8ba4fed5",
     "baseline_yaml_content_hash": "aece4add060321a85b44916f967bbb4e86e77527ddb19b252ea53fcde6bf5d33"
   },
-  "TaskSkipped.reason": {},
-  "ToolEvent": {},
-  "_event_id_gen": {},
-  "_from_ir": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#TaskSkipped.reason": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#ToolEvent": {
+    "baseline_code_signature_text": "class ToolEvent(Event):",
+    "baseline_code_structure_hash": "8617611db13345b99a8a417c62beb714b3fb8cd86f869d70e97acd3dfe02acba"
+  },
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#_event_id_gen": {},
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#_from_ir": {
     "baseline_code_signature_text": "def _from_ir(ir: EventIR) -> Event:",
     "baseline_code_structure_hash": "696779d8a5b7da5c913c31c0b8a79ac20a19b13354f0d25fd1587604ce16376e",
     "baseline_yaml_content_hash": "211b9abbf51a8c8e1de509b7571e3f278a3e80bf64fa966a04a9ca723d49a931"
   },
-  "_hydrate_lifecycle": {
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#_hydrate_lifecycle": {
     "baseline_code_signature_text": "def _hydrate_lifecycle(ir: EventIR, run_id: Optional[str], timestamp: float) -> TaskEvent:",
     "baseline_code_structure_hash": "82e250aac322e9086bebbf4adfa0dd281f835e1df08f8bafc7c3c428f156720d"
   },
-  "logger": {}
+  "py://packages/cascade-runtime/src/cascade/runtime/services/observability/events.py#logger": {}
 }

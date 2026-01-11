@@ -1,29 +1,32 @@
 {
-  "WorkflowContext": {},
-  "WorkflowContext.__init__": {
+  "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext": {
+    "baseline_code_signature_text": "class WorkflowContext:",
+    "baseline_code_structure_hash": "57dcbb04c7a4e9f3ade1ea61ba4722f8762194061ab218e076bed1f27eb165ae"
+  },
+  "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.__init__": {
     "baseline_code_signature_text": "def __init__(self):",
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
   },
-  "WorkflowContext.get_all_specs": {
+  "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.get_all_specs": {
     "baseline_code_signature_text": "def get_all_specs(self) -> List[InputSpec]:",
     "baseline_code_structure_hash": "cd8c80d94ea6cd368fe45574f32ba4ad86f869d8b7e2078560a1951c4148bbc9"
   },
-  "WorkflowContext.get_value": {
+  "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.get_value": {
     "baseline_code_signature_text": "def get_value(self, name: str) -> Optional[Any]:",
     "baseline_code_structure_hash": "f01753ba498565391d2eebfb19e8867a4c48ac9f1eed0d27b810a3e6bbebd523"
   },
-  "WorkflowContext.input_specs": {},
-  "WorkflowContext.register": {
+  "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.input_specs": {},
+  "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.register": {
     "baseline_code_signature_text": "def register(self, spec: InputSpec):",
     "baseline_code_structure_hash": "8d77c02b3e07cdadfdc03e09f812ca018f507c9334ea71468b7e459da73545f3"
   },
-  "WorkflowContext.set_value": {
+  "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.set_value": {
     "baseline_code_signature_text": "def set_value(self, name: str, value: Any) -> None:",
     "baseline_code_structure_hash": "cc8cd4521744b0eebac85bcc5c4b158f25d094b38cca7b97a62194a101fc74fc"
   },
-  "WorkflowContext.values": {},
-  "_current_context": {},
-  "get_current_context": {
+  "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.values": {},
+  "py://packages/cascade-common/src/cascade/common/context.py#_current_context": {},
+  "py://packages/cascade-common/src/cascade/common/context.py#get_current_context": {
     "baseline_code_signature_text": "def get_current_context() -> WorkflowContext:",
     "baseline_code_structure_hash": "00eeb1a3dd530666fdab33a7745fdee216bd04b093c64197c40f5452653e1c11"
   }

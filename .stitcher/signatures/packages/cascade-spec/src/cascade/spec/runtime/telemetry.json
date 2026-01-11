@@ -1,30 +1,38 @@
 {
-  "LifecycleEvent": {
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#LifecycleEvent": {
+    "baseline_code_signature_text": "class LifecycleEvent:",
+    "baseline_code_structure_hash": "65f2aab495fa8738b930648874d522b5e77642e4faaa882ba0e650fcc5dce176",
     "baseline_yaml_content_hash": "9a5e8c85f2c6b2d55c10c62b3c97112a27db0b2e6337a3b1d7f21e90cd1f9991"
   },
-  "LifecycleEvent.event": {},
-  "ResourceEvent": {
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#LifecycleEvent.event": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#ResourceEvent": {
+    "baseline_code_signature_text": "class ResourceEvent:",
+    "baseline_code_structure_hash": "7d8dbda6af6f3f9b8c5a5f13966277c3b9553fd071e399ea72d75b4de9879a20",
     "baseline_yaml_content_hash": "9eea8209add88703942d17b473525f0b905d6b8b82ed032a7a98da3e957362b6"
   },
-  "ResourceEvent.action": {},
-  "ResourceEvent.current_usage": {},
-  "ResourceEvent.resource_name": {},
-  "TaskStateEvent": {
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#ResourceEvent.action": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#ResourceEvent.current_usage": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#ResourceEvent.resource_name": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TaskStateEvent": {
+    "baseline_code_signature_text": "class TaskStateEvent:",
+    "baseline_code_structure_hash": "5bd736b71b4fa8b0ea27a81def6588ec9a0a4ef0bb508470bbc71afb452209bd",
     "baseline_yaml_content_hash": "6e59855104514d6568849c2a0d45c1789bc97eacee791c42ec2040dc92f29f05"
   },
-  "TaskStateEvent.duration_ms": {},
-  "TaskStateEvent.error": {},
-  "TaskStateEvent.metadata": {},
-  "TaskStateEvent.state": {},
-  "TaskStateEvent.task_id": {},
-  "TaskStateEvent.task_name": {},
-  "TelemetryHeader": {
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TaskStateEvent.duration_ms": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TaskStateEvent.error": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TaskStateEvent.metadata": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TaskStateEvent.state": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TaskStateEvent.task_id": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TaskStateEvent.task_name": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader": {
+    "baseline_code_signature_text": "class TelemetryHeader:",
+    "baseline_code_structure_hash": "2ba314386df48b142d79aa669f61566e8b1b1cba8a219330c252ff2884c733bb",
     "baseline_yaml_content_hash": "d85358ae93ae64e042314862ab0f9c8cd6dab593b622de797ff4261caa3c471c"
   },
-  "TelemetryHeader.org_id": {},
-  "TelemetryHeader.project_id": {},
-  "TelemetryHeader.run_id": {},
-  "TelemetryHeader.source": {},
-  "TelemetryHeader.ts": {},
-  "TelemetryHeader.v": {}
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.org_id": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.project_id": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.run_id": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.source": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.ts": {},
+  "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.v": {}
 }

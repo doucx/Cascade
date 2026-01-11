@@ -1,10 +1,10 @@
 {
-  "test_impure_tasks_have_unique_identities": {
+  "py://packages/cascade-runtime/tests/legacy_graph/unit/test_purity_model.py#test_impure_tasks_have_unique_identities": {
     "baseline_code_signature_text": "def test_impure_tasks_have_unique_identities():",
     "baseline_code_structure_hash": "b97033a089b3b75111b3ddcd17ac8f3db5c949b7e47cd7d35ccbbf095c50a9e9",
     "baseline_yaml_content_hash": "a19fa5292fdb4c0846058401e20551146e8254d65d0221c9a9675e8067c98b4e"
   },
-  "test_pure_tasks_are_deduplicated": {
+  "py://packages/cascade-runtime/tests/legacy_graph/unit/test_purity_model.py#test_pure_tasks_are_deduplicated": {
     "baseline_code_signature_text": "def test_pure_tasks_are_deduplicated():",
     "baseline_code_structure_hash": "6050b13cab5ca8125fa6d1d1b804d5ab22de7ab056a29fa97aa5905db0d1c833",
     "baseline_yaml_content_hash": "e466e0255cb5724298aad26c98933dfb3235eb30a95d09717cae1e7f1d4a87e4"

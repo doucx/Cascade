@@ -1,21 +1,21 @@
 {
-  "test_hydrate_lifecycle_finished_failed": {
+  "py://packages/cascade-runtime/tests/unit/test_event_translation.py#test_hydrate_lifecycle_finished_failed": {
     "baseline_code_signature_text": "def test_hydrate_lifecycle_finished_failed():",
     "baseline_code_structure_hash": "e137956fcd97da2654d551efe0dfcee1ad9856196e9e0b76ac0cab153c7fea2c"
   },
-  "test_hydrate_lifecycle_finished_success": {
+  "py://packages/cascade-runtime/tests/unit/test_event_translation.py#test_hydrate_lifecycle_finished_success": {
     "baseline_code_signature_text": "def test_hydrate_lifecycle_finished_success():",
     "baseline_code_structure_hash": "7419ad46fd6f5cbfc628f0ad8b4ad68f063e349edb61881415e0b3d983831cbe"
   },
-  "test_hydrate_lifecycle_skipped": {
+  "py://packages/cascade-runtime/tests/unit/test_event_translation.py#test_hydrate_lifecycle_skipped": {
     "baseline_code_signature_text": "def test_hydrate_lifecycle_skipped():",
     "baseline_code_structure_hash": "f97c10e11a2d676b8d35681b7f4185e949b12e6e6e6fb388380cd1d642cb539a"
   },
-  "test_hydrate_lifecycle_started": {
+  "py://packages/cascade-runtime/tests/unit/test_event_translation.py#test_hydrate_lifecycle_started": {
     "baseline_code_signature_text": "def test_hydrate_lifecycle_started():",
     "baseline_code_structure_hash": "14b0cd630b468971eb917440df5a1f256b282b6592901a3f9664bd8f1334bc5d"
   },
-  "test_hydrate_unknown_type": {
+  "py://packages/cascade-runtime/tests/unit/test_event_translation.py#test_hydrate_unknown_type": {
     "baseline_code_signature_text": "def test_hydrate_unknown_type():",
     "baseline_code_structure_hash": "ff8773a19ccd05722037e233279aa3461bed77f7d0a521d5842f17569d92b211"
   }

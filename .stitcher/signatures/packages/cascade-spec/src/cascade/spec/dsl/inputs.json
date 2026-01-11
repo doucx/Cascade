@@ -1,15 +1,21 @@
 {
-  "EnvSpec": {
+  "py://packages/cascade-spec/src/cascade/spec/dsl/inputs.py#EnvSpec": {
+    "baseline_code_signature_text": "class EnvSpec(InputSpec):",
+    "baseline_code_structure_hash": "c101db0b2a8dc413a6c1949aeb06cef1b34eb96b207cafec9974c14136ce103a",
     "baseline_yaml_content_hash": "316184266dfb0ced7f59d531e473bca00b7700b37bdf5732a4e80062b0ba2794"
   },
-  "InputSpec": {
+  "py://packages/cascade-spec/src/cascade/spec/dsl/inputs.py#InputSpec": {
+    "baseline_code_signature_text": "class InputSpec:",
+    "baseline_code_structure_hash": "6e5259f366fdb21572884ae830f0c3797c0c14919106d8610d7dc6389ac1bbf4",
     "baseline_yaml_content_hash": "8d111071e1f2355f57a2c750fd32b4caf1292878079ff47519374fd8c6618ac5"
   },
-  "InputSpec.default": {},
-  "InputSpec.description": {},
-  "InputSpec.name": {},
-  "ParamSpec": {
+  "py://packages/cascade-spec/src/cascade/spec/dsl/inputs.py#InputSpec.default": {},
+  "py://packages/cascade-spec/src/cascade/spec/dsl/inputs.py#InputSpec.description": {},
+  "py://packages/cascade-spec/src/cascade/spec/dsl/inputs.py#InputSpec.name": {},
+  "py://packages/cascade-spec/src/cascade/spec/dsl/inputs.py#ParamSpec": {
+    "baseline_code_signature_text": "class ParamSpec(InputSpec):",
+    "baseline_code_structure_hash": "2c7dc66f12bdc81f4b8c18743c2898955414bc2b864d64f95b9e50bff963c7f4",
     "baseline_yaml_content_hash": "cbd5839d7e19153553a9af3bc6dedb1863b4cb8f5c1793239c6261864261350b"
   },
-  "ParamSpec.type": {}
+  "py://packages/cascade-spec/src/cascade/spec/dsl/inputs.py#ParamSpec.type": {}
 }

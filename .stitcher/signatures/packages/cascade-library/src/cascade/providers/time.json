@@ -1,11 +1,14 @@
 {
-  "TimeWaitProvider": {},
-  "TimeWaitProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/time.py#TimeWaitProvider": {
+    "baseline_code_signature_text": "class TimeWaitProvider(Provider):",
+    "baseline_code_structure_hash": "b3bbf66701b219890d5481aa2eb710a7bc6268a76b4e55444c5b2bdfdabcce56"
+  },
+  "py://packages/cascade-library/src/cascade/providers/time.py#TimeWaitProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "TimeWaitProvider.name": {},
-  "_wait_task": {
+  "py://packages/cascade-library/src/cascade/providers/time.py#TimeWaitProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/time.py#_wait_task": {
     "baseline_code_signature_text": "async def _wait_task(delay: Union[float, int]) -> None:",
     "baseline_code_structure_hash": "14a8cd4c98782892aab3aa7d53610fe9ab7785792ffbc290956dbc1e19f66eb8",
     "baseline_yaml_content_hash": "6e9d2d52b58feb0be376ec55e2fdb440c799ca51415cec1b4294371bc54f45a4"

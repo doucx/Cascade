@@ -1,26 +1,30 @@
 {
-  "GraphValidationError": {
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidationError": {
+    "baseline_code_signature_text": "class GraphValidationError(ValueError):",
+    "baseline_code_structure_hash": "6c455821e4cbc96083cfbbf8b32e9a87a037b2c37fd397e3b780d1e0e703e43f",
     "baseline_yaml_content_hash": "9538afec46a8e97ed69bf0d97146393798125e88d7ceaf431903706e45324d13"
   },
-  "GraphValidator": {
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator": {
+    "baseline_code_signature_text": "class GraphValidator:",
+    "baseline_code_structure_hash": "d02510bffb89dc37b87af1b2ce6545d8cc2b4c21af38f3b98bf2d954c2609b82",
     "baseline_yaml_content_hash": "62aebc504201a3912b9d295e682c7fe80eb3f772f78d74feacbf9d8178cdf20b"
   },
-  "GraphValidator._check_bipartite_rule": {
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator._check_bipartite_rule": {
     "baseline_code_signature_text": "def _check_bipartite_rule(self, graph: BipartiteGraph) -> None:",
     "baseline_code_structure_hash": "58b7f6760a5751047ba0d9437e5b15cf570f87af1a501ffaab5889a4397f6b83",
     "baseline_yaml_content_hash": "01b9d715357166fd9a4247dcd57f622009bbeb0a62dcb0a694836ef4d4073caf"
   },
-  "GraphValidator._check_node_integrity": {
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator._check_node_integrity": {
     "baseline_code_signature_text": "def _check_node_integrity(self, graph: BipartiteGraph) -> None:",
     "baseline_code_structure_hash": "6b5f4f7d84ec9ba0f9f4037b3c2f1a424de206b095fd179dc4a141c4abf7ccca",
     "baseline_yaml_content_hash": "3d600b91a73c8e00305259439ecd8f6d5c71e92f250e3dbcfc3361206ed3fd65"
   },
-  "GraphValidator._check_port_connectivity": {
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator._check_port_connectivity": {
     "baseline_code_signature_text": "def _check_port_connectivity(self, graph: BipartiteGraph) -> None:",
     "baseline_code_structure_hash": "09a46fce50c04ab1d488cf46bc3d0b0e44b7f16f12fc417a4fd2b3f1d9b83af5",
     "baseline_yaml_content_hash": "568d658ceac8c9a7da01383998713188a626afe9701f8eb3df3cab2d83827bdc"
   },
-  "GraphValidator.validate": {
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator.validate": {
     "baseline_code_signature_text": "def validate(self, graph: BipartiteGraph, graph_ir: GraphIR) -> None:",
     "baseline_code_structure_hash": "bbd6e6c3de20663bb3e1b14b7c7c1abde88ee275cce532acc52c621035f8aafd",
     "baseline_yaml_content_hash": "2a51207d96ff6c42cc914a4ba73cc467debb1340e460ff6ca957149fce56ecf7"

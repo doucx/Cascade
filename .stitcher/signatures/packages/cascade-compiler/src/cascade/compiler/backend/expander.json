@@ -1,19 +1,12 @@
 {
-  "Expander": {
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/expander.py#Expander": {
+    "baseline_code_signature_text": "class Expander:",
+    "baseline_code_structure_hash": "f9c0b5d0763263bc2a032596291bb4e5d0b8f0a9b493b60b8e3dc7307b061e0a",
     "baseline_yaml_content_hash": "dfa569357cdd9d6a06a5d37f960806f050d73aa66c9658b9508b31430cf3ca6f"
   },
-  "Expander.expand_node": {
+  "py://packages/cascade-compiler/src/cascade/compiler/backend/expander.py#Expander.expand_node": {
     "baseline_code_signature_text": "def expand_node(self, node_ir: NodeIR) -> SubGraph:",
     "baseline_code_structure_hash": "157833d1cf9adbf7be81fd8466fc7248a67384e1363fd5e50e312206f40c7081",
     "baseline_yaml_content_hash": "054ea16e2bb5b0e0ccafc437b5eb19ae6d547adbc858c5fd89f6d29d0b028d3f"
-  },
-  "SubGraph": {},
-  "SubGraph.bleacher": {},
-  "SubGraph.channels": {},
-  "SubGraph.constants": {},
-  "SubGraph.controls": {},
-  "SubGraph.nodes": {},
-  "SubGraph.resources": {},
-  "SubGraph.stainer": {},
-  "SubGraph.worker": {}
+  }
 }

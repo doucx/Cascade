@@ -1,4 +1,10 @@
 {
-  "CascadeGraphError": {},
-  "StaticGraphError": {}
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/exceptions.py#CascadeGraphError": {
+    "baseline_code_signature_text": "class CascadeGraphError(Exception):",
+    "baseline_code_structure_hash": "73b518909cb355cc325df485877692045267268c23239a5773b61a4eb989d411"
+  },
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/exceptions.py#StaticGraphError": {
+    "baseline_code_signature_text": "class StaticGraphError(CascadeGraphError):",
+    "baseline_code_structure_hash": "7cdaed165071b6d399d2fe472e69e890a2a7bfc669198a39754b690cd7cd45a5"
+  }
 }

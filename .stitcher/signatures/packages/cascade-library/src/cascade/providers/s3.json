@@ -1,48 +1,62 @@
 {
-  "S3ProviderBase": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3ProviderBase": {
+    "baseline_code_signature_text": "class S3ProviderBase(Provider):",
+    "baseline_code_structure_hash": "3280ad808d11256496307906fb2bd82e338a21d9ce26fa3d11a005f58bcff4f9",
     "baseline_yaml_content_hash": "1e862e389161674ff5c01c28e9b485873302b6cb56cb9dd3c287e334b3cd87a7"
   },
-  "S3ProviderBase._check_dependency": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3ProviderBase._check_dependency": {
     "baseline_code_signature_text": "def _check_dependency(self):",
     "baseline_code_structure_hash": "29726e52ffcd0fd34cc93ef08cbab0886ca6aa31b77b2a69b35e2fdcacf1c6be"
   },
-  "S3ReadBytesProvider": {},
-  "S3ReadBytesProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3ReadBytesProvider": {
+    "baseline_code_signature_text": "class S3ReadBytesProvider(S3ProviderBase):",
+    "baseline_code_structure_hash": "2956eea7c2201494a7cf4a863f8383ddc59bb9e131833fd568aae429421cef4a"
+  },
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3ReadBytesProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "S3ReadBytesProvider.name": {},
-  "S3ReadTextProvider": {},
-  "S3ReadTextProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3ReadBytesProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3ReadTextProvider": {
+    "baseline_code_signature_text": "class S3ReadTextProvider(S3ProviderBase):",
+    "baseline_code_structure_hash": "b32e10f0bc1b8427881b8d4e109b2b8c133537d4801303c7afbb0eb20afac980"
+  },
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3ReadTextProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "S3ReadTextProvider.name": {},
-  "S3WriteBytesProvider": {},
-  "S3WriteBytesProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3ReadTextProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3WriteBytesProvider": {
+    "baseline_code_signature_text": "class S3WriteBytesProvider(S3ProviderBase):",
+    "baseline_code_structure_hash": "1b6ad10418823b4ba0c7e9a71bbf7863557c83323a025a36f16feafa23701449"
+  },
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3WriteBytesProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "S3WriteBytesProvider.name": {},
-  "S3WriteTextProvider": {},
-  "S3WriteTextProvider.create_factory": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3WriteBytesProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3WriteTextProvider": {
+    "baseline_code_signature_text": "class S3WriteTextProvider(S3ProviderBase):",
+    "baseline_code_structure_hash": "d79abdf0156173f426e195b7e97268848c696fe231afa94f3ab957726a793ab3"
+  },
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3WriteTextProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
-  "S3WriteTextProvider.name": {},
-  "_s3_read_bytes": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#S3WriteTextProvider.name": {},
+  "py://packages/cascade-library/src/cascade/providers/s3.py#_s3_read_bytes": {
     "baseline_code_signature_text": "async def _s3_read_bytes(bucket: str, key: str) -> bytes:",
     "baseline_code_structure_hash": "9ddbb708d402ee40d1cce6658b0ec5f004cc40021ba4345383a61d65666fc0df"
   },
-  "_s3_read_text": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#_s3_read_text": {
     "baseline_code_signature_text": "async def _s3_read_text(bucket: str, key: str, encoding: str = 'utf-8') -> str:",
     "baseline_code_structure_hash": "504a2b74fef5564c9c74530e7ef2d17ac16508661af24435f21d1ff98628f5c5"
   },
-  "_s3_write_bytes": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#_s3_write_bytes": {
     "baseline_code_signature_text": "async def _s3_write_bytes(bucket: str, key: str, content: bytes) -> None:",
     "baseline_code_structure_hash": "216614c7012b04a24dcebac74279a7f71519137f75478f9db652c0c173df49e2"
   },
-  "_s3_write_text": {
+  "py://packages/cascade-library/src/cascade/providers/s3.py#_s3_write_text": {
     "baseline_code_signature_text": "async def _s3_write_text(bucket: str, key: str, content: str, encoding: str = 'utf-8') -> None:",
     "baseline_code_structure_hash": "9db59d0b7dff4c57e0a023646c957c2569df8e17ca5b99d5d4d9f565da2d7646"
   }

@@ -1,17 +1,17 @@
 {
-  "add": {
+  "py://packages/cascade-compiler/tests/integration/test_manifest_content.py#add": {
     "baseline_code_signature_text": "def add(a: int, b: int) -> int:",
     "baseline_code_structure_hash": "6a0e278928c0b8f86e6fc8d18606e21229844e6b16bef22297ac533564b3dcc6"
   },
-  "source": {
+  "py://packages/cascade-compiler/tests/integration/test_manifest_content.py#source": {
     "baseline_code_signature_text": "def source():",
     "baseline_code_structure_hash": "e5b73e7509d107390d28f570769d89b48295cd8043076704f069852dd1e8cd9c"
   },
-  "square": {
+  "py://packages/cascade-compiler/tests/integration/test_manifest_content.py#square": {
     "baseline_code_signature_text": "def square(n: int) -> int:",
     "baseline_code_structure_hash": "cbe0ba853b2d4995d621005d310d766fee07751eea08f4a1144a594f447d0a86"
   },
-  "test_manifest_is_populated_correctly": {
+  "py://packages/cascade-compiler/tests/integration/test_manifest_content.py#test_manifest_is_populated_correctly": {
     "baseline_code_signature_text": "def test_manifest_is_populated_correctly():",
     "baseline_code_structure_hash": "cf71022335a8e74e2591d1557309bd379167bc9d8f99c467ebe9e6670a8b2a28"
   }

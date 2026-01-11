@@ -1,20 +1,20 @@
 {
-  "mock_redis_client": {
+  "py://packages/cascade-runtime/tests/unit/test_cache_redis.py#mock_redis_client": {
     "baseline_code_signature_text": "def mock_redis_client():",
     "baseline_code_structure_hash": "6c0a81370209cac02085d04ca5d6f997fa89541eaa6901d38d45064a05b46f10",
     "baseline_yaml_content_hash": "c504055d227bb53fe0f9f9d8beadcb1e938801c2454339136ee912f70e3f05cd"
   },
-  "test_get_cache": {
+  "py://packages/cascade-runtime/tests/unit/test_cache_redis.py#test_get_cache": {
     "baseline_code_signature_text": "async def test_get_cache(mock_redis_client):",
     "baseline_code_structure_hash": "9bee70405a9333d2eee5c9b0961fdfb97f5f1b13ec9812331d5fb840cccad5b6",
     "baseline_yaml_content_hash": "2ef36910d9e363d79403127961886a66925b7e9365a5d25abc9659e79909492d"
   },
-  "test_redis_cache_backend_dependency_check": {
+  "py://packages/cascade-runtime/tests/unit/test_cache_redis.py#test_redis_cache_backend_dependency_check": {
     "baseline_code_signature_text": "def test_redis_cache_backend_dependency_check(monkeypatch):",
     "baseline_code_structure_hash": "d99ede7432365b35516b4000e7214d8725c30046091722736fe726df8a011eda",
     "baseline_yaml_content_hash": "80ae7b063ee7b9d4394313402da61126825cd5983b6fe0f15fde30a21f794c13"
   },
-  "test_set_cache": {
+  "py://packages/cascade-runtime/tests/unit/test_cache_redis.py#test_set_cache": {
     "baseline_code_signature_text": "async def test_set_cache(mock_redis_client):",
     "baseline_code_structure_hash": "485e51af4c458a5cadb43741882fb9c64b18279391be9d9ac3ad93f45cfb230d",
     "baseline_yaml_content_hash": "06b1c7304bb2afed34671f07af0b6b685d1d3968e580a71cd47a9767d8fbf839"

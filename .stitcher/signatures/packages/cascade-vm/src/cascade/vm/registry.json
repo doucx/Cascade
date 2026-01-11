@@ -1,26 +1,28 @@
 {
-  "CodeRegistry": {
+  "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry": {
+    "baseline_code_signature_text": "class CodeRegistry:",
+    "baseline_code_structure_hash": "90c7c171770f30d5945e475baf59020311bc94b56e634b1606a57babd0049fd4",
     "baseline_yaml_content_hash": "93bbb78048aa430f61b471b0b7f6a8d59a13aaa504c179bb725be77eafaa00cc"
   },
-  "CodeRegistry.__init__": {
+  "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry.__init__": {
     "baseline_code_signature_text": "def __init__(self):",
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
   },
-  "CodeRegistry._registry": {},
-  "CodeRegistry.get": {
+  "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry._registry": {},
+  "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry.get": {
     "baseline_code_signature_text": "def get(self, canonical_hash: str) -> TaskCallable:",
     "baseline_code_structure_hash": "a2222ec1e2bd62416d274702a116fef3854c34b276317191141fbe9f699ccf22",
     "baseline_yaml_content_hash": "ba75e7cdc47c56d8e79c45bb17350e55f2abee37e160578e531898680e98f693"
   },
-  "CodeRegistry.has": {
+  "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry.has": {
     "baseline_code_signature_text": "def has(self, canonical_hash: str) -> bool:",
     "baseline_code_structure_hash": "2d433870496e571ca2962242a3b1bf00beb19b95a3d9962b04646adf4a4806ea"
   },
-  "CodeRegistry.register": {
+  "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry.register": {
     "baseline_code_signature_text": "def register(self, canonical_hash: str, func: TaskCallable) -> None:",
     "baseline_code_structure_hash": "85d100680eb1d424e275278942ac5dfd395056fa439f64f097229437f0cafda8",
     "baseline_yaml_content_hash": "9889b77bffa8d661582a19cdb4f2b3cd96d486a3a7e7db9eaf196cb20b5e6503"
   },
-  "TaskCallable": {},
-  "logger": {}
+  "py://packages/cascade-vm/src/cascade/vm/registry.py#TaskCallable": {},
+  "py://packages/cascade-vm/src/cascade/vm/registry.py#logger": {}
 }

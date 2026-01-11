@@ -1,6 +1,9 @@
 {
-  "TaskAnalyzer": {},
-  "TaskAnalyzer.analyze": {
+  "py://packages/cascade-reflection/src/cascade/reflection/protocols.py#TaskAnalyzer": {
+    "baseline_code_signature_text": "class TaskAnalyzer(Protocol):",
+    "baseline_code_structure_hash": "a7f97237ff2937032ed6f5dd42ff64b2f09bc7791863c3be2e1ee3f128253938"
+  },
+  "py://packages/cascade-reflection/src/cascade/reflection/protocols.py#TaskAnalyzer.analyze": {
     "baseline_code_signature_text": "def analyze(self, target: Any) -> TaskDef:",
     "baseline_code_structure_hash": "ff303c7bf15e56389fc1b8c71691c49ff71336d72e67454b5e71f71193b7c5fa"
   }

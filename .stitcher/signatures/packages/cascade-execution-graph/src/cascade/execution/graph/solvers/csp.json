@@ -1,19 +1,21 @@
 {
-  "CSPSolver": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver": {
+    "baseline_code_signature_text": "class CSPSolver:",
+    "baseline_code_structure_hash": "ab76bd1c3e1ddbd6811f58ad003d2ad998fe1619ca875b1d5f2bcd6dbd1516a6",
     "baseline_yaml_content_hash": "dd7c537dc5a350941a23f70723fda010ae6e838aa122bcfa1c960117ca743f38"
   },
-  "CSPSolver.__init__": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver.__init__": {
     "baseline_code_signature_text": "def __init__(self, system_resources: Dict[str, float]):",
     "baseline_code_structure_hash": "c911f64fa607cc091a11b5f648b235c71426b21d3f98c0e9c7aa1dcf25127952",
     "baseline_yaml_content_hash": "db50d00f0ec0a4feab7d9433f605adff4d5f57f41aee940963c1577c137fcbc2"
   },
-  "CSPSolver._solve_csp": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver._solve_csp": {
     "baseline_code_signature_text": "def _solve_csp(self, graph: Graph, active_nodes: list, node_resources: Dict[str, Dict[str, float]], max_stages: int) -> Optional[Dict[str, int]]:",
     "baseline_code_structure_hash": "5e1ebe951702b950becfbfaa55cfc4480ca9b39f5f9e0cb15de8104288a237b3"
   },
-  "CSPSolver.resolve": {
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver.resolve": {
     "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
     "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
   },
-  "CSPSolver.system_resources": {}
+  "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver.system_resources": {}
 }

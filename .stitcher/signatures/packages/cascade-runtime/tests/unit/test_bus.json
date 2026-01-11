@@ -1,20 +1,20 @@
 {
-  "test_human_readable_subscriber_integration": {
+  "py://packages/cascade-runtime/tests/unit/test_bus.py#test_human_readable_subscriber_integration": {
     "baseline_code_signature_text": "def test_human_readable_subscriber_integration():",
     "baseline_code_structure_hash": "4ba222445dd946eb8ea8c871f14e9ebe281e2a34cf7295a217ddf7aac35aed11",
     "baseline_yaml_content_hash": "5d9c55c363d688a8fdcfd37220186f7866ec00200daf6de03ec015f72bfacea0"
   },
-  "test_human_readable_subscriber_log_level_filtering": {
+  "py://packages/cascade-runtime/tests/unit/test_bus.py#test_human_readable_subscriber_log_level_filtering": {
     "baseline_code_signature_text": "def test_human_readable_subscriber_log_level_filtering():",
     "baseline_code_structure_hash": "b55c112028e333c17fd954b4a3670fada630d52142f70a256c3dd8d62fc1a015",
     "baseline_yaml_content_hash": "1c96fe7ea606819e488e1456953acec772a2d8d45bec7f76cccf4c6a76ff97e7"
   },
-  "test_message_bus_dispatch": {
+  "py://packages/cascade-runtime/tests/unit/test_bus.py#test_message_bus_dispatch": {
     "baseline_code_signature_text": "def test_message_bus_dispatch(bus_and_spy):",
     "baseline_code_structure_hash": "92062365d8b909c76a4459632d97beb45451c6fe69703f1dd205242d414460a0",
     "baseline_yaml_content_hash": "e766ec95683772784223753d91e2cec6fed0c31dd80025e9f962979f5fb708ef"
   },
-  "test_message_bus_wildcard": {
+  "py://packages/cascade-runtime/tests/unit/test_bus.py#test_message_bus_wildcard": {
     "baseline_code_signature_text": "def test_message_bus_wildcard(bus_and_spy):",
     "baseline_code_structure_hash": "1a8102d52079dadec12f30c371a21c285bdba2bd9286a8c6592ba86c3017dcf7",
     "baseline_yaml_content_hash": "001928df52d062c336a689be3fe9ab1d7cb72124186740c94b1f55b590f33c81"

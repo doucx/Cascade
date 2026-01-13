@@ -1,0 +1,162 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-common/src/cascade/__init__.py#__path__": {},
+    "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext": {
+      "baseline_code_signature_text": "class WorkflowContext:",
+      "baseline_code_structure_hash": "57dcbb04c7a4e9f3ade1ea61ba4722f8762194061ab218e076bed1f27eb165ae"
+    },
+    "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.get_all_specs": {
+      "baseline_code_signature_text": "def get_all_specs(self) -> List[InputSpec]:",
+      "baseline_code_structure_hash": "cd8c80d94ea6cd368fe45574f32ba4ad86f869d8b7e2078560a1951c4148bbc9"
+    },
+    "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.get_value": {
+      "baseline_code_signature_text": "def get_value(self, name: str) -> Optional[Any]:",
+      "baseline_code_structure_hash": "f01753ba498565391d2eebfb19e8867a4c48ac9f1eed0d27b810a3e6bbebd523"
+    },
+    "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.input_specs": {},
+    "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.register": {
+      "baseline_code_signature_text": "def register(self, spec: InputSpec):",
+      "baseline_code_structure_hash": "8d77c02b3e07cdadfdc03e09f812ca018f507c9334ea71468b7e459da73545f3"
+    },
+    "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.set_value": {
+      "baseline_code_signature_text": "def set_value(self, name: str, value: Any) -> None:",
+      "baseline_code_structure_hash": "cc8cd4521744b0eebac85bcc5c4b158f25d094b38cca7b97a62194a101fc74fc"
+    },
+    "py://packages/cascade-common/src/cascade/common/context.py#WorkflowContext.values": {},
+    "py://packages/cascade-common/src/cascade/common/context.py#_current_context": {},
+    "py://packages/cascade-common/src/cascade/common/context.py#get_current_context": {
+      "baseline_code_signature_text": "def get_current_context() -> WorkflowContext:",
+      "baseline_code_structure_hash": "00eeb1a3dd530666fdab33a7745fdee216bd04b093c64197c40f5452653e1c11"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/__init__.py#__all__": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus": {
+      "baseline_code_signature_text": "class FeedbackBus:",
+      "baseline_code_structure_hash": "7deb756b2b17cf076baa1237a420d12b6f6eb487e0522b17991cdaa36fcd3782"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus.__init__": {
+      "baseline_code_signature_text": "def __init__(self, store: MessageStore):",
+      "baseline_code_structure_hash": "5040b88be06643bddcbfbf61c0cb7dd729aa4df78c9ef146ace3c1f75f8dc2cb"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus._render": {
+      "baseline_code_signature_text": "def _render(self, level: str, msg_id: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "7b67b33671aee186d0dc28c75867da51167de2ba06bbc2409bc9952631e6959b"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus._renderer": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus._store": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus.error": {
+      "baseline_code_signature_text": "def error(self, msg_id: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "74d0e1591df1ba06fd66e12c1295ee60cd7c01bb3259f824dd0a77c2c4f80d78"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus.info": {
+      "baseline_code_signature_text": "def info(self, msg_id: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "817afd5b683cfac505c18cbd0364e790a65d78753b848dcdde052c7850b79b84"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus.set_renderer": {
+      "baseline_code_signature_text": "def set_renderer(self, renderer: Renderer):",
+      "baseline_code_structure_hash": "ce3ded2742fb947176e357aadf1a2a16da320a95d72c9a6c393d91f26a2c70a4"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus.store": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#FeedbackBus.warning": {
+      "baseline_code_signature_text": "def warning(self, msg_id: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "a6b1deb421acfd2525d3145f5beb41d63b230ec1ea40663f73d3852c239d3e05"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#MessageStore": {
+      "baseline_code_signature_text": "class MessageStore:",
+      "baseline_code_structure_hash": "9df57f0f801e88c5b8fd96ffd3720dda29c3cb154d5ad24782443d813fffbf5d"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#MessageStore.__init__": {
+      "baseline_code_signature_text": "def __init__(self, locale: str = 'en'):",
+      "baseline_code_structure_hash": "f164a2dd5f9d11755204babace26e8807b83d4df64015d6fc82bbe78e518b443"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#MessageStore._find_locales_dir": {
+      "baseline_code_signature_text": "def _find_locales_dir(self) -> Optional[Path]:",
+      "baseline_code_structure_hash": "02193bf75f7f5a553b0228a25f6d5b23b2c958ae1bfb54853912c766da534df2"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#MessageStore._load_messages": {
+      "baseline_code_signature_text": "def _load_messages(self):",
+      "baseline_code_structure_hash": "8674d570a06445321b723026b09b798de3b061f6120b58ce658b9042a36e31bb"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#MessageStore._messages": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#MessageStore.get": {
+      "baseline_code_signature_text": "def get(self, msg_id: str, default: str = '', **kwargs = {}) -> str:",
+      "baseline_code_structure_hash": "6495b38cd6eee18bd02002e79fc95b23c49da555ce5533124f58eec2a898e38c"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#MessageStore.locale": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#_default_store": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#bus": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/bus.py#logger": {},
+    "py://packages/cascade-common/src/cascade/common/messaging/protocols.py#Renderer": {
+      "baseline_code_signature_text": "class Renderer(Protocol):",
+      "baseline_code_structure_hash": "8342694db8d308b36ba5d1ecf2dc07bba1460712ac3a9a9438c5abba24852b3d",
+      "baseline_yaml_content_hash": "5fc611d9e96faae412a932ccb960cdcec27952fd30d82eae2c9ed91e6d0fc369"
+    },
+    "py://packages/cascade-common/src/cascade/common/messaging/protocols.py#Renderer.render": {
+      "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "2785386165127926edf6b708c1e63953c18505e0f1a1e4391b2166ee367c0988",
+      "baseline_yaml_content_hash": "d397dc2452109be0c30695b9ada197351dd7ab463c018ec91146711b36e52d5f"
+    },
+    "py://packages/cascade-common/src/cascade/common/renderers.py#CliRenderer": {
+      "baseline_code_signature_text": "class CliRenderer(protocols.Renderer):",
+      "baseline_code_structure_hash": "be99441fa563ad512ea7af90b657f1a2cca2298be2167ba456a763f9103e9a72",
+      "baseline_yaml_content_hash": "baa1c0444a8fda7a34dc5ca3943d3c0740557066a71aa831b0cb08ad96360286"
+    },
+    "py://packages/cascade-common/src/cascade/common/renderers.py#CliRenderer.__init__": {
+      "baseline_code_signature_text": "def __init__(self, store: MessageStore, stream: Optional[TextIO] = None, min_level: str = 'INFO'):",
+      "baseline_code_structure_hash": "8929cadf5779d099461f073793e387f7a1f4c1bdac68a960b7cb2464b8b70ddb"
+    },
+    "py://packages/cascade-common/src/cascade/common/renderers.py#CliRenderer._min_level_val": {},
+    "py://packages/cascade-common/src/cascade/common/renderers.py#CliRenderer._store": {},
+    "py://packages/cascade-common/src/cascade/common/renderers.py#CliRenderer._stream": {},
+    "py://packages/cascade-common/src/cascade/common/renderers.py#CliRenderer.render": {
+      "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs = {}):",
+      "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
+    },
+    "py://packages/cascade-common/src/cascade/common/renderers.py#JsonRenderer": {
+      "baseline_code_signature_text": "class JsonRenderer(protocols.Renderer):",
+      "baseline_code_structure_hash": "0b68fa7b0b6b8a40b967057cfc53eb51b95a607481f8dcbd2ad00e959ea92c5b",
+      "baseline_yaml_content_hash": "642e33173b28bb079895416c36477382725cd2950ff0ecdd0a212e534fc4b179"
+    },
+    "py://packages/cascade-common/src/cascade/common/renderers.py#JsonRenderer.__init__": {
+      "baseline_code_signature_text": "def __init__(self, stream: Optional[TextIO] = None, min_level: str = 'INFO'):",
+      "baseline_code_structure_hash": "999c4cf218c2844df2f5fdeaa0cbc5893e50681f16db49867984d6dd1eef4607"
+    },
+    "py://packages/cascade-common/src/cascade/common/renderers.py#JsonRenderer._min_level_val": {},
+    "py://packages/cascade-common/src/cascade/common/renderers.py#JsonRenderer._stream": {},
+    "py://packages/cascade-common/src/cascade/common/renderers.py#JsonRenderer.render": {
+      "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs = {}):",
+      "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
+    },
+    "py://packages/cascade-common/src/cascade/common/renderers.py#LOG_LEVELS": {},
+    "py://packages/cascade-common/tests/unit/test_messaging.py#test_message_bus_renderer_delegation": {
+      "baseline_code_signature_text": "def test_message_bus_renderer_delegation():",
+      "baseline_code_structure_hash": "6bcdb946869eb7ef676f7b645ecfcb40afa187dc972dead2c38bcd78773eb2a1",
+      "baseline_yaml_content_hash": "cb5d1c404693661d7539225661f3b5ed33067c96e3c57dfd412ab8fdaf4c7c83"
+    },
+    "py://packages/cascade-common/tests/unit/test_messaging.py#test_message_store_loads_defaults": {
+      "baseline_code_signature_text": "def test_message_store_loads_defaults():",
+      "baseline_code_structure_hash": "5c7d690761bfff23a5b0ac8b8c507fcdf99082313b93f908ced71c76693ca192",
+      "baseline_yaml_content_hash": "7ac0e86394c74fd24215aa6c58cd422883625bc06bee3acec6a94275872cde18"
+    },
+    "py://packages/cascade-common/tests/unit/test_renderers.py#msg_store": {
+      "baseline_code_signature_text": "def msg_store():",
+      "baseline_code_structure_hash": "24b6e2969a68fac8bbb645fad703a66312e2807aa1b518ac6704d0dcf0a27fc4"
+    },
+    "py://packages/cascade-common/tests/unit/test_renderers.py#test_cli_renderer": {
+      "baseline_code_signature_text": "def test_cli_renderer(msg_store):",
+      "baseline_code_structure_hash": "7ec431cff01a288441d1308662b5e345803c8a412e590f2ed622dce287f139aa"
+    },
+    "py://packages/cascade-common/tests/unit/test_renderers.py#test_json_renderer_log_level_filtering": {
+      "baseline_code_signature_text": "def test_json_renderer_log_level_filtering():",
+      "baseline_code_structure_hash": "23a4d16fa88c8c555a984f7efad740cbf1cd186b79615a7f59c3f0b83c9ba15f"
+    },
+    "py://packages/cascade-common/tests/unit/test_renderers.py#test_json_renderer_structure_and_content": {
+      "baseline_code_signature_text": "def test_json_renderer_structure_and_content():",
+      "baseline_code_structure_hash": "f33f55c4bfa5a9231d31ec9bd1459746cbd81d803f46aba3b3e5a7d6cad7cce0"
+    }
+  },
+  "version": "1.0"
+}

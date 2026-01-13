@@ -1,7 +1,0 @@
-{
-  "py://packages/cascade-std/src/cascade/std/triad/bleacher.py#standard_bleacher": {
-    "baseline_code_signature_text": "def standard_bleacher(io: BleacherSpec.IO, node: BleachNode, resources: Any) -> None:",
-    "baseline_code_structure_hash": "6828c508589ed9f2381f62403a89e2ac956283831830d918c54657e4877717f0",
-    "baseline_yaml_content_hash": "a24ef18e43194bc110ce315325463e8cf5b4689c521bd37037300d687f26ae2e"
-  }
-}

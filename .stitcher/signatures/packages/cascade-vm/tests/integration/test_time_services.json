@@ -1,6 +1,0 @@
-{
-  "py://packages/cascade-vm/tests/integration/test_time_services.py#test_sleep_ic_integration": {
-    "baseline_code_signature_text": "async def test_sleep_ic_integration():",
-    "baseline_code_structure_hash": "ca3f2d33fda0e3fa247591c2702903c6e597cbc737cb78b5415cb4c010fad8be"
-  }
-}

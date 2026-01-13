@@ -1,0 +1,248 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-sdk/src/cascade/__init__.py#__path__": {},
+    "py://packages/cascade-sdk/src/cascade/control_flow.py#bind": {
+      "baseline_code_signature_text": "def bind(source: LazyResult, target: Any):",
+      "baseline_code_structure_hash": "8264b4a87b261343bf09ab7a781dbfc1117592b5649277d04ee00c688f98de5e",
+      "baseline_yaml_content_hash": "062d991e06181448f4e81cb83d6d80648289d533f227af9f69c06bf1513085e2"
+    },
+    "py://packages/cascade-sdk/src/cascade/control_flow.py#select_jump": {
+      "baseline_code_signature_text": "def select_jump(routes: Dict[str, Optional[LazyResult]]) -> JumpSelector:",
+      "baseline_code_structure_hash": "4d689055116e2d61f84fa92236832d388445613e35997826f76c612249ec5733",
+      "baseline_yaml_content_hash": "b8fe279b9bd403f08d4faa2a3c81f3253ae7c2d825043e7dfbc6edae25f2bc03"
+    },
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#api_key": {},
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#api_response": {},
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#context": {},
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#final_prompt": {},
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#model": {},
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#parse_response": {
+      "baseline_code_signature_text": "def parse_response(response: HttpResponse):",
+      "baseline_code_structure_hash": "4e57fcd757fb590da8d3e9420279efcea67d97ed9b7a282508f17d80bc255b10"
+    },
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#parsed_text": {},
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#prompt_template": {},
+    "py://packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py#result": {},
+    "py://packages/cascade-sdk/src/cascade/sdk.py#Env": {
+      "baseline_code_signature_text": "def Env(name: str, default: Any = None, description: str = '') -> LazyResult:",
+      "baseline_code_structure_hash": "aee58e71ade7c1cc0026f302f141072a89eb988299cb560281dd4e121f69c096"
+    },
+    "py://packages/cascade-sdk/src/cascade/sdk.py#Param": {
+      "baseline_code_signature_text": "def Param(name: str, default: Any = None, type: Any = str, description: str = '') -> LazyResult:",
+      "baseline_code_structure_hash": "157bdbe14a70fdca2402f222d57e2f11c6f36098b5c1f40710b809a93e177647"
+    },
+    "py://packages/cascade-sdk/src/cascade/sdk.py#_IMPORT_MAP": {},
+    "py://packages/cascade-sdk/src/cascade/sdk.py#__all__": {},
+    "py://packages/cascade-sdk/src/cascade/sdk.py#__getattr__": {
+      "baseline_code_signature_text": "def __getattr__(name: str) -> Any:",
+      "baseline_code_structure_hash": "e4c6375eacd59d709311f755b6d45a5256cf3f5517bc10b7eaf8e38228d9701f"
+    },
+    "py://packages/cascade-sdk/src/cascade/sdk.py#dry_run": {
+      "baseline_code_signature_text": "def dry_run(target: Any) -> None:",
+      "baseline_code_structure_hash": "f05cb4c328e2beecb116cca35297d758c405c65c8d9af4f9c02fd123f68b698b"
+    },
+    "py://packages/cascade-sdk/src/cascade/sdk.py#http": {},
+    "py://packages/cascade-sdk/src/cascade/sdk.py#run": {
+      "baseline_code_signature_text": "def run(target: Union[LazyResult, List[Any], tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None) -> Any:",
+      "baseline_code_structure_hash": "5508c31bb9996ac7f840897b1e6f4e485e46b7262facda3ef4f515a93c5cd0d9"
+    },
+    "py://packages/cascade-sdk/src/cascade/sdk.py#template": {},
+    "py://packages/cascade-sdk/src/cascade/sdk.py#visualize": {
+      "baseline_code_signature_text": "def visualize(target: Any) -> str:",
+      "baseline_code_structure_hash": "cbdf7900f72c964721532288de54bba433ba71290f3fce1f7c467a77f8a6e689"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/__init__.py#__all__": {},
+    "py://packages/cascade-sdk/src/cascade/tools/cli.py#create_cli": {
+      "baseline_code_signature_text": "def create_cli(target: LazyResult[Any]) -> Callable[[], None]:",
+      "baseline_code_structure_hash": "ebabdee8721517ae2a197575654ff96732e9edb863ad9a460257041fd5252807",
+      "baseline_yaml_content_hash": "23f277ff564bb523f8d675987f6e3da00e42aa2a9ec29899b13dcfd57f1b1db4"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/events.py#__all__": {},
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler": {
+      "baseline_code_signature_text": "class LispTranspiler:",
+      "baseline_code_structure_hash": "499ca6b31087f0876563748fb33cd3fa468eb029050265fb322305f36e28100e"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler.__init__": {
+      "baseline_code_signature_text": "def __init__(self, graph: Graph, instance_map: Dict[str, Node]):",
+      "baseline_code_structure_hash": "8343029c41908329b1f3ffb532ca4f98620293c8541132e090bf565cc99eb445"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler._analyze": {
+      "baseline_code_signature_text": "def _analyze(self):",
+      "baseline_code_structure_hash": "e62832e802e55d3f81c85afa4f2796bf616cea3b9eb4270ee688697f379409fb",
+      "baseline_yaml_content_hash": "ef44987a8a3190fdd4df85c29d8ffab267d7eeb0437aecf8d5c9d57e4ddc1899"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler._get_transitive_deps": {
+      "baseline_code_signature_text": "def _get_transitive_deps(self, root: Node) -> Set[Node]:",
+      "baseline_code_structure_hash": "c9cbb47808738b102efe254c56ac201c2957c8826360a9bcad1f226ec02202df",
+      "baseline_yaml_content_hash": "3cf61bfb68d3259033988d531405a5e32a0ba0527de0422229447ee59ba8e407"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler._render_edge_ref": {
+      "baseline_code_signature_text": "def _render_edge_ref(self, edge: Edge) -> str:",
+      "baseline_code_structure_hash": "f94b823e3bb1f3f913b4b27263abfeff4d45bf27ee3e042f21ba8c798adf1ce8"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler._render_expr": {
+      "baseline_code_signature_text": "def _render_expr(self, node: Node) -> str:",
+      "baseline_code_structure_hash": "ba8498a5e0f3223cb8089187696598b3765e333cd509c0cca3613e62c55bfd59"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler._resolve_node_ref": {
+      "baseline_code_signature_text": "def _resolve_node_ref(self, node: Node) -> str:",
+      "baseline_code_structure_hash": "c8a0a968c03da6ac2b5ad5da2ccdb8a10706397e61df510e4a4ce8c02bc2a33f"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler._sanitize_name": {
+      "baseline_code_signature_text": "def _sanitize_name(self, name: str) -> str:",
+      "baseline_code_structure_hash": "735cb286761499fe5b42b22b487c47457cef1784442df6a2f0339ab21d2263e6"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler._to_lisp_literal": {
+      "baseline_code_signature_text": "def _to_lisp_literal(self, val: Any) -> str:",
+      "baseline_code_structure_hash": "69ce8f16ba344faf99b5690d6e16d986ef1199e47a9e67456f9c15ce61b602af"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler._topo_sort": {
+      "baseline_code_signature_text": "def _topo_sort(self, nodes: List[Node]) -> List[Node]:",
+      "baseline_code_structure_hash": "3dd2cbd7b9976005ff26a2b8d13d01376bb09e7a46237c92811702a979f828ac",
+      "baseline_yaml_content_hash": "1cfb18f23e1ca876780899814ef02447825263dfab45e889abb68c1bf821d87b"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler.generated_bindings": {},
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler.graph": {},
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler.instance_map": {},
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler.node_var_names": {},
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler.ref_counts": {},
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler.shared_nodes": {},
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#LispTranspiler.transpile": {
+      "baseline_code_signature_text": "def transpile(self, target_node: Node) -> str:",
+      "baseline_code_structure_hash": "6e562a412fd954908d41597289bac1eda9d53d2ca467b67dc3590413d134f275"
+    },
+    "py://packages/cascade-sdk/src/cascade/tools/lisp.py#to_lisp": {
+      "baseline_code_signature_text": "def to_lisp(target: Any) -> str:",
+      "baseline_code_structure_hash": "1b5bbcf3e1af86ce7a8ba191f510374b59e73bd6560c3b04cccf6cb505dba056",
+      "baseline_yaml_content_hash": "e22a847478f8637fe7bf8049087616a398ce77aee81673cffe6b645b92cd375d"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_auto_gathering.py#identity": {
+      "baseline_code_signature_text": "def identity(val: any) -> any:",
+      "baseline_code_structure_hash": "5f489d0d7ce71cd4c7971fc3036ef39eccaa60eb52c0314f4f5138af841aa5d5"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_auto_gathering.py#task_one": {
+      "baseline_code_signature_text": "def task_one():",
+      "baseline_code_structure_hash": "2c19485ed2ce5f71982810d335b57a642a4ee8ccee8bce91ba66a6716c997c2d"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_auto_gathering.py#task_two": {
+      "baseline_code_signature_text": "def task_two():",
+      "baseline_code_structure_hash": "b4b515d7a84cba1cba1df67e994c42beb22c8cc98da966fbd89b6bbc58e66621"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_auto_gathering.py#test_run_with_empty_list": {
+      "baseline_code_signature_text": "def test_run_with_empty_list():",
+      "baseline_code_structure_hash": "e77dda55618d8a0097c81f137d2cc338c3a1da122ffee367fc2eb1fdbae963ad",
+      "baseline_yaml_content_hash": "553e1eb367d6159265969b96f259fc1124c753680ded7c5165dd789953172ea1"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_auto_gathering.py#test_run_with_list_of_lazy_results": {
+      "baseline_code_signature_text": "def test_run_with_list_of_lazy_results():",
+      "baseline_code_structure_hash": "15fa0881e6bb4d5c4f617c5519daa75e020c45f44fe2996b4b526293c6da6436",
+      "baseline_yaml_content_hash": "d268ec4b36aecdeb233e15234ccb9aabf4d904d19c4130446d51a3162ede025f"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_auto_gathering.py#test_run_with_mixed_list_of_lazy_results_and_literals": {
+      "baseline_code_signature_text": "def test_run_with_mixed_list_of_lazy_results_and_literals():",
+      "baseline_code_structure_hash": "a58c5a56a8c747bb290cda8e2af6178e2c6d9e473e1483f6e83cd00c13aebab5",
+      "baseline_yaml_content_hash": "1f455809c2ed679920c25ae5d3d3883f24bd4f258e379899df4b1c0cc4c28340"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_auto_gathering.py#test_run_with_tuple_of_lazy_results": {
+      "baseline_code_signature_text": "def test_run_with_tuple_of_lazy_results():",
+      "baseline_code_structure_hash": "dff2a4fcd582d7703d1613015561c04baae3022822eea3e075faf88913f87569",
+      "baseline_yaml_content_hash": "febf7e97f6978eb47a695da7ee549c6bc3c3b7fac38fd188c70893b36f4e5df7"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_cli.py#runner": {},
+    "py://packages/cascade-sdk/tests/integration/test_cli.py#test_cli_generator_from_context": {
+      "baseline_code_signature_text": "def test_cli_generator_from_context():",
+      "baseline_code_structure_hash": "55a5dccba20b78f64f1ac183121abce4eab4f82272cf5cb1fd7bf7cd6143d546",
+      "baseline_yaml_content_hash": "1a3dbcc1066e764d185cf0b4fda7d0725b1a554ac6eb9f5669633e26a849e25a"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_llm_pattern.py#mock_http_post": {
+      "baseline_code_signature_text": "def mock_http_post(monkeypatch):",
+      "baseline_code_structure_hash": "03c9be31274ab840a4a22f1b3221f6b5f8f15aa0d8d1108489804b1936e4c2c8",
+      "baseline_yaml_content_hash": "877987aebd4c99085031b4c079e0910e59f72fd57e703221aa5d071dde928562"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_llm_pattern.py#mock_openai_response": {},
+    "py://packages/cascade-sdk/tests/integration/test_llm_pattern.py#test_llm_pattern_via_subflow": {
+      "baseline_code_signature_text": "async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):",
+      "baseline_code_structure_hash": "798af51c8dfc4ff1e9d0ea9f98152faf31fb297d5a60d0dfe7fe6935dd28a916",
+      "baseline_yaml_content_hash": "33f0ffd2b04ddbcf44b7927bb157d27bbe62c2ed4e41fb5d39af353188e7e42a"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_public_api_imports.py#test_accessing_non_existent_attribute_raises_attribute_error": {
+      "baseline_code_signature_text": "def test_accessing_non_existent_attribute_raises_attribute_error():",
+      "baseline_code_structure_hash": "807ed953abab89db64d2d06f3afa4972030677efae1a40799ffade544ea58bb1",
+      "baseline_yaml_content_hash": "1e6ca41419d709d20aec5c559496811520aebe55100ebd06e2c46f08d59f32ac"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_public_api_imports.py#test_core_components_are_accessible_from_top_level": {
+      "baseline_code_signature_text": "def test_core_components_are_accessible_from_top_level():",
+      "baseline_code_structure_hash": "f3ad32addc776d8cc7656c197c62abe6df1702240dbbc10c989c6c03a862261e",
+      "baseline_yaml_content_hash": "5288cb3927defaaa92ea3bbda9b593d739c47bdb09919f90707371552c05bc9e"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_state_backends.py#add": {
+      "baseline_code_signature_text": "def add(a, b):",
+      "baseline_code_structure_hash": "b5a831002b97516126d1eb5b4437c9dbf962b78968a52c80c2428b129d72a177"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_state_backends.py#identity": {
+      "baseline_code_signature_text": "def identity(x):",
+      "baseline_code_structure_hash": "e5509b3a49180d5fa8e23124952b4259e867d9c03a503db2e1768f64bebead42"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_state_backends.py#stateful_redis_mock": {
+      "baseline_code_signature_text": "def stateful_redis_mock(monkeypatch):",
+      "baseline_code_structure_hash": "56d5365ad6c0a794ce54e80462a8a04fb52c5950978e33beb3df90ccce81c26a",
+      "baseline_yaml_content_hash": "01f8425581cf07118fbd93d7ccd6b3e8854aee9acb0b86bd6714b17b53b4d41d"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_state_backends.py#test_run_with_redis_backend_raises_if_not_installed": {
+      "baseline_code_signature_text": "def test_run_with_redis_backend_raises_if_not_installed(monkeypatch):",
+      "baseline_code_structure_hash": "4555a87e3892cab605584bbc553d41d47e0cb475dee0f145a85cc7683559e751",
+      "baseline_yaml_content_hash": "a199107225f201591f84fc95cfdbff3e4e8abd9bf80743e24d074224f787dd50"
+    },
+    "py://packages/cascade-sdk/tests/integration/test_state_backends.py#test_run_with_redis_backend_uri": {
+      "baseline_code_signature_text": "def test_run_with_redis_backend_uri(stateful_redis_mock):",
+      "baseline_code_structure_hash": "66869db40763294aae65dc3ad89595bc3912bd96edf529f1422232d89c08cf3a",
+      "baseline_yaml_content_hash": "85b5c1f987947241cbe6e9cd15417e0829cf6fca55b7289ed649a31bc16fe2f5"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_lisp.py#test_lisp_transpile_param_as_dependency": {
+      "baseline_code_signature_text": "def test_lisp_transpile_param_as_dependency():",
+      "baseline_code_structure_hash": "ad706bcebada7172dcc795a5ec30ce4717e55d91ca90cdca9c9e05f645d170f7",
+      "baseline_yaml_content_hash": "20613551613e0aeabeb398b28e4aed18add7f1a1464af2d5b0c5eeb020441dd7"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_lisp.py#test_lisp_transpile_router_with_param_selector": {
+      "baseline_code_signature_text": "def test_lisp_transpile_router_with_param_selector():",
+      "baseline_code_structure_hash": "351d453363b90de149530477217c354eb43d1bdf13841d32ef85e015fe7ee8e4",
+      "baseline_yaml_content_hash": "aef475b01eb4df897cdb1f69c3a2e69fbd6da4507eb9e8faa94a25b23e3d01d9"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_lisp.py#test_lisp_transpile_shared_param_in_let": {
+      "baseline_code_signature_text": "def test_lisp_transpile_shared_param_in_let():",
+      "baseline_code_structure_hash": "7d10f7c146ee383b139340cfcff236ddf49004a8341a7bdcbc75c2ec01e36866",
+      "baseline_yaml_content_hash": "86a1fa9282f348209c0a62415c496103710ba6a02330d14b954763e869474d53"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_lisp.py#test_lisp_transpile_simple_param": {
+      "baseline_code_signature_text": "def test_lisp_transpile_simple_param():",
+      "baseline_code_structure_hash": "5bbdd58807a0968183e95e46cf0b1e60e5e37c7a226373638b0776e3a147609f",
+      "baseline_yaml_content_hash": "9cd84fd21fca2179a7deda73a877e13b136b0fe642d05df6e9137764b9eafaa3"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_visualize.py#test_visualize_diamond_graph": {
+      "baseline_code_signature_text": "def test_visualize_diamond_graph():",
+      "baseline_code_structure_hash": "0da329460611582960077538823f64f7cc306c2e26125a97b038784ffd3d2aef",
+      "baseline_yaml_content_hash": "e3cf27c7e532b0dedf6da7c03014e9fe5c82544f26ed03f2de73f0246f7ae5ec"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_visualize.py#test_visualize_iterative_jump_edge": {
+      "baseline_code_signature_text": "def test_visualize_iterative_jump_edge():",
+      "baseline_code_structure_hash": "fa6524d371a4d42b41779f9442f62d94ef33028a685aebed0e105db3518dc875",
+      "baseline_yaml_content_hash": "9709e419d7487bcaa4c2cdd53942cf4d430018ad681f36e73e7013a552392adf"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_visualize.py#test_visualize_multi_node_jump_edge": {
+      "baseline_code_signature_text": "def test_visualize_multi_node_jump_edge():",
+      "baseline_code_structure_hash": "6d49a32506f9fe9df9d7b4a94833abc21be060c00c6f46588ac103340a468631",
+      "baseline_yaml_content_hash": "b5613f11420bf2dec2489ec745d0090b33c35b091d43796133fc96f27d7da0dd"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_visualize.py#test_visualize_special_edge_types": {
+      "baseline_code_signature_text": "def test_visualize_special_edge_types():",
+      "baseline_code_structure_hash": "594bcdb0f1fbd04b35992ccc2f76333d60d6431ef968befe92eb50246df87aea",
+      "baseline_yaml_content_hash": "ead83fd7a749d011c6840b6d4d14cfa5108cef7b818ee09447c6fb3d7a6b5708"
+    },
+    "py://packages/cascade-sdk/tests/unit/test_visualize.py#test_visualize_with_list_of_lazy_results": {
+      "baseline_code_signature_text": "def test_visualize_with_list_of_lazy_results():",
+      "baseline_code_structure_hash": "0db8794733ad35d82b4f94c7804c0d95054e502d7d8200177cdad27d6554ee11",
+      "baseline_yaml_content_hash": "194a75e5a9c1534ad0ca70578c3f1f563165f6c5436c41896d462b15d472fb34"
+    }
+  },
+  "version": "1.0"
+}

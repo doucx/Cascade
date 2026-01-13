@@ -1,0 +1,107 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-cli-observer/src/cascade/__init__.py#__path__": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/__init__.py#__path__": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_get_status": {
+      "baseline_code_signature_text": "async def _get_status(backend: str, hostname: str, port: int):",
+      "baseline_code_structure_hash": "aef0b2ecfa0b98c6787ea928723e4a265b5a92b9f6481e22d88a39ffa813b141",
+      "baseline_yaml_content_hash": "ea778b5ad7efb8d0348f7576e3aabced7761e8c28ffe1ef17bcf04495ba7acd1"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_get_status_sqlite": {
+      "baseline_code_signature_text": "async def _get_status_sqlite():",
+      "baseline_code_structure_hash": "928a4093837066bed1c96f2d02434111d6f62b19808ad2519c6f8030cf0f7a68",
+      "baseline_yaml_content_hash": "6d3cb4143921589e54371862c0a523a880e52d54a458ea065b7c6e079a866c49"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_render_constraints_table": {
+      "baseline_code_signature_text": "def _render_constraints_table(constraints: list[GlobalConstraint]):",
+      "baseline_code_structure_hash": "17da98740ea40bce8c24f02574227fb345afefaf6ed68deed1df5933c7668a7c",
+      "baseline_yaml_content_hash": "2724b688edfaa5eb3667b89b2d8c7255c5c3db6c78b13caa95eefbe71c170bf9"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_run_mqtt_watcher": {
+      "baseline_code_signature_text": "async def _run_mqtt_watcher(project: str, hostname: str, port: int):",
+      "baseline_code_structure_hash": "13056327a8b39fc7b777645edb48429d1ded1cc2cea4221fd001b5deb0f994a3",
+      "baseline_yaml_content_hash": "f3aaa9d9ed14d4f81b582fc9d8f887d6265e9519e0b8ee7d163f755c47f4d405"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#_run_uds_watcher": {
+      "baseline_code_signature_text": "async def _run_uds_watcher():",
+      "baseline_code_structure_hash": "e1a7cf130d9304845a91cb26cb74fb4e58d8f5e478579e2f1eb86f6cf98ee985",
+      "baseline_yaml_content_hash": "68109ce33a2d3e6744037b06ffab12b650af73464a5c1cd3f21832166e2fecd2"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#app": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#console": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#main": {
+      "baseline_code_signature_text": "def main():",
+      "baseline_code_structure_hash": "ec3ee86290baaf2be43d796e40266959fcd8b2d57b6599f49808563639b00d28"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#on_message": {
+      "baseline_code_signature_text": "async def on_message(topic: str, payload: dict):",
+      "baseline_code_structure_hash": "8a49428abd1c6800a70f8f390eca68110aee50a980da244d902a5aba77d87275",
+      "baseline_yaml_content_hash": "802a49506320a549daaaa1981fb9f2e803c1b325c81b869714183970e702c5d8"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#seen_run_ids": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#status": {
+      "baseline_code_signature_text": "def status(backend: str = typer.Option('mqtt', '--backend', help=\"Control plane backend ('mqtt' or 'local').\"), hostname: str = typer.Option('localhost', help='MQTT broker hostname.'), port: int = typer.Option(1883, help='MQTT broker port.')):",
+      "baseline_code_structure_hash": "cb8eaff76dbd13e615174a8f8878d6ae707ef6881b8121434e10f6866aef1963",
+      "baseline_yaml_content_hash": "a9596ae9f4fa58bf92dd035092dc5c85f0a1e75037439e69fefcd1fa5c90fcf3"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/app.py#watch": {
+      "baseline_code_signature_text": "def watch(backend: str = typer.Option('mqtt', '--backend', help=\"Telemetry backend ('mqtt' or 'local').\"), project: str = typer.Option('default', '--project', help='The project ID to watch (MQTT only).'), hostname: str = typer.Option('localhost', '--host', help='MQTT broker hostname (MQTT only).'), port: int = typer.Option(1883, '--port', help='MQTT broker port (MQTT only).')):",
+      "baseline_code_structure_hash": "321fd4e357fc04df945109d1e6d784e794e812b5a1b830394726ab86a3901aa9",
+      "baseline_yaml_content_hash": "71dae62e9761e8e78aac92065d49d6851b3abe42e57df0e16602e5171fe480c0"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#LOG_LEVELS": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#RichCliRenderer": {
+      "baseline_code_signature_text": "class RichCliRenderer(protocols.Renderer):",
+      "baseline_code_structure_hash": "5cd9aeb55d7a45e6cd9476479b950f7ad8e8d4f30d9d7e164f531466b4ae6b3b",
+      "baseline_yaml_content_hash": "6fb2e827bab7d5a650b051d7cf46dd70b653e7db0fa8729bb642d137685f27ee"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#RichCliRenderer.__init__": {
+      "baseline_code_signature_text": "def __init__(self, store: MessageStore, min_level: str = 'INFO'):",
+      "baseline_code_structure_hash": "3f95d647f380edf48175e97c25d076ccc5156b502c135165c9b20d40631b229d"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#RichCliRenderer._console": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#RichCliRenderer._min_level_val": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#RichCliRenderer._store": {},
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#RichCliRenderer.render": {
+      "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs = {}):",
+      "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
+    },
+    "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#custom_theme": {},
+    "py://packages/cascade-cli-observer/tests/integration/test_telemetry_contract.py#test_telemetry_subscriber_to_observer_contract": {
+      "baseline_code_signature_text": "async def test_telemetry_subscriber_to_observer_contract():",
+      "baseline_code_structure_hash": "1f3e23f4180d1202ed7825aa766dcf132d93db5f3c107a2ed24bd133bfdf8e7f",
+      "baseline_yaml_content_hash": "62a975e866adb52ad0493916168fed31629a93ce112a3be72f64361d146391c3"
+    },
+    "py://packages/cascade-cli-observer/tests/unit/test_observer_app.py#mock_connector": {
+      "baseline_code_signature_text": "def mock_connector(monkeypatch) -> AsyncMock:",
+      "baseline_code_structure_hash": "8a69db59845d2abb40939e3901c84473f2cc86bb36481ad3429288433d998bd3",
+      "baseline_yaml_content_hash": "c8d63dfb1c86120a91e4d354f28eeb35cb22d98c972f53c01e0a964a2d6a17bc"
+    },
+    "py://packages/cascade-cli-observer/tests/unit/test_observer_app.py#mock_messaging_bus": {
+      "baseline_code_signature_text": "def mock_messaging_bus(monkeypatch) -> MagicMock:",
+      "baseline_code_structure_hash": "9db3dc61a7a432d2593b52a966c163ffc2a02b9ef3c70de08a3d4d01169455ce",
+      "baseline_yaml_content_hash": "7031aa366be30a0ee63568ce0e43d8003a22acd318abf4344253e54e51c4bc50"
+    },
+    "py://packages/cascade-cli-observer/tests/unit/test_observer_app.py#test_on_message_handles_task_completed_event": {
+      "baseline_code_signature_text": "async def test_on_message_handles_task_completed_event(mock_messaging_bus):",
+      "baseline_code_structure_hash": "da9156b169f9ae55c1cf3dce01c216b984faddf6f664d0c7f995d52779f08963",
+      "baseline_yaml_content_hash": "f97a7f9be3ebf24cd4152904e62fed56296e1a2bd034d54943bd1fd521b3a8d5"
+    },
+    "py://packages/cascade-cli-observer/tests/unit/test_observer_app.py#test_on_message_handles_task_failed_event": {
+      "baseline_code_signature_text": "async def test_on_message_handles_task_failed_event(mock_messaging_bus):",
+      "baseline_code_structure_hash": "bb2f775f251934c961acfc135796b4781698882a9e289ac0ce6b37507c8676ac",
+      "baseline_yaml_content_hash": "050d5ed2a8670d6aa2bd48747f54d910e0d1309fa95cdb7da8515a548e7711e7"
+    },
+    "py://packages/cascade-cli-observer/tests/unit/test_observer_app.py#test_on_message_handles_task_running_event": {
+      "baseline_code_signature_text": "async def test_on_message_handles_task_running_event(mock_messaging_bus):",
+      "baseline_code_structure_hash": "effb8344170757a48b7a38128afc74671bd5edf32556cc2f05bd5368178f004b",
+      "baseline_yaml_content_hash": "8cb6df3db360bf7b3bfa68eea21a477783394493561563f23c0cc8a8f53453ac"
+    },
+    "py://packages/cascade-cli-observer/tests/unit/test_observer_app.py#test_on_message_prints_run_header_only_once": {
+      "baseline_code_signature_text": "async def test_on_message_prints_run_header_only_once(mock_messaging_bus):",
+      "baseline_code_structure_hash": "8c124838874997170082e569cd298fde89dbbbd11969438f37ff3121a3f5ec20",
+      "baseline_yaml_content_hash": "c19ddad8236d26abdcb374e0cbc601b0494ed3f226113d453eaf1010fe946b92"
+    }
+  },
+  "version": "1.0"
+}

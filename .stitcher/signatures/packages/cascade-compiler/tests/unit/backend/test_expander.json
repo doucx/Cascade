@@ -1,6 +1,0 @@
-{
-  "py://packages/cascade-compiler/tests/unit/backend/test_expander.py#test_expander_creates_triad_structure": {
-    "baseline_code_signature_text": "def test_expander_creates_triad_structure():",
-    "baseline_code_structure_hash": "d692d73cd82722536692ce1d1e0be0f194d09e35a50ba044dc11fa7ef9fc64f8"
-  }
-}

@@ -1,0 +1,449 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-execution-graph/src/cascade/__init__.py#__path__": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/__init__.py#__path__": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/errors.py#CascadeRuntimeError": {
+      "baseline_code_signature_text": "class CascadeRuntimeError(Exception):",
+      "baseline_code_structure_hash": "c97423b3a6a1e4f5587acc2851797a30fba16f1bf644851ec8a9d725147d72bb",
+      "baseline_yaml_content_hash": "1973f2d26d39890d16cc34f1ff536b8be8ac92905da79f2a463675f19026b488"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/errors.py#DependencyMissingError": {
+      "baseline_code_signature_text": "class DependencyMissingError(CascadeRuntimeError):",
+      "baseline_code_structure_hash": "b0cd7da56cf288b4cd78cf0f7a69355140fdf0025cc13fa1565e9b2a367d76ca",
+      "baseline_yaml_content_hash": "ac084b9b0fee5e2e9448fe4eb171e7aed82abc55ad779cc389222900b0376bb6"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/errors.py#DependencyMissingError.__init__": {
+      "baseline_code_signature_text": "def __init__(self, task_id: str, arg_name: str, dependency_id: str):",
+      "baseline_code_structure_hash": "36385b354185649aa66cb05fc2531a12237ab2997ab22b66470a4b81ef3da86e"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/errors.py#DependencyMissingError.arg_name": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/errors.py#DependencyMissingError.dependency_id": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/errors.py#DependencyMissingError.task_id": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/errors.py#ResourceNotFoundError": {
+      "baseline_code_signature_text": "class ResourceNotFoundError(CascadeRuntimeError):",
+      "baseline_code_structure_hash": "88777672725c65da783cd4c392b60465b016acdad6d6740a8cf2ee4f2ae62bf4",
+      "baseline_yaml_content_hash": "80381fbca4f657a16fd4e7b405954e5e594afb308f4266324dbf553ac494a2ce"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/errors.py#ResourceNotFoundError.__init__": {
+      "baseline_code_signature_text": "def __init__(self, resource_name: str, consumer_name: str = 'unknown'):",
+      "baseline_code_structure_hash": "6e66376e9771956af71edee866a83deab170ac84d8d10bdd7e92ecb2014d27c3"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager": {
+      "baseline_code_signature_text": "class FlowManager:",
+      "baseline_code_structure_hash": "59df524a120426738df6d42b2a0cadf6c37c60d69fa86d6d0705e2e5b883197c",
+      "baseline_yaml_content_hash": "a2dd42b04643f708a9a4b0079eed72e47912b16d72076f770f913410834bcdd8"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.__init__": {
+      "baseline_code_signature_text": "def __init__(self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]):",
+      "baseline_code_structure_hash": "5c30c681999c07b48466f2e88c7fb8c52702b80cb40883b0d68025815e4348e6"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager._decrement_demand_and_prune": {
+      "baseline_code_signature_text": "async def _decrement_demand_and_prune(self, node_id: str, state_backend: StateBackend):",
+      "baseline_code_structure_hash": "3f630b2c79774b895ec485964ce2bfc316639d7cc01971d60b602000d15a5b2c",
+      "baseline_yaml_content_hash": "a32cdbe42c3611dd83270ed75f166100b4d47ae4edad5a1263390b9bd2150c63"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager._get_node_from_instance": {
+      "baseline_code_signature_text": "def _get_node_from_instance(self, instance: Any) -> Optional[Node]:",
+      "baseline_code_structure_hash": "3a2a3fb6ffbe2daccc9d5d961d1957e4e1189971d2c6c485b33dfa58cfd90da8",
+      "baseline_yaml_content_hash": "5d96cf274ab30775608054dda75089091ab253d7fd624af4a1d10a161dd9a1dc"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager._process_router_decision": {
+      "baseline_code_signature_text": "async def _process_router_decision(self, edge: Edge, selector_value: Any, state_backend: StateBackend):",
+      "baseline_code_structure_hash": "fd527827501b77da346f57446edc9cd0796af965103d44777ca72222d834e5a0"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.downstream_demand": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.graph": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.in_edges": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.instance_map": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.register_result": {
+      "baseline_code_signature_text": "async def register_result(self, node_id: str, result: Any, state_backend: StateBackend):",
+      "baseline_code_structure_hash": "f5d7930a315ee6d7182b70916e9ef1963326e473b1584d44a28a8c4bf43141ec",
+      "baseline_yaml_content_hash": "fed3dba4749e796eb39ac5cef4d1971b098c3af5637a94c1dfb9172b9b1049a1"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.route_source_map": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.routers_by_selector": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.should_skip": {
+      "baseline_code_signature_text": "async def should_skip(self, node: Node, state_backend: StateBackend) -> Optional[str]:",
+      "baseline_code_structure_hash": "21c1abd6a4fc30188e981c0ed3799e4276a98fabae395299b67a14ce95afa996",
+      "baseline_yaml_content_hash": "4266e79c0eb0b281d95f1bb31646688ca810d5cac75c8d28aaacf373fb8dd402"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/flow.py#FlowManager.target_node_id": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor": {
+      "baseline_code_signature_text": "class NodeProcessor:",
+      "baseline_code_structure_hash": "1d5fc2549a0b6c56a29e89dbfde8c61826c59a89e9eb24abd91ccebf9c2f7d04",
+      "baseline_yaml_content_hash": "a7dc69ff8dd54924c018e19dc3865eb4ef89a26ffd89f67c352306f71a46a465"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.__init__": {
+      "baseline_code_signature_text": "def __init__(self, executor: Executor, bus: EventBus, resource_manager: ResourceManager, constraint_manager: ConstraintManager, solver: Solver):",
+      "baseline_code_structure_hash": "2065de7286d9979bd1b3cd88a722bba70db6f50131e9384130f0ed5c7fefd34a"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor._execute_core": {
+      "baseline_code_signature_text": "async def _execute_core(self, node: Node, executable: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
+      "baseline_code_structure_hash": "9fae17204b59e027803519d71da37cbf829d155aa9988f07321399530881040f",
+      "baseline_yaml_content_hash": "902429306ad106bf3013ce3b6b3a2882ce90aecbe2ff7b745be91b93814198ba"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor._execute_internal": {
+      "baseline_code_signature_text": "async def _execute_internal(self, node: Node, executable: Callable, inputs: Tuple[List[Any], Dict[str, Any]], cache_inputs: Dict[str, Any], state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable) -> Any:",
+      "baseline_code_structure_hash": "28c423b858cfc6215f987a45dec7509a52eff9bd77fc4c2e711988a27a63ed8f"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor._execute_map_node": {
+      "baseline_code_signature_text": "async def _execute_map_node(self, node: MapNode, factory: Callable, kwargs: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], parent_state_backend: StateBackend, sub_graph_runner: Callable) -> List[Any]:",
+      "baseline_code_structure_hash": "20d93a5b975b5193181ca2b845384986a9d255e9e9ea5b67fad848ae03a82e15"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor._handle_failed_outcome": {
+      "baseline_code_signature_text": "async def _handle_failed_outcome(self, exception: Exception, node: Node, run_id: str, attempt: int, max_attempts: int, delay: float, start_time: float) -> bool:",
+      "baseline_code_structure_hash": "6daf5b4a5280bbf3f89873acaabf978d8474a62393e58f109bbd754639c594aa",
+      "baseline_yaml_content_hash": "8453b03b399a4eccbc4f59d0d5151faa84e4a596da95b27f6b6551fecc3815fb"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor._handle_successful_outcome": {
+      "baseline_code_signature_text": "async def _handle_successful_outcome(self, node: Node, run_id: str, cache_inputs: Dict[str, Any], start_time: float, result: Any) -> Any:",
+      "baseline_code_structure_hash": "4606abccd38c241efb90960ff4babbaa8f583ad0b471df58cc9d21c82b78ae3e",
+      "baseline_yaml_content_hash": "4445df130e6ddb5acf29b5fbd2035dbb0b94b179addcf6cb413355a22de42543"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.arg_resolver": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.bus": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.constraint_manager": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.constraint_resolver": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.executor": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.process": {
+      "baseline_code_signature_text": "async def process(self, node: Node, executable: Callable, inputs: Tuple[List[Any], Dict[str, Any]], requirements: Dict[str, Any], cache_inputs: Dict[str, Any], state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]]) -> Any:",
+      "baseline_code_structure_hash": "c8cecf64d26f2a62d927c386f400cc5d44e1c5a0b119562c4ffcee42563538cb",
+      "baseline_yaml_content_hash": "3541c6ec3ce1dfea9e1ef501dafabd68f2e643df84905c1812f7352d8fbe21b0"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.resource_manager": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/processor.py#NodeProcessor.solver": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ArgumentResolver": {
+      "baseline_code_signature_text": "class ArgumentResolver:",
+      "baseline_code_structure_hash": "2ec52e252be1c8031dbe17a4105a232f53295a28327cd9ef1585c5bfc4b6a6c3",
+      "baseline_yaml_content_hash": "f11481712fbbd10f82939651db18197fff886df7f6e02b75ad7c567ccc74712b"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ArgumentResolver._get_node_result": {
+      "baseline_code_signature_text": "async def _get_node_result(self, node_id: str, consumer_id: str, arg_name: str, state_backend: StateBackend, graph: Graph) -> Any:",
+      "baseline_code_structure_hash": "c826718988bd5587cb663a765fa01cc787e02837ac74dbcd8a9c179180172c7a",
+      "baseline_yaml_content_hash": "59aec9ea695c2d461f2f0459505db438f3f88be976c4c9a0b1d29d0e914da59b"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ArgumentResolver._resolve_data_edges": {
+      "baseline_code_signature_text": "async def _resolve_data_edges(self, node: Node, graph: Graph, state_backend: StateBackend, instance_map: Dict[str, Node], input_overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "72015d77a94291bc707a02b5ebbee5d23e2761e68b0f2cadc41878d583efdabb",
+      "baseline_yaml_content_hash": "88eaff23e5052cb243a1aded5622b394836f71982521def49c856e665be426ce"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ArgumentResolver._resolve_dependency": {
+      "baseline_code_signature_text": "async def _resolve_dependency(self, edge: Edge, consumer_id: str, state_backend: StateBackend, graph: Graph, instance_map: Dict[str, Node]) -> Any:",
+      "baseline_code_structure_hash": "25ce9f9a0c93a82d7895e6fd7e28c244517cc155fd3ce17d1c87e7923f519334"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ArgumentResolver._resolve_inject": {
+      "baseline_code_signature_text": "def _resolve_inject(self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]) -> Any:",
+      "baseline_code_structure_hash": "570d059364755cf7c9b71f0a77c1f2aae37009497b2695bda259d778a3bf3d55"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ArgumentResolver._resolve_structure": {
+      "baseline_code_signature_text": "def _resolve_structure(self, obj: Any, consumer_id: str, state_backend: StateBackend, resource_context: Dict[str, Any], graph: Graph) -> Any:",
+      "baseline_code_structure_hash": "f1a0b0f1f2f084102eeaa28256d3799bc48d835b1c51a28899bf2d8834a2f8b5"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ArgumentResolver.resolve": {
+      "baseline_code_signature_text": "async def resolve(self, node: Node, graph: Graph, state_backend: StateBackend, resource_context: Dict[str, Any], instance_map: Dict[str, Node], callable_obj: Optional[Callable], user_params: Optional[Dict[str, Any]] = None, input_overrides: Optional[Dict[str, Any]] = None) -> Tuple[List[Any], Dict[str, Any]]:",
+      "baseline_code_structure_hash": "549ec97319178803285736d569b53309036e9a7659b59d80d51df0a1c9086b2f"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ArgumentResolver.resolve_cache_inputs": {
+      "baseline_code_signature_text": "async def resolve_cache_inputs(self, node: Node, graph: Graph, state_backend: StateBackend) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "428c3f677add4ae0fb978ce44563e58cf1c4d47d0aaf95700d7fe18d4c05ad8f"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ConstraintResolver": {
+      "baseline_code_signature_text": "class ConstraintResolver:",
+      "baseline_code_structure_hash": "8aabf9a525e8bf9904cc239126349952dac5b1006a7ac5f3e623eccf16f0d613",
+      "baseline_yaml_content_hash": "b2f1a5404b1c660ca5a508c30b55100df4e464bb0a166e94df177f06941dc364"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/logic/resolvers.py#ConstraintResolver.resolve": {
+      "baseline_code_signature_text": "async def resolve(self, node: Node, graph: Graph, state_backend: StateBackend, constraint_manager: Any, instance_map: Dict[str, Node]) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "bc42cda06b5903f240859586dec304c549738acd822d90da1961795d79d644ee"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/__init__.py#__all__": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter": {
+      "baseline_code_signature_text": "class IRToRuntimeAdapter:",
+      "baseline_code_structure_hash": "091bab1c43095863abd93593a1a4973a047fa90cfb56b6a18c9b0124482e9d3e"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter.__init__": {
+      "baseline_code_signature_text": "def __init__(self, registry: Optional[NodeRegistry] = None):",
+      "baseline_code_structure_hash": "e13536c50c960ca67ae591bf1e6d80cd2e4159a505fe27b579c220b1426e7ca2"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter._create_edges": {
+      "baseline_code_signature_text": "def _create_edges(self, node_ir: NodeIR, target_node: Node):",
+      "baseline_code_structure_hash": "3d4d9f7bd872f6df7bf63e38378944c4e141aab96ef5a282a90f2e413f9b5eb4"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter._create_node": {
+      "baseline_code_signature_text": "def _create_node(self, node_ir: NodeIR, executables: Dict[str, Callable]) -> Node:",
+      "baseline_code_structure_hash": "5d82a39d27b5185feecde9108db1db542b80e09d8e7bfd358370b7564ee29297"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter._is_dependency": {
+      "baseline_code_signature_text": "def _is_dependency(self, value: Any) -> bool:",
+      "baseline_code_structure_hash": "752cb32f26b69cd3046f83f8e9b9fe6123991b2ddf609b3bb06c56125f29118a",
+      "baseline_yaml_content_hash": "230b32643aa6d26e799f3a24c5caa0a538644089ff150ace1f39c5a8ad1b8500"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter._reconstruct_jump_edges": {
+      "baseline_code_signature_text": "def _reconstruct_jump_edges(self, flow_control: Dict[str, Any], source_node: Node):",
+      "baseline_code_structure_hash": "7030f096d34fa3ab451d177940db9af05b7e7af6de2434950867180cd4c2c4ad"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter._reconstruct_router_edges": {
+      "baseline_code_signature_text": "def _reconstruct_router_edges(self, router_def: Dict[str, Any], arg_name: str, target_node: Node):",
+      "baseline_code_structure_hash": "97abd87e981a69602993ef4369d904d1c489da232fcde76ae280038bc42bc08e"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter._scan_and_create_nested_edges": {
+      "baseline_code_signature_text": "def _scan_and_create_nested_edges(self, obj: Any, arg_name: str, target_node: Node):",
+      "baseline_code_structure_hash": "897cd92d2e7fb77ec59010ae21165a3e8d4fd0d16bc99eaa25fef0d0a2909d50",
+      "baseline_yaml_content_hash": "c57033648acdf9a3e83145a3d928093e535ae128fb2b3b025a9262063d816285"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter.adapt": {
+      "baseline_code_signature_text": "def adapt(self, result: GenerationResult) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:",
+      "baseline_code_structure_hash": "e7f60a331a68f3b517c8ddca6370788c0b355f4b1c99e5e8b6b49bd798add0b3"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter.graph": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter.logical_map": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter.node_map": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#IRToRuntimeAdapter.registry": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#_StubLazyResult": {
+      "baseline_code_signature_text": "class _StubLazyResult:",
+      "baseline_code_structure_hash": "12dfdd35f11cdfdb280c7f3c1666bd635d898d5fb97a5bca4f3e5919b936e0c3",
+      "baseline_yaml_content_hash": "3a75fe875cb7591bb0fbd669fb1d385103114ed43a382ee7174d0a39b7845df0"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/adapter.py#_StubLazyResult._uuid": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/build.py#build_graph": {
+      "baseline_code_signature_text": "def build_graph(target: Any, registry: Optional[NodeRegistry] = None) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:",
+      "baseline_code_structure_hash": "43e4e933ffdc2fbfa3acdd74e73bdb46c0f24b4e27aae7b111d2144e8580c6db",
+      "baseline_yaml_content_hash": "96bfa03e58f0967db94ee85846ca0298fda2c6bdfb8ca7e8c91e384941aff013"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/exceptions.py#CascadeGraphError": {
+      "baseline_code_signature_text": "class CascadeGraphError(Exception):",
+      "baseline_code_structure_hash": "73b518909cb355cc325df485877692045267268c23239a5773b61a4eb989d411"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/exceptions.py#StaticGraphError": {
+      "baseline_code_signature_text": "class StaticGraphError(CascadeGraphError):",
+      "baseline_code_structure_hash": "7cdaed165071b6d399d2fe472e69e890a2a7bfc669198a39754b690cd7cd45a5"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/hashing.py#BlueprintHasher": {
+      "baseline_code_signature_text": "class BlueprintHasher:",
+      "baseline_code_structure_hash": "be5cf4121339e9b4776adef2717795d046ee3b730cd2821ce9b8883714d6857c"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/hashing.py#BlueprintHasher._get_merkle_hash": {
+      "baseline_code_signature_text": "def _get_merkle_hash(self, components: List[str]) -> str:",
+      "baseline_code_structure_hash": "f6f4c15396ae743d076c4bcd2e7abf1e927b864e3fb94a364c3089b1320a006b"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/hashing.py#BlueprintHasher._get_node_components": {
+      "baseline_code_signature_text": "def _get_node_components(self, node: Node, graph: Graph) -> List[str]:",
+      "baseline_code_structure_hash": "932f30fcfad600cc1cd629b5cf88b91e0d402e668cfcf594a3aa7e69bc90dae2"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/hashing.py#BlueprintHasher.compute_hash": {
+      "baseline_code_signature_text": "def compute_hash(self, graph: Graph) -> str:",
+      "baseline_code_structure_hash": "6a89200c584c284c55913c4278566ef788c834063fe08f5d3acd2d53bb6711d5"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge": {
+      "baseline_code_signature_text": "class Edge:",
+      "baseline_code_structure_hash": "a2db2dc1332fe932f3984fe13052beeaaa9e01142a5f6b1974c8e87ab7021234"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.arg_name": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.edge_type": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.jump_selector": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.router": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.source": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Edge.target": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType": {
+      "baseline_code_signature_text": "class EdgeType(Enum):",
+      "baseline_code_structure_hash": "a52c0ea42c5152fab21dc5d3688fc32d8dbf00a91e5fc01af07a9b0ea5a718b5"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.CONDITION": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.CONSTRAINT": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.DATA": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.IMPLICIT": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.ITERATIVE_JUMP": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.POTENTIAL": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.ROUTER_ROUTE": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#EdgeType.SEQUENCE": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph": {
+      "baseline_code_signature_text": "class Graph:",
+      "baseline_code_structure_hash": "46ec2314af218f08b3fef817cccc9eb47cd1cd64ca97fda556d9645dede4bbe8"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph._node_index": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.add_edge": {
+      "baseline_code_signature_text": "def add_edge(self, edge: Edge):",
+      "baseline_code_structure_hash": "eb0f74293d5b404252dae86717c20757ecd6988a11ca1a354389324ba3a7de29"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.add_node": {
+      "baseline_code_signature_text": "def add_node(self, node: Node):",
+      "baseline_code_structure_hash": "ba32af9058bd5b43729639266bee73ea36eb3ed91bee43d5f1d4cc6e40ac1dea"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.edges": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.get_node": {
+      "baseline_code_signature_text": "def get_node(self, node_id: str) -> Optional[Node]:",
+      "baseline_code_structure_hash": "4fc5ef0a47ba67cb70da2bd6b80d496e796a3d095abfd038611066e93ddc360c"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Graph.nodes": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#MapNode": {
+      "baseline_code_signature_text": "class MapNode(Node):",
+      "baseline_code_structure_hash": "55a8d657c0fa2485bd748967e6dd8ddc8529b9b242c961ae549b191e5e06d843"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node": {
+      "baseline_code_signature_text": "class Node:",
+      "baseline_code_structure_hash": "330edd1b7a6280e5b72587885ec675aaf979d82e2efc843e551eacaf909b5e49"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.__eq__": {
+      "baseline_code_signature_text": "def __eq__(self, other):",
+      "baseline_code_structure_hash": "158b3e7cb66eccd572d942985ef6c495179e8a05ca8e198740959d2db4852ec1"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.__hash__": {
+      "baseline_code_signature_text": "def __hash__(self):",
+      "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.cache_policy": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.constraints": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.current_node_instance_hash": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.definition": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.has_complex_inputs": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.input_bindings": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.name": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.node_type": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#Node.retry_policy": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#ParamNode": {
+      "baseline_code_signature_text": "class ParamNode(TaskNode):",
+      "baseline_code_structure_hash": "908d9cc0f94cb209f5689edfb0b9430c1ab08fc4b1a912936dba0c6d9aeb5ff2"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#ParamNode.has_complex_inputs": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#ParamNode.param_spec": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/model.py#TaskNode": {
+      "baseline_code_signature_text": "class TaskNode(Node):",
+      "baseline_code_structure_hash": "29c3e4c5562e409e047b60407ba4cf3c2775a5417aba8d064860a745d6aec155"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/registry.py#NodeRegistry": {
+      "baseline_code_signature_text": "class NodeRegistry:",
+      "baseline_code_structure_hash": "fd35c305e9ae5c6c3363ca8121e69fb707944b36f1b12e283015f60f5c40fd18"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/registry.py#NodeRegistry.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/registry.py#NodeRegistry._registry": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/registry.py#NodeRegistry.get": {
+      "baseline_code_signature_text": "def get(self, key: str) -> Node | None:",
+      "baseline_code_structure_hash": "b7d1390f7d1887f34daf22655234ae57a79292972acec9fe07695657f7954ab4"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/registry.py#NodeRegistry.get_or_create": {
+      "baseline_code_signature_text": "def get_or_create(self, key: str, node_factory: Callable[[], Node]) -> tuple[Node, bool]:",
+      "baseline_code_structure_hash": "6615e983f417e80fd4395b9d7dd42be5837766cccabca12b1372d4faefcd63ca"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#_StubLazyResult": {
+      "baseline_code_signature_text": "class _StubLazyResult:",
+      "baseline_code_structure_hash": "12dfdd35f11cdfdb280c7f3c1666bd635d898d5fb97a5bca4f3e5919b936e0c3"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#_StubLazyResult._uuid": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#_dict_to_node": {
+      "baseline_code_signature_text": "def _dict_to_node(data: Dict[str, Any]) -> Node:",
+      "baseline_code_structure_hash": "5a9d03e01b6a13d79ce196088d5eeb98027dce628ccb025eeb0f76e2ef232336"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#_edge_to_dict": {
+      "baseline_code_signature_text": "def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "827ba034909b93cceb5edbf7edb5c4bd7329ae9491a78649277f912cdff3b790"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#_get_func_path": {
+      "baseline_code_signature_text": "def _get_func_path(func: Any) -> Optional[Dict[str, str]]:",
+      "baseline_code_structure_hash": "8721f01f16708118a7827cd77d9988798a276ece8ba4016dc8971d8b6243a3df"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#_load_func_from_path": {
+      "baseline_code_signature_text": "def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:",
+      "baseline_code_structure_hash": "d598960409c99e8746ad3999484cbfbc4af46de8d3ed68467a52fdb87f37fe7f"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#_node_to_dict": {
+      "baseline_code_signature_text": "def _node_to_dict(node: Node, registry: Optional[Dict[str, Callable]] = None) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "1c614fdefc34fc8025fb20dd12f8533371a782134987563c7c71e6dddebff769"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#from_json": {
+      "baseline_code_signature_text": "def from_json(json_str: str) -> Graph:",
+      "baseline_code_structure_hash": "0ea9a61fb28b68c6cbb577c64b7de923e9cb5a54f1e8ba3464ddea73060126d1"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#graph_from_dict": {
+      "baseline_code_signature_text": "def graph_from_dict(data: Dict[str, Any]) -> Graph:",
+      "baseline_code_structure_hash": "89ebb22f776a492d87e65384281e1a44e7ce813d39351eaafd96d166fe56ef1b"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#graph_to_dict": {
+      "baseline_code_signature_text": "def graph_to_dict(graph: Graph, registry: Optional[Dict[str, Callable]] = None) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "8c5a2c6f476f817961b184719715d5a78038ce70035edcde4e55a52c4bc47603"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/model/serialize.py#to_json": {
+      "baseline_code_signature_text": "def to_json(graph: Graph, registry: Optional[Dict[str, Callable]] = None, indent: int = 2) -> str:",
+      "baseline_code_structure_hash": "176714452e0760ec2a4502ae7fde79ef6a1bcd8f38d9e72fc92e415cdefb9615"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver": {
+      "baseline_code_signature_text": "class CSPSolver:",
+      "baseline_code_structure_hash": "ab76bd1c3e1ddbd6811f58ad003d2ad998fe1619ca875b1d5f2bcd6dbd1516a6",
+      "baseline_yaml_content_hash": "2c54f3ec3c22c3546192c8a6c93a4bf6fd7d47a14217dc385b91c19c91f0def2"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver.__init__": {
+      "baseline_code_signature_text": "def __init__(self, system_resources: Dict[str, float]):",
+      "baseline_code_structure_hash": "c911f64fa607cc091a11b5f648b235c71426b21d3f98c0e9c7aa1dcf25127952",
+      "baseline_yaml_content_hash": "d6fd8c34f36d90ccda9c1556fed9856bbb0f8fa121a519c15994e9861060062d"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver._solve_csp": {
+      "baseline_code_signature_text": "def _solve_csp(self, graph: Graph, active_nodes: list, node_resources: Dict[str, Dict[str, float]], max_stages: int) -> Optional[Dict[str, int]]:",
+      "baseline_code_structure_hash": "5e1ebe951702b950becfbfaa55cfc4480ca9b39f5f9e0cb15de8104288a237b3"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver.resolve": {
+      "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
+      "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/csp.py#CSPSolver.system_resources": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/native.py#NativeSolver": {
+      "baseline_code_signature_text": "class NativeSolver(Solver):",
+      "baseline_code_structure_hash": "ff2d8d7992d922d42bb2754f58ae872c150c770e49c14bfe3a0c3f3ab6b451f9",
+      "baseline_yaml_content_hash": "eabd000472f8f03d67c48a3d64601b57ec3aa76561563e6f722ca9dcbd3637a8"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/solvers/native.py#NativeSolver.resolve": {
+      "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
+      "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f",
+      "baseline_yaml_content_hash": "399e01ad1902e423907cc7c42af3a58eeb61c0c97f4881ddd6b0fe55c8175812"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionResult": {
+      "baseline_code_signature_text": "class GraphExecutionResult:",
+      "baseline_code_structure_hash": "0f464e487dda97cc97e5756e89701f72666b1bdae691a486f536af2b5897d486",
+      "baseline_yaml_content_hash": "19b12e4f4f403539f58af258956f18cc4e4810c0861d13fcc2011ef8649df102"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionResult.__init__": {
+      "baseline_code_signature_text": "def __init__(self, value: Any, source_node_id: str):",
+      "baseline_code_structure_hash": "1914fa40805e7b23be73e62b0d2236c3638b8f355092a623699cbe3128eee786"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionResult.source_node_id": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionResult.value": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy": {
+      "baseline_code_signature_text": "class GraphExecutionStrategy:",
+      "baseline_code_structure_hash": "8f40c6c6a6376b286b330477908754e33f4d5f984fedcfc00dd309750f7a8b20",
+      "baseline_yaml_content_hash": "06fd12b4b57168243d6576f70208a88c6d1dbe35f416b400f6eff6d4ad46e962"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.__init__": {
+      "baseline_code_signature_text": "def __init__(self, solver: Solver, node_processor: NodeProcessor, resource_container: ResourceContainer, constraint_manager: ConstraintManager, bus: EventBus, wakeup_event: asyncio.Event):",
+      "baseline_code_structure_hash": "e530f3654d8300bec5c751a03c843ba9af466dca258c5258590f7d273e447d61"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy._execute_graph": {
+      "baseline_code_signature_text": "async def _execute_graph(self, target: Any, params: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, state_backend: StateBackend, graph: Graph, plan: Any, instance_map: Dict[str, Node], executable_registry: Dict[str, Callable], root_input_overrides: Optional[Dict[str, Any]] = None) -> GraphExecutionResult:",
+      "baseline_code_structure_hash": "cfad88de843b085da55b90d86cec419856907a4c91ca73e6a842171dc16ef73c"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy._index_plan": {
+      "baseline_code_signature_text": "def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:",
+      "baseline_code_structure_hash": "5e894e79c670e7d3c8ab307c801c290df4ad0f64355e2a0871affd02bb2a8637",
+      "baseline_yaml_content_hash": "b2cb67db2f425392d8301a0fe3cb1abfa269c68512176c00aebcdc30b3fc6a3c"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy._node_registry": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy._rehydrate_plan": {
+      "baseline_code_signature_text": "def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:",
+      "baseline_code_structure_hash": "23d79fe6bf6d50043583c7874b422e3b63b269fdf69e163d9146c03e5ed0f478",
+      "baseline_yaml_content_hash": "c238793f0d0a3051ade564ae788cd79d85a87b9a391d6e863a28b8755bbb4593"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy._template_plan_cache": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.blueprint_hasher": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.bus": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.constraint_manager": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.execute": {
+      "baseline_code_signature_text": "async def execute(self, target: Any, context: ExecutionContext) -> Any:",
+      "baseline_code_structure_hash": "896af64d55e3d93d752bffb30eb92d7a7293c272bfe7a40c8882beb33fdc1668"
+    },
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.node_processor": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.resource_container": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.solver": {},
+    "py://packages/cascade-execution-graph/src/cascade/execution/graph/strategy.py#GraphExecutionStrategy.wakeup_event": {}
+  },
+  "version": "1.0"
+}

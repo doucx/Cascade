@@ -1,9 +1,0 @@
-{
-  "py://packages/cascade-spec/src/cascade/spec/dsl/routing.py#Router": {
-    "baseline_code_signature_text": "class Router:",
-    "baseline_code_structure_hash": "12c75444b7fa8fd6615d5f1651f16e60d41a4507285632e17106f617769dfcd0",
-    "baseline_yaml_content_hash": "86206116ac649425beacd6e35be377c96f0b6712ec4bfefa123cc10de9e32981"
-  },
-  "py://packages/cascade-spec/src/cascade/spec/dsl/routing.py#Router.routes": {},
-  "py://packages/cascade-spec/src/cascade/spec/dsl/routing.py#Router.selector": {}
-}

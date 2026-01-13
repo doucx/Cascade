@@ -1,7 +1,0 @@
-{
-  "py://packages/cascade-connector-mqtt/tests/unit/conftest.py#mock_aiomqtt_module": {
-    "baseline_code_signature_text": "def mock_aiomqtt_module(mocker):",
-    "baseline_code_structure_hash": "91050b17f763959db5a3a292ee3e86db7299d4037a67afb5e324864c437b29df",
-    "baseline_yaml_content_hash": "165cd69998db949a2b5135dfab2ec306f2995303598eb0505a6593efa722c6ec"
-  }
-}

@@ -1,0 +1,767 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-vm/src/cascade/__init__.py#__path__": {},
+    "py://packages/cascade-vm/src/cascade/vm/__init__.py#__all__": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/__init__.py#__all__": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService": {
+      "baseline_code_signature_text": "class BridgedComputeService:",
+      "baseline_code_structure_hash": "255c1e360fac79a9dde24f60aa3352b1ac14df44ed1f6d969da5269235341ab5"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.__init__": {
+      "baseline_code_signature_text": "def __init__(self, executor: Executor, store: ObjectStore, registry: CodeRegistry, inbound_queue: asyncio.Queue[ComputeRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], wakeup_event: Optional[asyncio.Event] = None):",
+      "baseline_code_structure_hash": "96fc4e78531ddd51d9a8258793436769570eee1fe8f732b974a2eed4e05eea40"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService._active_count": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService._process_request": {
+      "baseline_code_signature_text": "async def _process_request(self, request: ComputeRequest) -> None:",
+      "baseline_code_structure_hash": "6603f6e84e554e9e6c59196d61b3611165fada194563f5a5d64f2f4170a58548"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService._resolve_arguments": {
+      "baseline_code_signature_text": "def _resolve_arguments(self, inputs: Dict[str, Any]) -> Tuple[List[Any], Dict[str, Any]]:",
+      "baseline_code_structure_hash": "fd9c6c08b3f8954247b0fee859b04b3a112fec76502bb3d276283fe090de01f4"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService._running": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService._wakeup_event": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.active_count": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.executor": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.inbound_queue": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.is_idle": {
+      "baseline_code_signature_text": "def is_idle(self) -> bool:",
+      "baseline_code_structure_hash": "c95ad9d9ef6894d5590de285647a6720b3997d9779f5c663448d7b30f8a0a271"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.outbound_queue": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.registry": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.run": {
+      "baseline_code_signature_text": "async def run(self) -> None:",
+      "baseline_code_structure_hash": "23d60ef0787b87861c8853216071832d8b40d0953517705ad99ad36a1c6a5a4f"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.stop": {
+      "baseline_code_signature_text": "def stop(self) -> None:",
+      "baseline_code_structure_hash": "14864074f7cf807016cfec6298c551a6b22cca02f61c1e24780898d969f58b81"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#BridgedComputeService.store": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#ProxyDef": {
+      "baseline_code_signature_text": "class ProxyDef:",
+      "baseline_code_structure_hash": "751bc7a2ddcfdc3e0e56e67487aa1f7270cc766397d1870f12f8b0c5b023460b",
+      "baseline_yaml_content_hash": "f45e0afd77a737bcd14c9c76554e144cf37fc1c35ff857b2bfdc9a7140f61444"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#ProxyDef.is_async": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#ProxyDef.mode": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#ProxyNode": {
+      "baseline_code_signature_text": "class ProxyNode:",
+      "baseline_code_structure_hash": "8981241096a8bae3fe8699fe5dfee4a50afdf35b142c6db7e690c4a91f291905",
+      "baseline_yaml_content_hash": "1f110333b924248f4c7f3f3dc5143519910ca50f839b1873ca02a15fd8f61b50"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#ProxyNode.definition": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#ProxyNode.name": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#ProxyNode.node_type": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/adapters.py#logger": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/contract.py#ComputeRequest": {
+      "baseline_code_signature_text": "class ComputeRequest:",
+      "baseline_code_structure_hash": "cb63aaabc78f6e475dd1b83b32c39a5a7feca980f6eef52fd47958218fab54ea",
+      "baseline_yaml_content_hash": "d0b8ab58a628af8540661332b6cf6b0c900ea8dbf48f8cffb90b292e5b40cf28"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/contract.py#ComputeRequest.code_hash": {
+      "baseline_yaml_content_hash": "46c68d4994e3be7f4b800edeaa4dca7c0a46186a7898339b590cdb169bec8b54"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/contract.py#ComputeRequest.input_refs": {
+      "baseline_yaml_content_hash": "79ee1b0539eb78e67d87f719b6e600124b09f474413b35bd746dc02083964e67"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/contract.py#ComputeRequest.reply_to_nid": {
+      "baseline_yaml_content_hash": "7609e7c86cbdcdb25987b808377d296a747639c030f6f6b197fdf60ed72fa38a"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/contract.py#ComputeRequest.trace": {
+      "baseline_yaml_content_hash": "4723f9302d01ece61a796ef37af1ba05bffe24e170393330aa586e17a314e487"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService": {
+      "baseline_code_signature_text": "class LocalComputeService:",
+      "baseline_code_structure_hash": "05d47d8b1e78de5ed75a5977a50e53b49f4348e91483c93b497b2d0117af602c",
+      "baseline_yaml_content_hash": "1fbd846190d70d656b750cc4487daf7627a84812c016d05c6fcbbc2a6e469698"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.__init__": {
+      "baseline_code_signature_text": "def __init__(self, store: ObjectStore, registry: CodeRegistry, inbound_queue: asyncio.Queue[ComputeRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], max_workers: Optional[int] = None, wakeup_event: Optional[asyncio.Event] = None):",
+      "baseline_code_structure_hash": "3f3ca63bb8e75ae763b7687f1f8cf2681693aa1b47a216824ec7f646cc6f3a4a"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService._active_count": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService._pool": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService._process_request": {
+      "baseline_code_signature_text": "async def _process_request(self, request: ComputeRequest) -> None:",
+      "baseline_code_structure_hash": "6603f6e84e554e9e6c59196d61b3611165fada194563f5a5d64f2f4170a58548"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService._resolve_arguments": {
+      "baseline_code_signature_text": "def _resolve_arguments(self, inputs: Dict[str, Any]) -> Tuple[List[Any], Dict[str, Any]]:",
+      "baseline_code_structure_hash": "fd9c6c08b3f8954247b0fee859b04b3a112fec76502bb3d276283fe090de01f4"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService._running": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService._wakeup_event": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.active_count": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.inbound_queue": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.is_idle": {
+      "baseline_code_signature_text": "def is_idle(self) -> bool:",
+      "baseline_code_structure_hash": "c95ad9d9ef6894d5590de285647a6720b3997d9779f5c663448d7b30f8a0a271"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.outbound_queue": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.registry": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.run": {
+      "baseline_code_signature_text": "async def run(self) -> None:",
+      "baseline_code_structure_hash": "23d60ef0787b87861c8853216071832d8b40d0953517705ad99ad36a1c6a5a4f",
+      "baseline_yaml_content_hash": "63bf1a148e394a26d34781f673131f719eaf9eee931ab8bde915dac10cc21293"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.stop": {
+      "baseline_code_signature_text": "def stop(self) -> None:",
+      "baseline_code_structure_hash": "14864074f7cf807016cfec6298c551a6b22cca02f61c1e24780898d969f58b81"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#LocalComputeService.store": {},
+    "py://packages/cascade-vm/src/cascade/vm/compute/service.py#logger": {},
+    "py://packages/cascade-vm/src/cascade/vm/kernel/__init__.py#__all__": {},
+    "py://packages/cascade-vm/src/cascade/vm/kernel/core.py#KernelFunc": {},
+    "py://packages/cascade-vm/src/cascade/vm/kernel/core.py#PhysicsKernel": {
+      "baseline_code_signature_text": "class PhysicsKernel:",
+      "baseline_code_structure_hash": "ce560e2754c4e288e2d5bdf5a0104e33ec0eee14be99572b0cc4fce803cfd49e",
+      "baseline_yaml_content_hash": "25f21f31bbd50c8425cc675d95ec03ba0a65169ae8a578596addb0b6c901a575"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/kernel/core.py#PhysicsKernel.__init__": {
+      "baseline_code_signature_text": "def __init__(self, function_map: Dict[str, KernelFunc], resources: ResourceRegistry):",
+      "baseline_code_structure_hash": "719a55885ba42e9bd46e9bfa1692db035b3c68e1e0f93a50de3fc176e313c857"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/kernel/core.py#PhysicsKernel._function_map": {},
+    "py://packages/cascade-vm/src/cascade/vm/kernel/core.py#PhysicsKernel._resources": {},
+    "py://packages/cascade-vm/src/cascade/vm/kernel/core.py#PhysicsKernel.execute": {
+      "baseline_code_signature_text": "def execute(self, node: PhysicsFuncNode, inputs: Dict[str, Token]) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "bcff403fc09afb2e19857a31928347e0e75aa6155b952e6ccc160404ff4975f7",
+      "baseline_yaml_content_hash": "483ab8b7029128fba014be01a894bfe150ce367d19cd6dc29e3c5aa473812bbc"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/kernel/core.py#logger": {},
+    "py://packages/cascade-vm/src/cascade/vm/linker.py#Linker": {
+      "baseline_code_signature_text": "class Linker:",
+      "baseline_code_structure_hash": "d4316f6a1b6b29b437e7c2315c8d9a86328ea38289eee332db6d936d899f732d",
+      "baseline_yaml_content_hash": "3d65b849003974a9f7f153b12a9cbeec056b0922ea56a2babad723d7e41f0cdd"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/linker.py#Linker._resolve_stdlib": {
+      "baseline_code_signature_text": "def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:",
+      "baseline_code_structure_hash": "772518e4c07a771eb5018a5ece6f1a076a7405ff221cb5de3aac621784b0dab4",
+      "baseline_yaml_content_hash": "59bf936c0e0391de5be17bab6f37750a270f83bd26db35963a02cd16ebe22c51"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/linker.py#Linker._verify_integrity": {
+      "baseline_code_signature_text": "def _verify_integrity(self, assembly: Assembly, registry: CodeRegistry) -> None:",
+      "baseline_code_structure_hash": "745f6c877dcf42b3cc97c35a00eefb85a59c4c4efa441aa903e295a15cc16a29",
+      "baseline_yaml_content_hash": "3cd85bd60766c98e6f49b71353f00df1d21fa3d49f9940a4dd7d74cd0673a3fd"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/linker.py#Linker.link": {
+      "baseline_code_signature_text": "def link(self, assembly: Assembly, registry: CodeRegistry) -> Dict[str, Callable]:",
+      "baseline_code_structure_hash": "c61445a9436de954c6d6636a146930bb84be84b6a6d5132192464d9ba0e7ad9d"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/linker.py#LinkerError": {
+      "baseline_code_signature_text": "class LinkerError(RuntimeError):",
+      "baseline_code_structure_hash": "ffaaf09461ffc9f172478444d95d34f1a626601e0d68db1a530302e5b7212d27",
+      "baseline_yaml_content_hash": "6e18e07fcc42a54812a7361b9fda9b18930610d5abf1257876c096ff5cbcfca7"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#Machine": {
+      "baseline_code_signature_text": "class Machine:",
+      "baseline_code_structure_hash": "b799049de67c089d90379c0ac822f171237969035ae030fec7caa4a907e25842",
+      "baseline_yaml_content_hash": "8ec048831fa32e747927dcc7c52295d81fc10018fdd88c3d5316d72226c7c677"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#Machine.__init__": {
+      "baseline_code_signature_text": "def __init__(self, reactor: ReactorProtocol, compute_service: ComputeServiceProtocol, chronos_service: ChronosService, wakeup_event: asyncio.Event):",
+      "baseline_code_structure_hash": "39425f8f29a7e20ce38c7f480b9c1f8c2fdc2b491e262179d941fc2e57c4c7e4"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#Machine.chronos_service": {},
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#Machine.compute_service": {},
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#Machine.ingress_queue": {},
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#Machine.reactor": {},
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#Machine.run": {
+      "baseline_code_signature_text": "async def run(self) -> None:",
+      "baseline_code_structure_hash": "23d60ef0787b87861c8853216071832d8b40d0953517705ad99ad36a1c6a5a4f",
+      "baseline_yaml_content_hash": "ccfe1935f7795472d54c181bf79c36d6c2663513e1d54b6d41b255a90046db74"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#Machine.wakeup_event": {},
+    "py://packages/cascade-vm/src/cascade/vm/machine.py#logger": {},
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#MemoryEmptyError": {
+      "baseline_code_signature_text": "class MemoryEmptyError(MemoryError):",
+      "baseline_code_structure_hash": "97b45f0344dbf2ff3fce9c95d1e85f0364770db8638ed133ba8dc19f2c2d0559",
+      "baseline_yaml_content_hash": "790dd182535164f43df3edc39af0cf2e30b1f27c93a305e01dc7f82085b6ac85"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#MemoryError": {
+      "baseline_code_signature_text": "class MemoryError(Exception):",
+      "baseline_code_structure_hash": "23a5ccdba987628352d620279f774639792fb9b383086f663650eef25b13910e",
+      "baseline_yaml_content_hash": "439c885513c0d4855994be8862af2e0b3fd96c932b86c0bd8a2340f59d80cd80"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#MemoryFullError": {
+      "baseline_code_signature_text": "class MemoryFullError(MemoryError):",
+      "baseline_code_structure_hash": "46fe09fbebab543cc5bfdf6242dbbcc5369998a5c70d182bcb625a02399ee715",
+      "baseline_yaml_content_hash": "8eebf4bc23c25c21adc28e83bebef7f8dd3ebf83f77e7742f5c6434fb5309487"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory": {
+      "baseline_code_signature_text": "class VolatileMemory:",
+      "baseline_code_structure_hash": "8a03307242d22cb9992742f3d5675583d21ae8a36559f78565b6333a4044836f",
+      "baseline_yaml_content_hash": "bd702f85deddaf1ead7380dc743ec1b73795d9a1930196206f7a6551611abc95"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory._buffers": {},
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory._capacities": {},
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory._mutation_event": {},
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory.get_count": {
+      "baseline_code_signature_text": "def get_count(self, node_id: str) -> int:",
+      "baseline_code_structure_hash": "71c771343fd17c773354896144d11ef794339be911b810ac036044d34bbb46a6",
+      "baseline_yaml_content_hash": "9879ada66162cac5117c49f2847d8f8178dbda824dc3e2edfab68e2457284335"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory.is_excited": {
+      "baseline_code_signature_text": "def is_excited(self, node_id: str, threshold: int = 1) -> bool:",
+      "baseline_code_structure_hash": "e33835b721398282bd33c4f5c853d2de8e5fd05d416283199d377336eeedca2e",
+      "baseline_yaml_content_hash": "de0c88f023dd0a5b84ebdade50d53f0b0b76eb99281e61ce0ff2c5f49e4c03cb"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory.put": {
+      "baseline_code_signature_text": "def put(self, node: PhysicsDataNode, token: Token) -> None:",
+      "baseline_code_structure_hash": "834df1a2fa8fb5a0bfe50a4dbde01bc0700e3ab6b3c23a9460b0c9819f7b35ab",
+      "baseline_yaml_content_hash": "89411410879d83a85d69812d04960382929a4a5b48c81d3f86fbb229b28d2cde"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory.take": {
+      "baseline_code_signature_text": "def take(self, node_id: str) -> Token:",
+      "baseline_code_structure_hash": "b9199770a311e29c955cb45ccfbc7d6db48e7d80b145ae85bc860dfc891dd91b",
+      "baseline_yaml_content_hash": "d7327c80c30f8d4e2f25c619a47413c055826b027d0a280ab77f3d4fbef78214"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/memory.py#VolatileMemory.wait_for_mutation": {
+      "baseline_code_signature_text": "async def wait_for_mutation(self) -> None:",
+      "baseline_code_structure_hash": "bc66fed682b00a0f481d8ef1a74eea227e529777e0d4df076f4a95772bb97495",
+      "baseline_yaml_content_hash": "1629e0eb3d410e4a8874d5fbb656bf958a2f34235c42f9ff087c15d06cf84e41"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor": {
+      "baseline_code_signature_text": "class Reactor:",
+      "baseline_code_structure_hash": "717e97ceef93a040fa364353517edc15893b300d6e1bb0bafdeefb56d7d15530",
+      "baseline_yaml_content_hash": "7e48206e74a137aa1846425e56b0671f41a121f0ade57f60d2a0fa3969d44c86"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.__init__": {
+      "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, memory: VolatileMemory, kernel: PhysicsKernel, ingress_queue: Optional[asyncio.Queue] = None):",
+      "baseline_code_structure_hash": "00d892ddb9ce3a942085114dcf16c52c014bee0a30e5d1fbbf9a251e16c8e6f4"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor._func_inputs": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor._func_nodes": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor._handle_control_signal": {
+      "baseline_code_signature_text": "def _handle_control_signal(self, ctrl: SystemControlToken) -> None:",
+      "baseline_code_structure_hash": "87b18b45f479f1b31491a740d9c6fe82a413957d6d26c164ef170e3071eba94f"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor._handle_results_immediate": {
+      "baseline_code_signature_text": "def _handle_results_immediate(self, node: PhysicsFuncNode, results: Dict[str, Token]) -> None:",
+      "baseline_code_structure_hash": "23d94744a4516cccb93474394cd0cb9cbf08fccc58d2946dcbd9ec1de3626151"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor._outbound_channels": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor._process_ingress": {
+      "baseline_code_signature_text": "def _process_ingress(self):",
+      "baseline_code_structure_hash": "24b417a5a3fdfea3bbc0c91457d6aea31e9432473500388496aab336826be6ca"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.drain_event": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.graph": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.ingress_queue": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.kernel": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.memory": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.prime": {
+      "baseline_code_signature_text": "def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:",
+      "baseline_code_structure_hash": "2c7501c8774bdf1aaea3894fac5086d67d836b20e6a01d36945e121356ca5243",
+      "baseline_yaml_content_hash": "49b95df57346954bb3aadbbfcbc4c9c3a959786c16419dfff387a1d8d90e7f41"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.shutdown_event": {},
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#Reactor.step": {
+      "baseline_code_signature_text": "def step(self) -> int:",
+      "baseline_code_structure_hash": "d04d9baf243ec115db08033852849a345080b31d376c109e68e80e804927541b",
+      "baseline_yaml_content_hash": "595f987f1ea6b957080705cb22aabd6dd854d63bcf5c395631eacd0b4fe95632"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/reactor.py#logger": {},
+    "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry": {
+      "baseline_code_signature_text": "class CodeRegistry:",
+      "baseline_code_structure_hash": "90c7c171770f30d5945e475baf59020311bc94b56e634b1606a57babd0049fd4",
+      "baseline_yaml_content_hash": "1dfc3ba89ea2fe7f65428ae5b767afe19e5ec47fb6440506d3a305507efc9be3"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry._registry": {},
+    "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry.get": {
+      "baseline_code_signature_text": "def get(self, canonical_hash: str) -> TaskCallable:",
+      "baseline_code_structure_hash": "a2222ec1e2bd62416d274702a116fef3854c34b276317191141fbe9f699ccf22",
+      "baseline_yaml_content_hash": "e4614db11308c1dc55b46f2baf3abd4a2f3e631284769ed5ed8644f424b7d381"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry.has": {
+      "baseline_code_signature_text": "def has(self, canonical_hash: str) -> bool:",
+      "baseline_code_structure_hash": "2d433870496e571ca2962242a3b1bf00beb19b95a3d9962b04646adf4a4806ea"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/registry.py#CodeRegistry.register": {
+      "baseline_code_signature_text": "def register(self, canonical_hash: str, func: TaskCallable) -> None:",
+      "baseline_code_structure_hash": "85d100680eb1d424e275278942ac5dfd395056fa439f64f097229437f0cafda8",
+      "baseline_yaml_content_hash": "439dcc54363729a76bab19afbce5bbe48a6929a53390a7b5db583faf0de2c7d4"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/registry.py#TaskCallable": {},
+    "py://packages/cascade-vm/src/cascade/vm/registry.py#logger": {},
+    "py://packages/cascade-vm/src/cascade/vm/resource_registry.py#ResourceRegistry": {
+      "baseline_code_signature_text": "class ResourceRegistry:",
+      "baseline_code_structure_hash": "9106a7fdc9430c400ff1441602cc9f2dd84a4c1dd2f23e9d58ca96c747d540fa"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/resource_registry.py#ResourceRegistry.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/resource_registry.py#ResourceRegistry._resources": {},
+    "py://packages/cascade-vm/src/cascade/vm/resource_registry.py#ResourceRegistry.get": {
+      "baseline_code_signature_text": "def get(self, resource_id: str) -> Any:",
+      "baseline_code_structure_hash": "fddda3289fadc728f6875a9a307cc196958f002579c6329143eea5b5eb3a0a28"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/resource_registry.py#ResourceRegistry.has": {
+      "baseline_code_signature_text": "def has(self, resource_id: str) -> bool:",
+      "baseline_code_structure_hash": "b746e70e2dce554d9e2fe9a991d60a97f86a4c449a894d95ac423a31762a22de"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/resource_registry.py#ResourceRegistry.register": {
+      "baseline_code_signature_text": "def register(self, resource_id: str, resource: Any) -> None:",
+      "baseline_code_structure_hash": "59981a8b56b74e2ea4d3c21df4af4def300bb742099d9ecd0d27f211d36d7231"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService": {
+      "baseline_code_signature_text": "class ChronosService:",
+      "baseline_code_structure_hash": "bbbd52a5ebab28d6b4c25168d7e63e6bf79b709570ce7d7927ac6959e432734a",
+      "baseline_yaml_content_hash": "5c914eb24ea8752ff6c38c1a4a7c4b96f47eb654449361de384545a017e192a1"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService.__init__": {
+      "baseline_code_signature_text": "def __init__(self, inbound_queue: asyncio.Queue[DelayRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], wakeup_event: asyncio.Event):",
+      "baseline_code_structure_hash": "1e6a093bc511efea764c1d36ce6f604821cc2abd46a7a06ba6f458710933599c"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService._handle_request": {
+      "baseline_code_signature_text": "async def _handle_request(self, request: DelayRequest) -> None:",
+      "baseline_code_structure_hash": "e479c8cc16d10e55737bd359d41d3e73831aad93a879529ac430a5b3cd630320"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService._running": {},
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService.inbound_queue": {},
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService.outbound_queue": {},
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService.run": {
+      "baseline_code_signature_text": "async def run(self) -> None:",
+      "baseline_code_structure_hash": "23d60ef0787b87861c8853216071832d8b40d0953517705ad99ad36a1c6a5a4f"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService.stop": {
+      "baseline_code_signature_text": "def stop(self) -> None:",
+      "baseline_code_structure_hash": "14864074f7cf807016cfec6298c551a6b22cca02f61c1e24780898d969f58b81"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#ChronosService.wakeup_event": {},
+    "py://packages/cascade-vm/src/cascade/vm/services/chronos.py#logger": {},
+    "py://packages/cascade-vm/src/cascade/vm/services/contracts.py#DelayRequest": {
+      "baseline_code_signature_text": "class DelayRequest:",
+      "baseline_code_structure_hash": "bd4b40d75fc1e409daf79d907140852fef2dafda54ce99b14a603fe92270f377",
+      "baseline_yaml_content_hash": "95bc0491aa83773ff1a20f94b265e17813ec52550bcee3025cbfac1befe499a6"
+    },
+    "py://packages/cascade-vm/src/cascade/vm/services/contracts.py#DelayRequest.delay_seconds": {},
+    "py://packages/cascade-vm/src/cascade/vm/services/contracts.py#DelayRequest.target_nid": {},
+    "py://packages/cascade-vm/src/cascade/vm/services/contracts.py#DelayRequest.token": {},
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#async_add": {
+      "baseline_code_signature_text": "async def async_add(a, b):",
+      "baseline_code_structure_hash": "4b55543cf2b76b930fbb811d6c5654caa884e39188fa2e423624717915251a2c"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#inbound_queue": {
+      "baseline_code_signature_text": "def inbound_queue():",
+      "baseline_code_structure_hash": "bff61df84030d313d56da34d86c43e2f1b5976eb6ff817186a31619bfe4dcda2"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#mock_executor": {
+      "baseline_code_signature_text": "def mock_executor():",
+      "baseline_code_structure_hash": "d1cd49d2cab9a5557f3e809b2599555786331efc64ee6143b8af997433e5550d"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#outbound_queue": {
+      "baseline_code_signature_text": "def outbound_queue():",
+      "baseline_code_structure_hash": "f188a68a77cf8f294a51ef0134c11a4a21c4538f2ae66521576468792e256d04"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#registry": {
+      "baseline_code_signature_text": "def registry():",
+      "baseline_code_structure_hash": "80dbfb26b2188869ce80123f76f3b06999b40c3bc7d6b43176c60ec17f2d2744"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#service": {
+      "baseline_code_signature_text": "def service(mock_executor, store, registry, inbound_queue, outbound_queue, wakeup_event):",
+      "baseline_code_structure_hash": "087cf4ec6bd431741475cfd2f210093303dca98c2a4b9b8051d7e58e0018c4f3"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#service_task": {
+      "baseline_code_signature_text": "async def service_task(service):",
+      "baseline_code_structure_hash": "5134ed2695c03d8e7337659c32cdb48c15e107569da5d1b5ffa086746155ba1d",
+      "baseline_yaml_content_hash": "6439f31be8d5a732be3ddcaf0a006c9f633d9dbbcb467aaaffb4f5b46e42e9b6"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#store": {
+      "baseline_code_signature_text": "def store():",
+      "baseline_code_structure_hash": "ae4a0926a903921e2b475a129fae521eafa0461e3fcd8abb28f4624bfc529e76"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#sync_add": {
+      "baseline_code_signature_text": "def sync_add(a, b):",
+      "baseline_code_structure_hash": "e4da6e3e013c653cf45cbaf0ab973ddbdd182f6b2d9eeae0f7f16a6604d61965"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#sync_compute_task": {
+      "baseline_code_signature_text": "def sync_compute_task(x):",
+      "baseline_code_structure_hash": "eb50d70371318c3f66924899c5829cabd301354f4aa4b95488608c201616a901"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_execution_failure": {
+      "baseline_code_signature_text": "async def test_execution_failure(service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor):",
+      "baseline_code_structure_hash": "f1589aa4f981ddfd6549a7d5cf581fde36858540216f9a689aa26d10b14fbad1",
+      "baseline_yaml_content_hash": "ef07e0a689c77e900c8466f476541ec21522db377bbf28f8f3ddefb31f0ce7e7"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_is_idle_state_changes": {
+      "baseline_code_signature_text": "async def test_is_idle_state_changes(service, service_task, inbound_queue, outbound_queue):",
+      "baseline_code_structure_hash": "408c529f192bc2271e1c1bc7537f0d0911593b7995e647df624cd61fa104d3c4",
+      "baseline_yaml_content_hash": "b3998205da7c79f98aab75e033d6b3b41e8d32f3c1da434b956397f16c2ff545"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_process_async_task": {
+      "baseline_code_signature_text": "async def test_process_async_task(service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor):",
+      "baseline_code_structure_hash": "139877a8551f18f599623a49427d83dad89b76301930ac2483ec7ecc0a5baf12",
+      "baseline_yaml_content_hash": "cd2e3807099287f596e66e80eaf4eb7726ba34d602002cf7f684dc689422a592"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_process_sync_task": {
+      "baseline_code_signature_text": "async def test_process_sync_task(service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor):",
+      "baseline_code_structure_hash": "c8229c6501d65d29ac8acefa5663a274dc5745fc32a2c9c3a83c65bb9a44cf30",
+      "baseline_yaml_content_hash": "2bd458f9b347b5261c904c29d8873d3040a7bdd57a80fcffcbb398ffee7e9add"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#test_task_with_compute_mode": {
+      "baseline_code_signature_text": "async def test_task_with_compute_mode(service, service_task, store, registry, inbound_queue, outbound_queue, mock_executor):",
+      "baseline_code_structure_hash": "6ad1fabe11da2527138faf39fb0399afcbde8cf96f2f7ac42f8a206e94df2d50",
+      "baseline_yaml_content_hash": "ef137dd96f0a80341698564624b5e6db083f5addc33f938e99f660852fee0c59"
+    },
+    "py://packages/cascade-vm/tests/integration/test_compute_adapters.py#wakeup_event": {
+      "baseline_code_signature_text": "def wakeup_event():",
+      "baseline_code_structure_hash": "fb59021729df4a55344e915d3cc3312c2d8ac8f373a2f8db18839f36d1ae4d16"
+    },
+    "py://packages/cascade-vm/tests/integration/test_context_injection.py#actual_user_logic": {
+      "baseline_code_signature_text": "async def actual_user_logic(arg1: str) -> str:",
+      "baseline_code_structure_hash": "ef883be13113539a729b201b2600f5e0239348b65bd28bc465ceb2ef3d1f7a4f",
+      "baseline_yaml_content_hash": "401784ff551e72e0d24d403e6fcae0588dd08efece7b31d2f7b81587350fc6de"
+    },
+    "py://packages/cascade-vm/tests/integration/test_context_injection.py#build_test_triad_for_injection": {
+      "baseline_code_signature_text": "def build_test_triad_for_injection() -> BipartiteGraph:",
+      "baseline_code_structure_hash": "f299540f2c4f5b191e6e3ac67730d75ddafa6cd5139c93f76d347fea178245c8"
+    },
+    "py://packages/cascade-vm/tests/integration/test_context_injection.py#test_genesis_injection_propagates_run_id": {
+      "baseline_code_signature_text": "async def test_genesis_injection_propagates_run_id():",
+      "baseline_code_structure_hash": "abf6be75d30873076bbeaaa268d125cb3646b12bde3dd7864aa3e2e120c963eb",
+      "baseline_yaml_content_hash": "23e1e302cf8111d16b3e7d64e7cf96934adb678bcd90f08d1de19ceda5fe504e"
+    },
+    "py://packages/cascade-vm/tests/integration/test_lifecycle_signals.py#crashing_kernel": {
+      "baseline_code_signature_text": "def crashing_kernel(inputs, node, resources):",
+      "baseline_code_structure_hash": "16892cbf366aeb279ad6aa7b3cf398b438c90816d6b62aa8ef9deb6e28c5d0c9"
+    },
+    "py://packages/cascade-vm/tests/integration/test_lifecycle_signals.py#drain_trigger_kernel": {
+      "baseline_code_signature_text": "def drain_trigger_kernel(inputs, node, resources):",
+      "baseline_code_structure_hash": "a6f7c2cc74784376b195ba4c60382f4073e8eea5884387e6582bf9a9fd265ff1"
+    },
+    "py://packages/cascade-vm/tests/integration/test_lifecycle_signals.py#machine_components": {
+      "baseline_code_signature_text": "def machine_components():",
+      "baseline_code_structure_hash": "9bc343ff13b889d0c9681c8b387997bc28baff1ae72b7c3e3525ee34f096a272"
+    },
+    "py://packages/cascade-vm/tests/integration/test_lifecycle_signals.py#mock_dispatcher_kernel": {
+      "baseline_code_signature_text": "def mock_dispatcher_kernel(inputs, node, resources):",
+      "baseline_code_structure_hash": "086d75bccfd16c8dde90a15ab628f404b82db8c2872511758e9e74a7d2a435df"
+    },
+    "py://packages/cascade-vm/tests/integration/test_lifecycle_signals.py#slow_worker_func": {
+      "baseline_code_signature_text": "async def slow_worker_func(n: int) -> int:",
+      "baseline_code_structure_hash": "6f3d64cf926335c5c89e91b3868697daddbd5f00baadc91b4fa862200f826cb7"
+    },
+    "py://packages/cascade-vm/tests/integration/test_lifecycle_signals.py#test_drain_waits_for_active_task": {
+      "baseline_code_signature_text": "async def test_drain_waits_for_active_task(machine_components):",
+      "baseline_code_structure_hash": "9b3e5b8a50a684701571bb02c62a9a2f5264a82fe10ceb58fd214dacd33ac8a4"
+    },
+    "py://packages/cascade-vm/tests/integration/test_lifecycle_signals.py#test_error_signal_shuts_down_machine": {
+      "baseline_code_signature_text": "async def test_error_signal_shuts_down_machine(machine_components):",
+      "baseline_code_structure_hash": "05beb684bcebc85145b769cf2d97d4eb2d5af87a7cb09205eb669a0216390b5f"
+    },
+    "py://packages/cascade-vm/tests/integration/test_linker_validation.py#missing_task": {
+      "baseline_code_signature_text": "def missing_task():",
+      "baseline_code_structure_hash": "3a038b7fb340d0d1edd1280555d9f75fe801d26eed449fcb418201f0b2180fdd"
+    },
+    "py://packages/cascade-vm/tests/integration/test_linker_validation.py#test_blind_optimism_without_linker": {
+      "baseline_code_signature_text": "async def test_blind_optimism_without_linker():",
+      "baseline_code_structure_hash": "f3fc6d5da838ed909f41a45593bc2b2cb40778ec3428a77ab6d058d4c24b2850",
+      "baseline_yaml_content_hash": "6f5028e15f25f5a54b24b0ab4e1988571c59b9295e616534c1fccdcc673341f1"
+    },
+    "py://packages/cascade-vm/tests/integration/test_linker_validation.py#test_linker_enforces_integrity": {
+      "baseline_code_signature_text": "async def test_linker_enforces_integrity():",
+      "baseline_code_structure_hash": "afe99d902a0aa08990f503c3398bb108b062911e4c154a6354776203d34d1073",
+      "baseline_yaml_content_hash": "3ee311743eb043482b272c33ca6d30ecdcd150709d831263155226af1d39c36b"
+    },
+    "py://packages/cascade-vm/tests/integration/test_linker_validation.py#test_runner_from_assembly_enforces_linker": {
+      "baseline_code_signature_text": "async def test_runner_from_assembly_enforces_linker():",
+      "baseline_code_structure_hash": "b68286fc8200c812f79a31872d95c47e269e4022dfe25d7f01a8a0c88be94198",
+      "baseline_yaml_content_hash": "5b91540f6ee9b244aedde9093dc4654e7107c13b230e1d2e793761309f0ac7c0"
+    },
+    "py://packages/cascade-vm/tests/integration/test_machine_integration.py#build_test_graph": {
+      "baseline_code_signature_text": "def build_test_graph() -> BipartiteGraph:",
+      "baseline_code_structure_hash": "2ec54a2312a73a4f21a9357d0c77fa9bcbb754ae3bf190eaf6755b7de9d37ca0"
+    },
+    "py://packages/cascade-vm/tests/integration/test_machine_integration.py#test_machine_self_terminating_flow": {
+      "baseline_code_signature_text": "async def test_machine_self_terminating_flow():",
+      "baseline_code_structure_hash": "6d6aae5dfc81a11d5e7fa9364e8ad913633e1ac913e30d5b1a6774ec3474619d"
+    },
+    "py://packages/cascade-vm/tests/integration/test_machine_integration.py#transparent_halt": {
+      "baseline_code_signature_text": "def transparent_halt(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "97bc1d8ab09662e8f0802a4e975e45a9fca0425b94d0487422b6a18185313e86"
+    },
+    "py://packages/cascade-vm/tests/integration/test_machine_integration.py#user_square": {
+      "baseline_code_signature_text": "async def user_square(n: int) -> int:",
+      "baseline_code_structure_hash": "82e66dcf0601654606496c72bee98919492987b666ab492e60f513730f3a9f53"
+    },
+    "py://packages/cascade-vm/tests/integration/test_observability_congestion.py#noop_producer": {
+      "baseline_code_signature_text": "def noop_producer(inputs, node, resources):",
+      "baseline_code_structure_hash": "9229aaab85e09da0cdf523f4eccaa8a77280fb4c265a9ce52e165476b97c93f1"
+    },
+    "py://packages/cascade-vm/tests/integration/test_observability_congestion.py#test_infinite_capacity_handles_concurrency": {
+      "baseline_code_signature_text": "async def test_infinite_capacity_handles_concurrency():",
+      "baseline_code_structure_hash": "55300d13300e1e50697a0a78fa28e65ca33c6ee0e61b2c25dea7f156c290ea1a"
+    },
+    "py://packages/cascade-vm/tests/integration/test_observability_congestion.py#test_limited_capacity_causes_crash": {
+      "baseline_code_signature_text": "async def test_limited_capacity_causes_crash():",
+      "baseline_code_structure_hash": "30169ed0233e8155ba4ef16beaf08f4069ed11f67cdef8127cf1d9a3e0d63d00"
+    },
+    "py://packages/cascade-vm/tests/integration/test_ping_pong.py#ping_pong_topology": {
+      "baseline_code_signature_text": "def ping_pong_topology():",
+      "baseline_code_structure_hash": "c5e01446a0943a640548a7ecd16c1ea146c89618ce268ce7b6c38e1a8dcabc69",
+      "baseline_yaml_content_hash": "92e003a83447ff184369670d7319cebca7957cc682e75ee0b1871de4ae9c9d8f"
+    },
+    "py://packages/cascade-vm/tests/integration/test_ping_pong.py#simple_increment": {
+      "baseline_code_signature_text": "def simple_increment(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "2c4538f52cf79eebf911266a20fb4e08ef5a8268b9fb051ffeb0acf0ee4fd5e0",
+      "baseline_yaml_content_hash": "e21bf21e5e5acaac558e152754b6a9c885749e5d144e73b31a39661df74e4898"
+    },
+    "py://packages/cascade-vm/tests/integration/test_ping_pong.py#test_ping_pong_flow": {
+      "baseline_code_signature_text": "async def test_ping_pong_flow(ping_pong_topology):",
+      "baseline_code_structure_hash": "067c298f05f1c5cc7a563dad8b63ed4678b779e870cd7283655952c782a730e0",
+      "baseline_yaml_content_hash": "46c2cd1eb7a489a3907aacc5addff43e6983a4b1a3e2b0573e1ea28773d208df"
+    },
+    "py://packages/cascade-vm/tests/integration/test_ref_architecture.py#add_one": {
+      "baseline_code_signature_text": "def add_one(n: int) -> int:",
+      "baseline_code_structure_hash": "affde32fb00a53329dbafb1f8b3103262a0cef475b559e8cd5ca40a94cdf2284"
+    },
+    "py://packages/cascade-vm/tests/integration/test_ref_architecture.py#square": {
+      "baseline_code_signature_text": "def square(n: int) -> int:",
+      "baseline_code_structure_hash": "cbe0ba853b2d4995d621005d310d766fee07751eea08f4a1144a594f447d0a86"
+    },
+    "py://packages/cascade-vm/tests/integration/test_ref_architecture.py#test_full_ref_based_e2e_flow": {
+      "baseline_code_signature_text": "async def test_full_ref_based_e2e_flow():",
+      "baseline_code_structure_hash": "a5df9b074e6509fce84e848f21f492a7fd894f0de68ae0c97fd13d397da03226"
+    },
+    "py://packages/cascade-vm/tests/integration/test_resource_contention.py#resource_heavy_task": {
+      "baseline_code_signature_text": "def resource_heavy_task(duration: float = 0.01):",
+      "baseline_code_structure_hash": "e00ed50306d6f339ca00dc6715140e1cecf9dfcd4a9c5da5a129a00b5463fee2"
+    },
+    "py://packages/cascade-vm/tests/integration/test_resource_contention.py#test_mixed_resource_wiring": {
+      "baseline_code_signature_text": "async def test_mixed_resource_wiring():",
+      "baseline_code_structure_hash": "0a0c5603d966e5acbbb69775b9197df155b03819298a158b9a80318a44482962"
+    },
+    "py://packages/cascade-vm/tests/integration/test_resource_contention.py#test_resource_scarcity_topology_and_execution": {
+      "baseline_code_signature_text": "async def test_resource_scarcity_topology_and_execution():",
+      "baseline_code_structure_hash": "bce5e957846349a02fcba7096c2ba8cbbf4fcbc0e62c743a80d28b2fd01f0b4c"
+    },
+    "py://packages/cascade-vm/tests/integration/test_resource_sentry.py#gpu_task": {
+      "baseline_code_signature_text": "async def gpu_task(val: int) -> int:",
+      "baseline_code_structure_hash": "3c41972275eb8ef7c2f6847e2ff02ee141dfeb4f651839fc7bf994b0c81ad750"
+    },
+    "py://packages/cascade-vm/tests/integration/test_resource_sentry.py#test_sentry_parks_and_releases_correctly": {
+      "baseline_code_signature_text": "async def test_sentry_parks_and_releases_correctly():",
+      "baseline_code_structure_hash": "7bf378e9b705feb76e5789c72beed7c32a03b4c5a9794e60f979f4561472e1dc",
+      "baseline_yaml_content_hash": "782f37728d7efa43c8f82f3e591e29e002de9dc1c1b03513216119fd832c1bde"
+    },
+    "py://packages/cascade-vm/tests/integration/test_retry_topology.py#retry_topology_and_runner": {
+      "baseline_code_signature_text": "def retry_topology_and_runner():",
+      "baseline_code_structure_hash": "abc536af6e7c5ea3aa62d756561e5608170b1d5940c0234667e97eb7f34f0f85",
+      "baseline_yaml_content_hash": "f56ed606fc739d553671c2c9ac5e93bc9259fa16e9f4f1c7abaa13a27f57d9b3"
+    },
+    "py://packages/cascade-vm/tests/integration/test_retry_topology.py#test_failure_path": {
+      "baseline_code_signature_text": "async def test_failure_path(retry_topology_and_runner):",
+      "baseline_code_structure_hash": "5f3333194f81ba9962a40b2ec16a256772ea93dd4391f4e10a5a571e85ec51b6",
+      "baseline_yaml_content_hash": "bf61c0ead2e773cf4bb713ffae41e0df5c3e4e57613bbfac098567be93409d24"
+    },
+    "py://packages/cascade-vm/tests/integration/test_retry_topology.py#test_retry_path": {
+      "baseline_code_signature_text": "async def test_retry_path(retry_topology_and_runner):",
+      "baseline_code_structure_hash": "ac395eff24a531dffc9ae8e139eb970c4cf6e42b7f1987e9e93cffe31c099d9e",
+      "baseline_yaml_content_hash": "b4e003a757c943d17881e6d95025396712d99c27b6a724c439a851fa905a9a60"
+    },
+    "py://packages/cascade-vm/tests/integration/test_source_node_execution.py#source_task": {
+      "baseline_code_signature_text": "def source_task():",
+      "baseline_code_structure_hash": "fc646cf4c0a86d9bd7eb38e3f79ab5692fc2946c8773cabdc562ff227bbb1095",
+      "baseline_yaml_content_hash": "8b55b8703a8384dc8700057e2d6089ab03bc0b031228fd22077878eb4bf2df2f"
+    },
+    "py://packages/cascade-vm/tests/integration/test_source_node_execution.py#test_source_node_is_triggered_by_pulse": {
+      "baseline_code_signature_text": "async def test_source_node_is_triggered_by_pulse():",
+      "baseline_code_structure_hash": "d2838aec3fc527ce32e112a2abd34c2e2ab35513f10fff10ddef1b422ae43312"
+    },
+    "py://packages/cascade-vm/tests/integration/test_time_services.py#test_sleep_ic_integration": {
+      "baseline_code_signature_text": "async def test_sleep_ic_integration():",
+      "baseline_code_structure_hash": "ca3f2d33fda0e3fa247591c2702903c6e597cbc737cb78b5415cb4c010fad8be"
+    },
+    "py://packages/cascade-vm/tests/unit/physics/test_micro_physics.py#mock_worker_failure": {
+      "baseline_code_signature_text": "def mock_worker_failure(inputs, node, resources):",
+      "baseline_code_structure_hash": "240c1283a27afa81351fdc6996b0ce6661145803eacca39187f47c38c6a3ee5d"
+    },
+    "py://packages/cascade-vm/tests/unit/physics/test_micro_physics.py#mock_worker_success": {
+      "baseline_code_signature_text": "def mock_worker_success(inputs, node, resources):",
+      "baseline_code_structure_hash": "60d6fa3d0c67312775155b94d3f71fb99a5f07bcbb6564e183a2f26046ded7eb"
+    },
+    "py://packages/cascade-vm/tests/unit/physics/test_micro_physics.py#test_physics_the_crash": {
+      "baseline_code_signature_text": "async def test_physics_the_crash():",
+      "baseline_code_structure_hash": "83c601d0239b651b9fc80a9aeffd8d52a60669c055c6a3060033875b2461babb",
+      "baseline_yaml_content_hash": "939b87d12d0b4633cb1f761d198d0eb9415e0721f70cd3ebaa0d39ba38a97f53"
+    },
+    "py://packages/cascade-vm/tests/unit/physics/test_micro_physics.py#test_physics_the_halt": {
+      "baseline_code_signature_text": "async def test_physics_the_halt():",
+      "baseline_code_structure_hash": "04c08d4a323ff7153acecff39f1cd48c0014917b626631c65b49176363f855eb",
+      "baseline_yaml_content_hash": "1f48f825515d78480935e108b5357d7168dd9f712342e0364ae93802ce45866f"
+    },
+    "py://packages/cascade-vm/tests/unit/physics/test_micro_physics.py#test_physics_the_spark": {
+      "baseline_code_signature_text": "async def test_physics_the_spark():",
+      "baseline_code_structure_hash": "d74ffe972234416823ea3148e09b16943d6a1f84d452d5bffa6e66616e0f41b2",
+      "baseline_yaml_content_hash": "76b1a40f9a40b287d187e6b851b203a4e188b4b4be23a7e44822f5ccd18fc3fd"
+    },
+    "py://packages/cascade-vm/tests/unit/test_linker.py#assembly": {
+      "baseline_code_signature_text": "def assembly() -> Assembly:",
+      "baseline_code_structure_hash": "2989df05a9ec401c25d27fea4533e45f3f439d0e2b0e9e5cfdb0e906289f86fe"
+    },
+    "py://packages/cascade-vm/tests/unit/test_linker.py#code_registry": {
+      "baseline_code_signature_text": "def code_registry() -> CodeRegistry:",
+      "baseline_code_structure_hash": "a16f2f8e6c26b32728128a57fdff14b8243838d7a2309ce4de58b89e8549dd19"
+    },
+    "py://packages/cascade-vm/tests/unit/test_linker.py#dummy_task_a": {
+      "baseline_code_signature_text": "def dummy_task_a():",
+      "baseline_code_structure_hash": "c8d36df413e2ef70a716b15fb4fba5cd87107dfcd05059ea71205c450df91c90"
+    },
+    "py://packages/cascade-vm/tests/unit/test_linker.py#dummy_task_b": {
+      "baseline_code_signature_text": "def dummy_task_b():",
+      "baseline_code_structure_hash": "f82a795faae92f435e6807e060df1ef9731828f02186fd6a3cb7e4f41e9b985e"
+    },
+    "py://packages/cascade-vm/tests/unit/test_linker.py#test_linker_raises_on_missing_code": {
+      "baseline_code_signature_text": "def test_linker_raises_on_missing_code(assembly, code_registry):",
+      "baseline_code_structure_hash": "1224079e93e272f19b3a0ca22d75d821460c05539f7f88903e40a5aa090a4a56"
+    },
+    "py://packages/cascade-vm/tests/unit/test_linker.py#test_linker_raises_on_multiple_missing_codes": {
+      "baseline_code_signature_text": "def test_linker_raises_on_multiple_missing_codes():",
+      "baseline_code_structure_hash": "bdd70425f1731bdd2baa14dd6b6ed67be19fe389f597a85e931d12a824c02688"
+    },
+    "py://packages/cascade-vm/tests/unit/test_linker.py#test_linker_success_with_all_code_present": {
+      "baseline_code_signature_text": "def test_linker_success_with_all_code_present(assembly, code_registry):",
+      "baseline_code_structure_hash": "5e13153170d25b3fbb74360a89f79668ca98957c6d73e8ecaf4975159b8bd617"
+    },
+    "py://packages/cascade-vm/tests/unit/test_memory.py#test_basic_put_and_take": {
+      "baseline_code_signature_text": "def test_basic_put_and_take():",
+      "baseline_code_structure_hash": "329e9fd3de06443e1962f021f1e63c597fe18c6facd6bec06c02b60108534fa9",
+      "baseline_yaml_content_hash": "2ac109ddf94f311e4271d2b93cb97d38851a9ce26c6f2ccc6496a2ac9c7f0713"
+    },
+    "py://packages/cascade-vm/tests/unit/test_memory.py#test_capacity_overflow": {
+      "baseline_code_signature_text": "def test_capacity_overflow():",
+      "baseline_code_structure_hash": "7999be0ab0e26fc669cf77dc9562e730e98269d1024ef70a97508af007f87c33",
+      "baseline_yaml_content_hash": "af8e501bc1356b40d276db42bcae9b5e96698d151ab3e1609ebbfbcadc8f7072"
+    },
+    "py://packages/cascade-vm/tests/unit/test_memory.py#test_empty_take": {
+      "baseline_code_signature_text": "def test_empty_take():",
+      "baseline_code_structure_hash": "1500c35d48505cf4783503de7f8c8a70b1b03efcbd39488370834aa5caa48447",
+      "baseline_yaml_content_hash": "18401c1f8892b34de554a6675e3fe16d8b470af93e75e1b833f8456ae0083802"
+    },
+    "py://packages/cascade-vm/tests/unit/test_memory.py#test_excitement_check": {
+      "baseline_code_signature_text": "def test_excitement_check():",
+      "baseline_code_structure_hash": "42d9a402c3a9ceac4825f14c7bb09566c8140a59c36d7890ebe0f997a3cbf03b",
+      "baseline_yaml_content_hash": "e9bc0ce6c08748fc5de57488ac5429a0709643783efcaa6c27a85b98dba8e524"
+    },
+    "py://packages/cascade-vm/tests/unit/test_memory.py#test_fifo_behavior": {
+      "baseline_code_signature_text": "def test_fifo_behavior():",
+      "baseline_code_structure_hash": "990824f24206e23e937c6f7183b5f01bf1681128caaee10a0ebd9717c17b77ac",
+      "baseline_yaml_content_hash": "96d98a03a32434016510d26adda8cc9b2a2ef7f396fb32e9e79365bb5bb5b4eb"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#kernel": {
+      "baseline_code_signature_text": "def kernel(resources):",
+      "baseline_code_structure_hash": "b628089eefaa65b7b382b76b60429c28f0de932a4eb7564f9784560b0fb13295"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#kernel_fail": {
+      "baseline_code_signature_text": "def kernel_fail(inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: Any) -> Dict[str, Ref]:",
+      "baseline_code_structure_hash": "113ea874204b2369b70e651b88a7e6a2f418e3afcc14a29b31f31b0ad86bab9b"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#kernel_identity": {
+      "baseline_code_signature_text": "def kernel_identity(inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: Any) -> Dict[str, Ref]:",
+      "baseline_code_structure_hash": "b872cce0023c5bd7195c744a871629071d01bfe026540f8a9f414415cfcb4fe7"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#kernel_resource_access": {
+      "baseline_code_signature_text": "def kernel_resource_access(inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: ResourceRegistry) -> Dict[str, Ref]:",
+      "baseline_code_structure_hash": "1ea4fe455133c189c5b5905318b626068b9529c584040c9383f87636c4f6476b"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#resources": {
+      "baseline_code_signature_text": "def resources():",
+      "baseline_code_structure_hash": "ea7adbcedfea09adaee29f56b39c6d522bdc6e1b22bd1b82865088cad5df2ba6"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#test_kernel_exception_propagation": {
+      "baseline_code_signature_text": "def test_kernel_exception_propagation(kernel):",
+      "baseline_code_structure_hash": "90fb83b5e95c42fb0b2fd1dcd7a0794961636c6c88171074e3e4e429ce84082d"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#test_kernel_identity_execution": {
+      "baseline_code_signature_text": "def test_kernel_identity_execution(kernel):",
+      "baseline_code_structure_hash": "1dea9afe7c0076ada63e7a9338679b84cfea6819274feb158ea273577b093d41"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#test_kernel_missing_mapping": {
+      "baseline_code_signature_text": "def test_kernel_missing_mapping(kernel):",
+      "baseline_code_structure_hash": "bde31d30df8adbed17d5ef6ee39fd4df4fdb9a7762e8d721991e3657928908c3"
+    },
+    "py://packages/cascade-vm/tests/unit/test_physics_kernel.py#test_kernel_resource_access": {
+      "baseline_code_signature_text": "def test_kernel_resource_access(kernel):",
+      "baseline_code_structure_hash": "f4034a0b9faf3e87342003f248c1bba954d61d5cd5ad0f4315c85323b0831bd7"
+    },
+    "py://packages/cascade-vm/tests/unit/test_reactor.py#noop": {
+      "baseline_code_signature_text": "def noop(inputs, node, resources):",
+      "baseline_code_structure_hash": "09110434687231a30b4ec626300cd0babcff06261ae51830016d0749dafc15a4"
+    },
+    "py://packages/cascade-vm/tests/unit/test_reactor.py#simple_topology": {
+      "baseline_code_signature_text": "def simple_topology():",
+      "baseline_code_structure_hash": "8f7e2716a8715c366ea291b63e5f1b7c930a695772c72474fd422238b032ff8f",
+      "baseline_yaml_content_hash": "7d3583208d9e4f3811f04bdf9e18e0d04b0e51b1a6d70f279a91428d4a091a1d"
+    },
+    "py://packages/cascade-vm/tests/unit/test_reactor.py#test_event_driven_ping_pong": {
+      "baseline_code_signature_text": "async def test_event_driven_ping_pong(reactor_backend_factory):",
+      "baseline_code_structure_hash": "202b4392d45127f78bbac694e8baff271e336111928223e12238331e6db35470"
+    },
+    "py://packages/cascade-vm/tests/unit/test_reactor.py#test_reactor_independent_nodes": {
+      "baseline_code_signature_text": "async def test_reactor_independent_nodes():",
+      "baseline_code_structure_hash": "a6fa31a0b8cba01d96c1502c4bda101e2e92720a1a0b7c70d731e15234855f2d",
+      "baseline_yaml_content_hash": "3bb4b04abacefa2e3d3c030f030fdfb8feb70d8b6a4614033b67a8ea2bfdf3e4"
+    },
+    "py://packages/cascade-vm/tests/unit/test_reactor.py#test_reactor_partial_inputs": {
+      "baseline_code_signature_text": "async def test_reactor_partial_inputs():",
+      "baseline_code_structure_hash": "b6b05c721048b57a7e40c93c6b2dc0ed5bce65e65f16d8e4aa7ef7a0429d1964",
+      "baseline_yaml_content_hash": "7752f10154b8ab92216151e52f40c2d9fb237b1a06d92074d0b703d8be2b1bb5"
+    },
+    "py://packages/cascade-vm/tests/unit/test_reactor.py#test_reactor_step_fire": {
+      "baseline_code_signature_text": "async def test_reactor_step_fire(simple_topology):",
+      "baseline_code_structure_hash": "554de733c9c56a3a053e22bcc4b47162addb4ab3e2aa02878bedcef4676843b3",
+      "baseline_yaml_content_hash": "aea5c410c7772985b73a1f280a75a67daeddc5f077ae477dd2608583448f8e35"
+    },
+    "py://packages/cascade-vm/tests/unit/test_reactor.py#test_reactor_step_idle": {
+      "baseline_code_signature_text": "async def test_reactor_step_idle(simple_topology):",
+      "baseline_code_structure_hash": "e93248821ac2bd1e9580e19d6ade804301bf0d213737b0267cfb16513feab0ac",
+      "baseline_yaml_content_hash": "f7fee20e83dd0be0b45843eb43e22174d1cec9e739de7c344eab90c9575f5b33"
+    },
+    "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry": {
+      "baseline_code_signature_text": "class TestCodeRegistry:",
+      "baseline_code_structure_hash": "068ba43b80e787f4e128b6bfb979a949f3e8c52af82669810691728d0c2676da"
+    },
+    "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry.test_get_missing_raises_key_error": {
+      "baseline_code_signature_text": "def test_get_missing_raises_key_error(self):",
+      "baseline_code_structure_hash": "016f26d3bc6e2e5631b9bf25da6f7594d137a83376e2ad458d5684a4e25d9813",
+      "baseline_yaml_content_hash": "ce546968488eabf98f9fef31c31baca73fbf5220dd0d86a6818ca1b0afcf8d27"
+    },
+    "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry.test_register_and_get": {
+      "baseline_code_signature_text": "def test_register_and_get(self):",
+      "baseline_code_structure_hash": "da95298eb74c9a3ecb8d51eff63ffd8900e6f913a11c04b92f72df124175b5ba",
+      "baseline_yaml_content_hash": "289ff6fadcba28f20871f56bd2f51e642be19626b20521326c445b1d0e946dba"
+    },
+    "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry.test_reregister_collision_warns": {
+      "baseline_code_signature_text": "def test_reregister_collision_warns(self, caplog):",
+      "baseline_code_structure_hash": "0b097819a33fd9771e12eac1db5099e8c6543063df7430f4dd645153f0c448ac",
+      "baseline_yaml_content_hash": "4467535286e525a55a6346060c58eceddff6a327ed11e2593684dfdb2bcc6533"
+    },
+    "py://packages/cascade-vm/tests/unit/test_registry.py#TestCodeRegistry.test_reregister_idempotent": {
+      "baseline_code_signature_text": "def test_reregister_idempotent(self, caplog):",
+      "baseline_code_structure_hash": "6eeb705dc1e52bbcbe7acadc035060a1e7659abf4972bcd8e38d0a2f6dd8322f",
+      "baseline_yaml_content_hash": "4e878312e30f580d5d3da0638eeec4843fc0395e1b17a2854822907327649264"
+    },
+    "py://packages/cascade-vm/tests/unit/test_registry.py#sample_task_one": {
+      "baseline_code_signature_text": "def sample_task_one():",
+      "baseline_code_structure_hash": "d5feefa8135d3598dd4043f34db4b616ade499b40c9d383ca2e61e51a8c3087d"
+    },
+    "py://packages/cascade-vm/tests/unit/test_registry.py#sample_task_two": {
+      "baseline_code_signature_text": "def sample_task_two():",
+      "baseline_code_structure_hash": "abdde6b9c577442ec69e4b621eadacca3dbdb5fb8c0ca808290d340a85c621b0"
+    }
+  },
+  "version": "1.0"
+}

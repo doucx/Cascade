@@ -1,8 +1,0 @@
-{
-  "py://packages/cascade-std/src/cascade/std/triad/dispatcher.py#logger": {},
-  "py://packages/cascade-std/src/cascade/std/triad/dispatcher.py#standard_dispatcher": {
-    "baseline_code_signature_text": "def standard_dispatcher(io: WorkerSpec.IO, node: WorkerNode, resources: Any) -> None:",
-    "baseline_code_structure_hash": "7f3dc8bf55b427304f7f6f2a1bf730463899abe078c5cfb0ca9356719fdc09a3",
-    "baseline_yaml_content_hash": "7f7131b21ce6a46f12652935d9415176f30a5534095a3bbc453b856252700083"
-  }
-}

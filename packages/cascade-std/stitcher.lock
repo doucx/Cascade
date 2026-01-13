@@ -1,0 +1,396 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-std/src/cascade/__init__.py#__path__": {},
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap": {
+      "baseline_code_signature_text": "class DynamicOutputMap(MutableMapping):",
+      "baseline_code_structure_hash": "0c97ca6bc316f51cf663556b80907139723af9b52ea50d5a79f0c598d8ff4dcb",
+      "baseline_yaml_content_hash": "98de35c200d74a72329e49443bf5b61ea2082c3c22536ee6a6f4dfb63274b3f4"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap.__delitem__": {
+      "baseline_code_signature_text": "def __delitem__(self, key: str) -> None:",
+      "baseline_code_structure_hash": "b29972343906b3bc9c8cfaae7885b352bc6e067e2046199b7baf400ddc72e745"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap.__getitem__": {
+      "baseline_code_signature_text": "def __getitem__(self, key: str) -> Token:",
+      "baseline_code_structure_hash": "ec53b700593365f056a2cf62ea79502585777dc8dc9f3f618f961e5d2c58f955"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap.__init__": {
+      "baseline_code_signature_text": "def __init__(self, target_dict: Dict[str, Token], prefix: str):",
+      "baseline_code_structure_hash": "9fefe314062800deadfbf4aaf274b43ad0f991670592fab57b37b584d56ca086"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap.__iter__": {
+      "baseline_code_signature_text": "def __iter__(self):",
+      "baseline_code_structure_hash": "ef0b2a8d16df5b326bbce14d9e611fbb031f6083186fd6f888620af153154781"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap.__len__": {
+      "baseline_code_signature_text": "def __len__(self):",
+      "baseline_code_structure_hash": "4eef2625b3a5543becf464944490e0f5ffc0c2354e022fbf4dff00d931e1a463"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap.__setitem__": {
+      "baseline_code_signature_text": "def __setitem__(self, key: str, value: Token) -> None:",
+      "baseline_code_structure_hash": "fce35810e357ad6044c7f19ae39c7f7a87ebf08af587e9db411bb8a4523f3c94"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap._prefix": {},
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap._target": {},
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#IOWrapper": {
+      "baseline_code_signature_text": "class IOWrapper:",
+      "baseline_code_structure_hash": "4c8a1618805889a538ca7d6d279ec1d91c65ec51eb798a9474bb52762cd85059",
+      "baseline_yaml_content_hash": "4e64fcf4409b4541cdacbfcb46836146cf305b90636e9eadc190e3d5681a91d6"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#IOWrapper.__getattr__": {
+      "baseline_code_signature_text": "def __getattr__(self, name: str) -> Any:",
+      "baseline_code_structure_hash": "cfaa0d20b1f7ec834a295b0cfbdbbc55353e201952fcc10a53a830612bc56408"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#IOWrapper.__init__": {
+      "baseline_code_signature_text": "def __init__(self, inputs: Dict[str, Token], outputs: Dict[str, Token], spec: Type[PhysicsSpec]):",
+      "baseline_code_structure_hash": "3e1d2983e343416527ed57a9cc33207e906d7a7f767e209feba91f2b0cde0dc2"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#IOWrapper.__setattr__": {
+      "baseline_code_signature_text": "def __setattr__(self, name: str, value: Any) -> None:",
+      "baseline_code_structure_hash": "841953fff36ddb05f1d31038625e2ff76ca89f2135f5baedca68d7dad5ab864f"
+    },
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#IOWrapper.__slots__": {},
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#IOWrapper._inputs": {},
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#IOWrapper._outputs": {},
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#IOWrapper._spec": {},
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#T": {},
+    "py://packages/cascade-std/src/cascade/std/kernel_tools.py#implements": {
+      "baseline_code_signature_text": "def implements(spec: Type[PhysicsSpec]):",
+      "baseline_code_structure_hash": "28e174bec3cc33ea3a5b64c052f72b13808463754c8c59e2363660299d9e0eb7",
+      "baseline_yaml_content_hash": "3fe24b02911c56670e7642535493648454bbcb56a92a43d0196c2489e63d3150"
+    },
+    "py://packages/cascade-std/src/cascade/std/resource/__init__.py#__all__": {},
+    "py://packages/cascade-std/src/cascade/std/resource/continuous.py#ContinuousLedger": {
+      "baseline_code_signature_text": "class ContinuousLedger:",
+      "baseline_code_structure_hash": "675e9453376e3f7730eda9472de073cf7cfaa26161e8035128b5457eca30d505"
+    },
+    "py://packages/cascade-std/src/cascade/std/resource/continuous.py#ContinuousLedger.available": {},
+    "py://packages/cascade-std/src/cascade/std/resource/continuous.py#ContinuousLedger.total": {},
+    "py://packages/cascade-std/src/cascade/std/resource/continuous.py#continuous_allocator": {
+      "baseline_code_signature_text": "def continuous_allocator(io: ContinuousAllocatorSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "b49549c25abc120d234a4a8079b361ce3c6251a1aad69bd24e2e753b548d1175"
+    },
+    "py://packages/cascade-std/src/cascade/std/resource/continuous.py#continuous_reclaimer": {
+      "baseline_code_signature_text": "def continuous_reclaimer(io: ContinuousReclaimerSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "b24ddca18ae56db6a7ee412ba58987a19666032c1ef72cc6acd6cf150c3db519"
+    },
+    "py://packages/cascade-std/src/cascade/std/resource/discrete.py#DiscreteLedger": {
+      "baseline_code_signature_text": "class DiscreteLedger:",
+      "baseline_code_structure_hash": "a36d3afeaed4f4a8ae02cb8f9ef2ffb29196ae069b798edd2f30eab9c1b262e1"
+    },
+    "py://packages/cascade-std/src/cascade/std/resource/discrete.py#DiscreteLedger.available": {},
+    "py://packages/cascade-std/src/cascade/std/resource/discrete.py#DiscreteLedger.total": {},
+    "py://packages/cascade-std/src/cascade/std/resource/discrete.py#_extract_scalar": {
+      "baseline_code_signature_text": "def _extract_scalar(payload: Any) -> Union[int, float]:",
+      "baseline_code_structure_hash": "8a5eadeee430fd8b9d85d6312c66c68c681007488fea32d23f7091cf296b128b",
+      "baseline_yaml_content_hash": "790c0b05e811a1ff62f8c21279bfe19d0fca7b6cf112b6da1ad297f484273460"
+    },
+    "py://packages/cascade-std/src/cascade/std/resource/discrete.py#discrete_allocator": {
+      "baseline_code_signature_text": "def discrete_allocator(io: DiscreteAllocatorSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "3056b45c4bd17ae5ca255cee3f50d4a1d5d92eae3636a2222070f1ac3233998a",
+      "baseline_yaml_content_hash": "5ac28d5feb9786e8ae95038325d9b8d8446d1a3af1dd643e566a866e133c947b"
+    },
+    "py://packages/cascade-std/src/cascade/std/resource/discrete.py#discrete_reclaimer": {
+      "baseline_code_signature_text": "def discrete_reclaimer(io: DiscreteReclaimerSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "6c76293902ac8de47754d894f5d7f8879dbf2dc2316f81b74ff16762c122340a",
+      "baseline_yaml_content_hash": "1d7e0584e9532f90457ab0b65b1873162d3b4653c34538e0a51e073221eeac90"
+    },
+    "py://packages/cascade-std/src/cascade/std/resource/requestor.py#resource_requestor": {
+      "baseline_code_signature_text": "def resource_requestor(io: ResourceRequestorSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "1d92ea21438ad15b068abc335a6e8827d5c3584c53172bb301134e6cd1637e3e",
+      "baseline_yaml_content_hash": "2073af43fef2cfd5e2798b357ba2d0e4329ad7ac773ae7393ea0ec72af95fc22"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/__init__.py#__all__": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousAllocatorSpec": {
+      "baseline_code_signature_text": "class ContinuousAllocatorSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "f89c88686da49c4a7ec53e1f1802e145c2c34f7bf7d6101d47f1afa3215fedce"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousAllocatorSpec.gnt_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousAllocatorSpec.ledger_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousAllocatorSpec.ledger_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousAllocatorSpec.req_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousAllocatorSpec.req_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousReclaimerSpec": {
+      "baseline_code_signature_text": "class ContinuousReclaimerSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "ddadc5690bc6eaa540561921b589b2ffc71ad94cdcbc73525f6172e09c94ea3c"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousReclaimerSpec.ledger_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousReclaimerSpec.ledger_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ContinuousReclaimerSpec.rel_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteAllocatorSpec": {
+      "baseline_code_signature_text": "class DiscreteAllocatorSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "545d4119c6fd5c2e9f2a9c78045b08cd9bcdfc959f7b5a81bf54b81cb1cafc0b",
+      "baseline_yaml_content_hash": "9d9542e3226f705e7930ca976c17afba323d455379d7d74d1c0135d25f64d8c4"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteAllocatorSpec.gnt_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteAllocatorSpec.grants": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteAllocatorSpec.ledger_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteAllocatorSpec.ledger_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteAllocatorSpec.req_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteAllocatorSpec.req_parked": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteReclaimerSpec": {
+      "baseline_code_signature_text": "class DiscreteReclaimerSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "74774bcb6c70b4ae71e40b76ff06b4ba6d675b96f0967d0760f77932ecce73b5",
+      "baseline_yaml_content_hash": "959ab38c6ea9e65fff9343987309f5466df0c3f8f52f8103b39210dbede9512c"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteReclaimerSpec.ledger_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteReclaimerSpec.ledger_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteReclaimerSpec.rel_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#DiscreteReclaimerSpec.signal_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ResourceRequestorSpec": {
+      "baseline_code_signature_text": "class ResourceRequestorSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "2cdc1c7120c6ae9032043f2fbdfa06ae449272279ee9b98755349f6f93a1e6b5",
+      "baseline_yaml_content_hash": "b0348347ffc7b338888df478eeffe3aba9e023653ef83cbbad67e69bfb5c07a3"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ResourceRequestorSpec.amount": {},
+    "py://packages/cascade-std/src/cascade/std/specs/resource.py#ResourceRequestorSpec.req_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#DrainerSpec": {
+      "baseline_code_signature_text": "class DrainerSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "8378f890f6cfa00ab08c4ef3992c8c1562fe58775f7f3fbbe7971e384b67cc7a"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#DrainerSpec.out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#DrainerSpec.trigger": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#EgressSpec": {
+      "baseline_code_signature_text": "class EgressSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "702da3d1c7772e4789a2c2a3d1ce718f6b63a700538bc35a92c867ac69889f0e",
+      "baseline_yaml_content_hash": "2a822a3678a88bcc9887c0bf1c0c74e6e838b08780f9559ddc690a62a11a5c8d"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#EgressSpec.input_token": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#GateSpec": {
+      "baseline_code_signature_text": "class GateSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "9f6529fae894567e7a462cfd47a98f3ee95da60f4ce30932363bedccd6f700c8",
+      "baseline_yaml_content_hash": "9e2c9e3b67451450f1eae71c7b35b538fbca85ad8c0bdecb24ce0422d74dd0ed"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#GateSpec.req_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#GateSpec.req_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#GateSpec.signal_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#RetrySpec": {
+      "baseline_code_signature_text": "class RetrySpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "5a1448640533b1153ed39af961859cf27b6821485798f7d805769f0a0e575964"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#RetrySpec.context_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#RetrySpec.error_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#RetrySpec.fail_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#RetrySpec.retry_out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#SleepSpec": {
+      "baseline_code_signature_text": "class SleepSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "9ff1657adf9c2c18ab9e7acc9ffa83d4b63fdf364cc324b475e3eb4ec5641ef0",
+      "baseline_yaml_content_hash": "3b25e457ff0bb092791493d81ac83772226f443439e01318bee0960bb4a66b5c"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#SleepSpec.data_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#SleepSpec.delay_in": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#TerminatorSpec": {
+      "baseline_code_signature_text": "class TerminatorSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "55dbd74ce94261fd0323978c3704f205a798f3cf7bb99414118b6e46704d5de5"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#TerminatorSpec.out": {},
+    "py://packages/cascade-std/src/cascade/std/specs/system.py#TerminatorSpec.trigger": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec": {
+      "baseline_code_signature_text": "class BleacherSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "6b9b25e5e96dbdde750f9aeda0e2632a4fa4a5806a221a895c4c43d7072c7ba9",
+      "baseline_yaml_content_hash": "5cb110800fe2f351721cf112e54d02e9645e5c3cdb233b9035a59a1b2224c78c"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.args": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.condition": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.context_output": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.obs_output": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.pulse": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.trace_output": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#BleacherSpec.worker_input": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#ObservabilitySpec": {
+      "baseline_code_signature_text": "class ObservabilitySpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "68a5e03adac245755934c277fd4b5e7b03c6919bf4d5adaabcbf5142941e9357",
+      "baseline_yaml_content_hash": "5dc9e940fb7c0b878b88b5e4fe9be29fb70d0c314059c55db38f7a7395f63750"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#ObservabilitySpec.event_token": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec": {
+      "baseline_code_signature_text": "class StainerSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "763ebdb6c232b64fdf8706ffc99e3633a46ecdae4f49821bd6a0f9456ecfe58d",
+      "baseline_yaml_content_hash": "90f70f6fe722859b4760598df2a5b78074005902c80a49b804b8468b7cfc5088"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.context_input": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.obs_output": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.output_default": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.output_error": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.trace_input": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#StainerSpec.worker_result": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#WorkerSpec": {
+      "baseline_code_signature_text": "class WorkerSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "86f4bbe37f4547c8cd35f4cb9e5d7beb9015ac34647c7a6bcd1406acf5a804ed",
+      "baseline_yaml_content_hash": "14024988ab82f545bc589a57fe69b99e5b49c7b5332368a60d0cd6eb791723c5"
+    },
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#WorkerSpec.worker_input": {},
+    "py://packages/cascade-std/src/cascade/std/specs/triad.py#WorkerSpec.worker_result": {},
+    "py://packages/cascade-std/src/cascade/std/system/__init__.py#__all__": {},
+    "py://packages/cascade-std/src/cascade/std/system/drainer.py#drain_signal": {
+      "baseline_code_signature_text": "def drain_signal(io: DrainerSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "ca3b78731e176a9993b0d60de73e591ea9b1acbd26d423718ef1dc8ab90a09bf",
+      "baseline_yaml_content_hash": "8d3e8cdd21d3b16c0d65316f9f89a4342b4d67ed5924987ba0af611c693598f5"
+    },
+    "py://packages/cascade-std/src/cascade/std/system/egress.py#standard_egress": {
+      "baseline_code_signature_text": "def standard_egress(io: EgressSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "fcb58bd35adf7d615676cf15f4026ddcff7ebc45c2eacd2ef7cb33005e51aff9",
+      "baseline_yaml_content_hash": "aeb5ca10fb9063d1d32da202373a6631293cc077ae64c7c9aada32e9caeb46ba"
+    },
+    "py://packages/cascade-std/src/cascade/std/system/gate.py#gate_passthrough": {
+      "baseline_code_signature_text": "def gate_passthrough(io: GateSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "2c5ec9ef5af2118fc25ee9e2f5aeb728fab01d7867a0bf9c27d469a374af4587",
+      "baseline_yaml_content_hash": "6a800f7e157669b56feb63d3d590594c5c7d4d0fd5b2b3876efb8454e573b9b3"
+    },
+    "py://packages/cascade-std/src/cascade/std/system/retry.py#standard_retry_logic": {
+      "baseline_code_signature_text": "def standard_retry_logic(io: RetrySpec.IO, node: RetryNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "a09eea73ac8c2da536cc89ecea8cbe90d241f9a9eacf9b1d092b150bfb88e019",
+      "baseline_yaml_content_hash": "f00d9c4304b3e8a945a6611fb7bd5f479ebb9ff1c6b28075b1551672e3cd1c45"
+    },
+    "py://packages/cascade-std/src/cascade/std/system/terminator.py#halt_signal": {
+      "baseline_code_signature_text": "def halt_signal(io: TerminatorSpec.IO, node: PhysicsNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "c772b4498498ef80b87c168106428975dc8cd51a6d54e1919f5a7b66bbfdf710",
+      "baseline_yaml_content_hash": "0248de52926b293eeb855ec3d6d3678278ebb0d674577f1163f433c7ad282368"
+    },
+    "py://packages/cascade-std/src/cascade/std/system/time.py#logger": {},
+    "py://packages/cascade-std/src/cascade/std/system/time.py#standard_sleep": {
+      "baseline_code_signature_text": "def standard_sleep(inputs: Dict[str, Token], node: PhysicsFuncNode, resources: Any) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "bdf042670cbf45949a12bd93150cf0720f0d20d75ec8c65251ce6dde88935467",
+      "baseline_yaml_content_hash": "718741d30f0d4440ace5e9cc57891cde370de68f15d6dc4c3b4b9cd6d7d45d12"
+    },
+    "py://packages/cascade-std/src/cascade/std/triad/__init__.py#__all__": {},
+    "py://packages/cascade-std/src/cascade/std/triad/bleacher.py#standard_bleacher": {
+      "baseline_code_signature_text": "def standard_bleacher(io: BleacherSpec.IO, node: BleachNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "6828c508589ed9f2381f62403a89e2ac956283831830d918c54657e4877717f0",
+      "baseline_yaml_content_hash": "bf80677987c384f4bd63bad775d3f1c7e2731c931ad70015c2cffecf8e0b2a7d"
+    },
+    "py://packages/cascade-std/src/cascade/std/triad/dispatcher.py#logger": {},
+    "py://packages/cascade-std/src/cascade/std/triad/dispatcher.py#standard_dispatcher": {
+      "baseline_code_signature_text": "def standard_dispatcher(io: WorkerSpec.IO, node: WorkerNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "7f3dc8bf55b427304f7f6f2a1bf730463899abe078c5cfb0ca9356719fdc09a3",
+      "baseline_yaml_content_hash": "1f86b5995b88c986af58c39bdbe434b34f9824987c4c4fdaa8a3baf51d17eea0"
+    },
+    "py://packages/cascade-std/src/cascade/std/triad/observer.py#standard_observer": {
+      "baseline_code_signature_text": "def standard_observer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "24ec1527a1b41bd235fc71fc84d7df263c22aa7a13beb0bbdb23350662d07626",
+      "baseline_yaml_content_hash": "0a9960cf6422cb49d6f2893d621a043a8e51bafd05b418a49d8d95ea461fcb9c"
+    },
+    "py://packages/cascade-std/src/cascade/std/triad/stainer.py#standard_stainer": {
+      "baseline_code_signature_text": "def standard_stainer(inputs: Dict[str, Token], node: StainNode, resources: Any) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "5400f5c50cf10ab5d8e2f7fd5e96b875c2fb4790e7763d8a2a80101884bdd2a7",
+      "baseline_yaml_content_hash": "590e1206575b9091caf8bc02717638153c940b04b2a4c6d04a9f5152d29ac85c"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_continuous.py#partial_ledger": {
+      "baseline_code_signature_text": "def partial_ledger() -> ContinuousLedger:",
+      "baseline_code_structure_hash": "019dbbf69392dc2057dae699af321d1cbdb78f42bed5285f6ce982a12bb6de74",
+      "baseline_yaml_content_hash": "f9e601a5eab64c546e5ce50bc5ec3bfd61ba064c83fccebd16e04771be5c0abe"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_continuous.py#starved_ledger": {
+      "baseline_code_signature_text": "def starved_ledger() -> ContinuousLedger:",
+      "baseline_code_structure_hash": "374f362b18bd779a18aa14428bde97fa473319ad86df26460249d50572a519bd",
+      "baseline_yaml_content_hash": "dedc7da52b4531dabb2cc6bab28c3285c8dbd07b4178d4dd9931c01c5a2f7030"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_continuous.py#test_continuous_allocator_grants_memory": {
+      "baseline_code_signature_text": "def test_continuous_allocator_grants_memory(partial_ledger):",
+      "baseline_code_structure_hash": "bd43e929e7c6fad8dd52ca2068f8661edbbaf4b976751fb9f5ccf8e7d4df7f63"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_continuous.py#test_continuous_allocator_recirculates_large_request": {
+      "baseline_code_signature_text": "def test_continuous_allocator_recirculates_large_request(starved_ledger):",
+      "baseline_code_structure_hash": "93cf407674ad8e5228f60888ed365ce951b51733e0eb3427fcf560f7deca6efe"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_continuous.py#test_continuous_reclaimer_replenish": {
+      "baseline_code_signature_text": "def test_continuous_reclaimer_replenish():",
+      "baseline_code_structure_hash": "04751dcb8fdba6a5c76350c50fe86f3dffafffe4082887e172c4b065b65f8c94"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_discrete.py#available_ledger": {
+      "baseline_code_signature_text": "def available_ledger() -> DiscreteLedger:",
+      "baseline_code_structure_hash": "7495ea3a4feeb8999be299ce6d522e724bda137c05588cd23ee2e1a1fd3e975a",
+      "baseline_yaml_content_hash": "4d004507a6c84c54ceee97b5192a0ce4e86d0eb03c98f66ac66757c3d7025651"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_discrete.py#starved_ledger": {
+      "baseline_code_signature_text": "def starved_ledger() -> DiscreteLedger:",
+      "baseline_code_structure_hash": "f28692ddc4880dd1322ee5d768be5534f53a599ec69461ca49fcd1ed65b5221a",
+      "baseline_yaml_content_hash": "c0e1b37086f7319c4e4464a16c0c0a728401605e492ad9388099f60bb053d1e7"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_discrete.py#test_discrete_allocator_grants_when_available": {
+      "baseline_code_signature_text": "def test_discrete_allocator_grants_when_available(available_ledger):",
+      "baseline_code_structure_hash": "c4d809253b9bb3d60b4d986c20c1d61486e42446e8d3a0604968b1d460460b9e"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_discrete.py#test_discrete_allocator_parks_when_starved": {
+      "baseline_code_signature_text": "def test_discrete_allocator_parks_when_starved(starved_ledger):",
+      "baseline_code_structure_hash": "1a4eac176f4e29bec4c12a7a4565c6535c301485f924406012cb7befcefdc48d"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_discrete.py#test_discrete_reclaimer_releases_resource": {
+      "baseline_code_signature_text": "def test_discrete_reclaimer_releases_resource(available_ledger):",
+      "baseline_code_structure_hash": "b6f0330c3e4f830ae5425b804ea3cb78c80599f91d586cc80dc17f2b7bc43389"
+    },
+    "py://packages/cascade-std/tests/unit/resource/test_discrete.py#test_sequential_rel_and_req": {
+      "baseline_code_signature_text": "def test_sequential_rel_and_req():",
+      "baseline_code_structure_hash": "10a345dc148876d0affe26f1c0abd37e57c871ebd046b62da57bdc167f104d48"
+    },
+    "py://packages/cascade-std/tests/unit/system/test_drainer.py#test_drain_signal_produces_correct_token": {
+      "baseline_code_signature_text": "def test_drain_signal_produces_correct_token():",
+      "baseline_code_structure_hash": "f9c3d79291b3918a449c9af46c1ae45b37ab53634ee4c2511b60802459af7302"
+    },
+    "py://packages/cascade-std/tests/unit/system/test_terminator.py#test_halt_signal_produces_correct_token": {
+      "baseline_code_signature_text": "def test_halt_signal_produces_correct_token():",
+      "baseline_code_structure_hash": "e16e8d1f7d86145a88d6b859effa3f0efdd1795b1d51257bcb77ee674c4e4ba3"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_bleacher.py#create_mock_bleach_node": {
+      "baseline_code_signature_text": "def create_mock_bleach_node(input_ports_config):",
+      "baseline_code_structure_hash": "7445fe856448bc475450c151a1a5898537659d9236e5b53a401e8fb26fe172e9"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_bleacher.py#test_standard_bleacher_extracts_payloads": {
+      "baseline_code_signature_text": "def test_standard_bleacher_extracts_payloads():",
+      "baseline_code_structure_hash": "790daba61eafb56df468bee30d3ac7fea9e828935e5c0629feda08e60ba06064",
+      "baseline_yaml_content_hash": "90e5000b0d0a739ec7e24c70dbf62fd6798b095e1c5db19a49e97e0f337431a9"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_bleacher.py#test_standard_bleacher_generates_trace_with_timestamp": {
+      "baseline_code_signature_text": "def test_standard_bleacher_generates_trace_with_timestamp():",
+      "baseline_code_structure_hash": "c14177f3fd399668fa12e3aeb7c64b2090ed97f78921fd58fd9bcf4f3a56f0fd",
+      "baseline_yaml_content_hash": "937c3a3e33141ce713f84ee0384cd9809022c7c9896dc77585a3e1f1ce663e38"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_bleacher.py#test_standard_bleacher_merges_traces": {
+      "baseline_code_signature_text": "def test_standard_bleacher_merges_traces():",
+      "baseline_code_structure_hash": "76a50d7b6815b2ca752ccde05163fd530dd2d2eeb31455cab35d63888ac1202b",
+      "baseline_yaml_content_hash": "b2cd500f2d4ad43e48105e729641fedb01a4b8265769a6c750ba498db5c87942"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_bleacher.py#test_standard_bleacher_with_empty_inputs": {
+      "baseline_code_signature_text": "def test_standard_bleacher_with_empty_inputs():",
+      "baseline_code_structure_hash": "d73e6c25c584da7b87bc900f5a20e0d3bcf9f7558c6520ccb07689db6b649bf7",
+      "baseline_yaml_content_hash": "8434041d60a5e60ae75a63d21955108806e9fc48feb26e6b310b863f8009e352"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_observer.py#mock_bus": {
+      "baseline_code_signature_text": "def mock_bus() -> MagicMock:",
+      "baseline_code_structure_hash": "0037e75f5349bdb710e313e7906bf98bdc88b4e4d5b3f573417f9137cab33b65"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_observer.py#mock_resources": {
+      "baseline_code_signature_text": "def mock_resources(mock_bus: MagicMock) -> MagicMock:",
+      "baseline_code_structure_hash": "7889110c5ec7317ed9410f326c82bf405eac395c3462101c471331bc450771e3",
+      "baseline_yaml_content_hash": "f8abf2bbe55c0b0eaf767751e08349be5f6b711b98755567539440db74bdbbfb"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_observer.py#test_observer_handles_no_bus": {
+      "baseline_code_signature_text": "def test_observer_handles_no_bus(mock_resources: MagicMock):",
+      "baseline_code_structure_hash": "f0d709737cae91f11da194c86bd99a4b56df9b056d768092be34e0744ba1e10d"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_observer.py#test_observer_publishes_ir_to_bus": {
+      "baseline_code_signature_text": "def test_observer_publishes_ir_to_bus(mock_bus: MagicMock, mock_resources: MagicMock):",
+      "baseline_code_structure_hash": "a018ca741b180908f26d5b91a53664c8daea5da4fda231f68a813c80fe04c399"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_stainer.py#create_mock_stain_node": {
+      "baseline_code_signature_text": "def create_mock_stain_node(output_ports_config):",
+      "baseline_code_structure_hash": "23b2a130f3d9bb673902f05b8afb34ead769f8e008529da713f46a684b6031e2"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_stainer.py#test_stainer_error_case": {
+      "baseline_code_signature_text": "def test_stainer_error_case():",
+      "baseline_code_structure_hash": "eeba5255db142f0414c43b3337ea55e50088574437af1d791b8e7f4fcb162675",
+      "baseline_yaml_content_hash": "421ecae2b58425e09e5947dafdfbce4e34ef474416e09982a5656232fe522f93"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_stainer.py#test_stainer_handles_missing_start_ts_gracefully": {
+      "baseline_code_signature_text": "def test_stainer_handles_missing_start_ts_gracefully():",
+      "baseline_code_structure_hash": "5962a43ccd72f252098d6d3f448e83ca1d5fc180ce133370ce275eff222ba3f9",
+      "baseline_yaml_content_hash": "e5f8e65467dfba52f81148a22cf634771c98618eae790374b44075c36813c88c"
+    },
+    "py://packages/cascade-std/tests/unit/triad/test_stainer.py#test_stainer_success_case": {
+      "baseline_code_signature_text": "def test_stainer_success_case():",
+      "baseline_code_structure_hash": "aaebe6ad45a5c2d081a34f680f57e9081f17d3e2df271478798121f80aedf3cb",
+      "baseline_yaml_content_hash": "0d6d7a642332c39b89920ca4089e523e4c362601d1351bcac6318c8152a03c3d"
+    }
+  },
+  "version": "1.0"
+}

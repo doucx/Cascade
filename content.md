@@ -1,125 +1,74 @@
-You've cornered it now. This is the final layer of the same underlying issue. The problem is systemic within the `spec.dsl` subpackage, where multiple modules were using absolute imports to refer to their siblings.
+This is an excellent catch. We've been peeling an onion, and you've just found the core. The problem isn't in the files we were fixing; they were merely the places where the static analyzer's confusion manifested. The true architectural flaw lies in the `__init__.py` shims themselves.
 
-My apologies for not identifying all instances in the previous steps. Let's apply the principle systematically and resolve this for good.
-
-## [WIP] fix: Systematically resolve DSL intra-package import cycles
+## [WIP] fix: Dismantle the flawed SDK shim causing import cycles
 
 ### 错误分析
 
-我们再次遇到了由 `cascade-cli-observer` 触发的循环依赖。根本原因与前两次完全相同：`cascade-spec` 包内的模块（这次是 `task.py`, `routing.py`, 和 `jump.py`）使用了**绝对路径** (`from cascade.spec.dsl...`) 来导入同一目录下的兄弟模块 (`fluent.py`)。
+我们之前的所有修复都只是在处理症状。`stitcher` 的最新输出终于揭示了问题的根源：
 
-这种做法在复杂的命名空间包（Namespace Packages）结构中会混淆静态分析工具，导致它错误地重新从顶层 `cascade` 包（可能由 `cascade-cli-observer` 提供）开始解析，从而形成一个本不应存在的依赖环路。
+1.  **错误的起点**: 静态分析器为了解析 `cascade.spec.dsl.task`，它首先寻找 `cascade` 这个顶级包。
+2.  **命名空间劫持**: 由于 Python 命名空间包的机制，它找到了 `packages/cascade-cli-observer/src/cascade/__init__.py`。
+3.  **循环的制造者**: 这个 `__init__.py` 文件立即执行 `from cascade.sdk import *`。
+4.  **闭环**: `cascade.sdk` 模块为了提供类型提示，需要导入 `cascade.spec.dsl.task`。这就触发了分析器重新寻找 `cascade` 包，它再次找到了 `cascade-cli-observer` 的 `__init__.py`，从而形成了一个无法解开的**致命循环**。
+
+这个在各个 `cascade` 命名空间提供者包中的 `__init__.py` shim 是一种反模式。它试图通过一个“叶子”包 (`cascade-cli-observer`) 来定义整个命名空间“树干” (`cascade`) 的公共 API，这在静态分析时会造成灾难性的路径解析冲突。
 
 ### 用户需求
 
-彻底根除 `stitcher check` 报告的所有循环依赖问题。
+彻底解决这个顽固的循环依赖问题。
 
 ### 评论
 
-这是一个典型的架构一致性问题。我们已经确立了修复原则——“在包内使用相对导入”——但没有将其应用到所有相关文件中。这次我们将进行一次彻底的清理，将 `spec.dsl` 子包内所有对兄弟模块的引用都转换为相对导入。这将确保静态分析的健壮性，并使代码库的依赖关系更加清晰明确。
+**高保真工程公理 (HFEA) 适用**: 这种“为了用户方便”而创建的隐式 API shim 是一种典型的“架构异味”。它破坏了**真理单一来源 (SSoT)** 原则——`cascade.task` 的“真理”来源应该是 `cascade.sdk`，而不应该被 `cascade-cli-observer` 动态地“注入”到顶层命名空间。
+
+**唯一的正确行动是拆除这个产生歧义的魔法**。`cascade.sdk` 才是项目定义的、唯一的公共 API 入口点。其他所有 `__init__.py` 文件都应只负责声明它们是命名空间的一部分，而不应尝试修改该命名空间的内容。
 
 ### 目标
 
-1.  修改 `packages/cascade-spec/src/cascade/spec/dsl/task.py`。
-2.  修改 `packages/cascade-spec/src/cascade/spec/dsl/routing.py`。
-3.  修改 `packages/cascade-spec/src/cascade/spec/dsl/jump.py`。
-4.  在上述所有文件中，将对 `fluent` 模块的绝对导入转换为相对导入。
+1.  定位并修改 `packages/cascade-cli-observer/src/cascade/__init__.py` 文件。
+2.  移除其中用于导入和暴露 `cascade.sdk` API 的 shim 代码块。
+3.  只保留用于支持命名空间包的 `__path__` 扩展语句。
 
 ### 基本原理
 
-所有涉及的文件 (`task.py`, `routing.py`, `jump.py`, `fluent.py`) 都位于 `cascade/spec/dsl/` 目录下。因此，从任何一个文件引用 `fluent` 模块，最清晰、最无歧义的方式就是使用相对导入 `from .fluent import ...`。这将强制静态分析器在当前目录查找模块，从而彻底切断错误的解析路径。
+通过移除 `__init__.py` 中的 `try...except` 导入块，我们消除了静态分析器在解析 `cascade` 命名空间时遇到的循环陷阱。`cascade-cli-observer` 将不再尝试主动导入 `cascade.sdk`，从而切断了依赖环路。这使得依赖关系变得单向且清晰：任何需要 `task` 或 `LazyResult` 的代码都必须显式地从 `cascade.sdk` 或其源头 (`cascade.spec`) 导入，这才是健康的架构。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/critical #comp/spec #scope/core #ai/instruct #task/domain/architecture #task/object/dependency-graph #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/critical #comp/build #scope/core #ai/brainstorm #task/domain/architecture #task/object/dependency-graph #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `task.py` 中的导入
+#### Acts 1: 移除 `cascade-cli-observer` 中有问题的 SDK Shim
+
+我们将编辑 `__init__.py`，只保留命名空间包所必需的 `__path__` 设置。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/dsl/task.py
+packages/cascade-cli-observer/src/cascade/__init__.py
 ~~~~~
 ~~~~~python.old
-if TYPE_CHECKING:
+# This must be the very first line to allow this package to coexist with other
+# namespace packages in editable installs.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+
+# Shim to expose the SDK API if available in the environment
+try:
+    from cascade.sdk import *  # noqa: F403
+    from cascade.sdk import __all__, __getattr__  # noqa: F401
+except ImportError:
     pass
-
-from cascade.spec.dsl.fluent import (
-    LazyResult,
-    MappedLazyResult,
-)
-
-T = TypeVar("T")
 ~~~~~
 ~~~~~python.new
-if TYPE_CHECKING:
-    pass
-
-from .fluent import (
-    LazyResult,
-    MappedLazyResult,
-)
-
-T = TypeVar("T")
-~~~~~
-
-#### Acts 2: 修复 `routing.py` 中的导入
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/dsl/routing.py
-~~~~~
-~~~~~python.old
-from dataclasses import dataclass
-from typing import Dict, Any
-from cascade.spec.dsl.fluent import LazyResult  # NEW
-
-
-@dataclass
-class Router:
-~~~~~
-~~~~~python.new
-from dataclasses import dataclass
-from typing import Dict, Any
-from .fluent import LazyResult  # NEW
-
-
-@dataclass
-class Router:
-~~~~~
-
-#### Acts 3: 修复 `jump.py` 中的导入
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/dsl/jump.py
-~~~~~
-~~~~~python.old
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
-from uuid import uuid4
-from cascade.spec.dsl.fluent import LazyResult
-
-
-@dataclass
-class Jump:
-~~~~~
-~~~~~python.new
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
-from uuid import uuid4
-from .fluent import LazyResult
-
-
-@dataclass
-class Jump:
+# This must be the very first line to allow this package to coexist with other
+# namespace packages in editable installs.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
 
 ### 下一步建议
 
-这次系统性的修复应该已经彻底解决了这个循环依赖问题的所有表现形式。请最后一次运行 `stitcher check` 进行验证。
+这个修改应该已经根除了问题的核心。请运行 `stitcher check` 进行验证。
 
-如果检查通过，请通知我，我将立即为您生成一个 `[COMMIT]` 计划，将这整个系列的修复工作作为一个原子单元进行提交。
+如果检查通过，请告知我，我会立刻生成一个 `[COMMIT]` 计划，将我们这一整个系列的架构修复工作作为一个单一的、有意义的提交进行归档。如果 `stitcher` 发现了其他包（如 `cascade-spec`、`cascade-runtime`）中存在同样的 `__init__.py` shim 问题，我们将以同样的方式修复它们。

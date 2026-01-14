@@ -1,125 +1,63 @@
-You've cornered it now. This is the final layer of the same underlying issue. The problem is systemic within the `spec.dsl` subpackage, where multiple modules were using absolute imports to refer to their siblings.
+好的，我们已经系统地清理了 `cascade-spec` 包内的所有循环依赖风险点。现在我们将这些架构修复作为一个完整的逻辑单元提交。
 
-My apologies for not identifying all instances in the previous steps. Let's apply the principle systematically and resolve this for good.
-
-## [WIP] fix: Systematically resolve DSL intra-package import cycles
-
-### 错误分析
-
-我们再次遇到了由 `cascade-cli-observer` 触发的循环依赖。根本原因与前两次完全相同：`cascade-spec` 包内的模块（这次是 `task.py`, `routing.py`, 和 `jump.py`）使用了**绝对路径** (`from cascade.spec.dsl...`) 来导入同一目录下的兄弟模块 (`fluent.py`)。
-
-这种做法在复杂的命名空间包（Namespace Packages）结构中会混淆静态分析工具，导致它错误地重新从顶层 `cascade` 包（可能由 `cascade-cli-observer` 提供）开始解析，从而形成一个本不应存在的依赖环路。
+## [COMMIT] fix(spec): resolve circular dependencies by using relative imports and Any
 
 ### 用户需求
-
-彻底根除 `stitcher check` 报告的所有循环依赖问题。
+提交解决 `cascade-spec` 与 `cascade-execution-graph` 以及包内模块之间循环依赖的修复。
 
 ### 评论
-
-这是一个典型的架构一致性问题。我们已经确立了修复原则——“在包内使用相对导入”——但没有将其应用到所有相关文件中。这次我们将进行一次彻底的清理，将 `spec.dsl` 子包内所有对兄弟模块的引用都转换为相对导入。这将确保静态分析的健壮性，并使代码库的依赖关系更加清晰明确。
+这是一次重要的架构清理。通过将 `spec` 层对遗留实现层的依赖泛化为 `Any`，并强制在 `spec` 包内部使用相对导入，我们彻底消除了命名空间解析产生的歧义。这不仅解决了当前的 `stitcher check` 报错，也显著增强了底层规范包的健壮性和纯净度，防止未来再次出现类似的依赖塌陷。
 
 ### 目标
-
-1.  修改 `packages/cascade-spec/src/cascade/spec/dsl/task.py`。
-2.  修改 `packages/cascade-spec/src/cascade/spec/dsl/routing.py`。
-3.  修改 `packages/cascade-spec/src/cascade/spec/dsl/jump.py`。
-4.  在上述所有文件中，将对 `fluent` 模块的绝对导入转换为相对导入。
+1.  将修改过的所有 `cascade-spec` 文件添加到 Git 暂存区。
+2.  创建一个详尽的提交记录，说明修复的原理和必要性。
 
 ### 基本原理
-
-所有涉及的文件 (`task.py`, `routing.py`, `jump.py`, `fluent.py`) 都位于 `cascade/spec/dsl/` 目录下。因此，从任何一个文件引用 `fluent` 模块，最清晰、最无歧义的方式就是使用相对导入 `from .fluent import ...`。这将强制静态分析器在当前目录查找模块，从而彻底切断错误的解析路径。
+我们遵循了“底层包不感知实现层”和“包内引用优先使用相对路径”的原则。这些原则确保了即使在复杂的 Monorepo 和命名空间包环境下，静态分析工具也能准确、高效地解析依赖关系，而不会被路径重叠所误导。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/critical #comp/spec #scope/core #ai/instruct #task/domain/architecture #task/object/dependency-graph #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/spec #scope/core #ai/instruct #task/domain/architecture #task/object/dependency-graph #task/action/refactor #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `task.py` 中的导入
+#### Acts 1: 提交架构修复
+
+我们将所有受影响的文件添加到暂存区并创建提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/runtime/interfaces.py
+packages/cascade-spec/src/cascade/spec/dsl/fluent.py
 packages/cascade-spec/src/cascade/spec/dsl/task.py
-~~~~~
-~~~~~python.old
-if TYPE_CHECKING:
-    pass
-
-from cascade.spec.dsl.fluent import (
-    LazyResult,
-    MappedLazyResult,
-)
-
-T = TypeVar("T")
-~~~~~
-~~~~~python.new
-if TYPE_CHECKING:
-    pass
-
-from .fluent import (
-    LazyResult,
-    MappedLazyResult,
-)
-
-T = TypeVar("T")
-~~~~~
-
-#### Acts 2: 修复 `routing.py` 中的导入
-
-~~~~~act
-patch_file
 packages/cascade-spec/src/cascade/spec/dsl/routing.py
-~~~~~
-~~~~~python.old
-from dataclasses import dataclass
-from typing import Dict, Any
-from cascade.spec.dsl.fluent import LazyResult  # NEW
-
-
-@dataclass
-class Router:
-~~~~~
-~~~~~python.new
-from dataclasses import dataclass
-from typing import Dict, Any
-from .fluent import LazyResult  # NEW
-
-
-@dataclass
-class Router:
-~~~~~
-
-#### Acts 3: 修复 `jump.py` 中的导入
-
-~~~~~act
-patch_file
 packages/cascade-spec/src/cascade/spec/dsl/jump.py
 ~~~~~
-~~~~~python.old
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
-from uuid import uuid4
-from cascade.spec.dsl.fluent import LazyResult
 
-
-@dataclass
-class Jump:
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
-from uuid import uuid4
-from .fluent import LazyResult
+~~~~~text
+fix(spec): resolve circular dependencies and namespace resolution cycles
 
+This commit addresses several critical circular dependency issues identified by 'stitcher check'.
 
-@dataclass
-class Jump:
+1. Decoupled 'cascade-spec' from 'cascade-execution-graph':
+   Modified 'interfaces.py' to use 'Any' instead of importing 'Graph' and 'Node' from the legacy execution-graph package. This restores the correct architectural hierarchy where the specification layer has zero knowledge of its implementations.
+
+2. Fixed Namespace Package Resolution Cycles:
+   Converted all absolute imports within the 'cascade.spec.dsl' subpackage to relative imports. Using absolute imports (e.g., 'from cascade.spec.dsl.fluent import ...') within a namespace package can lead static analysis tools to incorrectly re-parse the entire namespace starting from other packages (like 'cascade-cli-observer'), creating false dependency loops.
+
+Files updated to use relative imports:
+- fluent.py
+- task.py
+- routing.py
+- jump.py
+
+These changes ensure a clean, acyclic dependency graph and improve the reliability of static analysis in complex development environments.
 ~~~~~
 
 ### 下一步建议
-
-这次系统性的修复应该已经彻底解决了这个循环依赖问题的所有表现形式。请最后一次运行 `stitcher check` 进行验证。
-
-如果检查通过，请通知我，我将立即为您生成一个 `[COMMIT]` 计划，将这整个系列的修复工作作为一个原子单元进行提交。
+- **回归检查**: 运行所有测试套件以确保导入方式的变更没有影响运行时的热加载或插件机制。
+- **文档更新**: 可以在内部开发文档中增加关于“包内导入必须使用相对路径”的指导原则，防止未来再次引入类似问题。

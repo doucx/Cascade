@@ -7,7 +7,7 @@
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector": {
       "baseline_code_signature_text": "class MqttConnector:",
       "baseline_code_structure_hash": "bd6f055a789523956792cb0d8f9c1a46acdb1f08d1d0d111409f50f034fca773",
-      "baseline_yaml_content_hash": "193bf19c4d9f5c64ffbdfa72d2d8f90f9dc63959ff8651864002c4b13a341c3c"
+      "baseline_yaml_content_hash": "440ff0e2632ac0ebfa56041d4834dccb635530fce6d45064d4b2806cdaa31f00"
     },
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector.__init__": {
       "baseline_code_signature_text": "def __init__(self, hostname: str, port: int = 1883, **kwargs = {}):",
@@ -18,37 +18,37 @@
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector._message_loop": {
       "baseline_code_signature_text": "async def _message_loop(self):",
       "baseline_code_structure_hash": "f4bcd487ca0b894f1871b0fe291e57de39372b586be08adf86051b47bd872984",
-      "baseline_yaml_content_hash": "b495281eef6339cf4e51e54f1b8759bafee1c89f67a0a3b5dc3fd20bae7e14c2"
+      "baseline_yaml_content_hash": "1d024029b052b12ae7531fed223802eec68125f26fc71fe8dbf0b26041a3935c"
     },
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector._source_id": {},
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector._subscriptions": {},
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector._topic_matches": {
       "baseline_code_signature_text": "def _topic_matches(subscription: str, topic: str) -> bool:",
       "baseline_code_structure_hash": "364368f2b303a3c1308fd43d9e8d1a833c90bb8bd8f5f393b27680394ee29f67",
-      "baseline_yaml_content_hash": "bf5326dfadc6969751802dcb1508fcac7d679120ab447845ff26906d0b372dcb"
+      "baseline_yaml_content_hash": "f72fac96c6e0b7fca6e3b68369ac1b4bc81faa3039a520ec87a7600e12d0639d"
     },
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector.client_kwargs": {},
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector.connect": {
       "baseline_code_signature_text": "async def connect(self) -> None:",
       "baseline_code_structure_hash": "2ee85c950427d812bd0d9f58ac0d3106ee4fab5647f8bfa600b5aa45efa28869",
-      "baseline_yaml_content_hash": "0841bcd8c36124a166b16e2f367b5501a00b0c104883ffb4409d9cd166b60529"
+      "baseline_yaml_content_hash": "0e3f360159865c6dcde3c6578a26fd78d5f56a26e1a38204d13860cce96356be"
     },
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector.disconnect": {
       "baseline_code_signature_text": "async def disconnect(self) -> None:",
       "baseline_code_structure_hash": "5cb5a725bc2266bd83ffa2d30312eb2bb861f0934cbf1791166722c3e9f5572b",
-      "baseline_yaml_content_hash": "2eb195e6492f08dd331807a79a3b0bcfd0b298cc8bd0afeb739f0cd480911fb2"
+      "baseline_yaml_content_hash": "a747ef8aa148058efbf002a4604795fd7201388ac66b117d238e6dd2ed6b8ff3"
     },
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector.hostname": {},
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector.port": {},
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector.publish": {
       "baseline_code_signature_text": "async def publish(self, topic: str, payload: Any, qos: int = 0, retain: bool = False) -> None:",
       "baseline_code_structure_hash": "2731780de702dde0101c29d54b0426ec7616e486bc563c8e99a48df0becd1a50",
-      "baseline_yaml_content_hash": "894b2a06e8699e09f8171c07b0cb1ca5a951c74e51427e41dca0aa765cd7f48d"
+      "baseline_yaml_content_hash": "17d48ffdedcae3668748fc1394593508491d5ef064b2cb41a9f1557f4bfe581a"
     },
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#MqttConnector.subscribe": {
       "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",
       "baseline_code_structure_hash": "c2addf29fd60240c9ff8400c72be68453d50b874a54b87a5fba2cd3b64ad5e02",
-      "baseline_yaml_content_hash": "0084f24434d3d9f76c211fdfc62185dd61e834460fa14f3814e26e92554aa249"
+      "baseline_yaml_content_hash": "115496c47385916600a20f8f9bf52f55322eab1f1f358dabdbdcda3febefd396"
     },
     "py://packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py#_MqttSubscriptionHandle": {
       "baseline_code_signature_text": "class _MqttSubscriptionHandle(SubscriptionHandle):",
@@ -68,32 +68,32 @@
     "py://packages/cascade-connector-mqtt/tests/unit/conftest.py#mock_aiomqtt_module": {
       "baseline_code_signature_text": "def mock_aiomqtt_module(mocker):",
       "baseline_code_structure_hash": "91050b17f763959db5a3a292ee3e86db7299d4037a67afb5e324864c437b29df",
-      "baseline_yaml_content_hash": "165cd69998db949a2b5135dfab2ec306f2995303598eb0505a6593efa722c6ec"
+      "baseline_yaml_content_hash": "19cab1f47c9aa4b291bf4cacf2b34439f0edabdcde1570efde95b43918c24980"
     },
     "py://packages/cascade-connector-mqtt/tests/unit/test_connector.py#test_connect_and_disconnect_lifecycle": {
       "baseline_code_signature_text": "async def test_connect_and_disconnect_lifecycle(mock_aiomqtt_module, mocker):",
       "baseline_code_structure_hash": "21e19c7864c72ccc39c09d8193afaa7589b36b78bee79fa51f2e7426c1b84478",
-      "baseline_yaml_content_hash": "22327db9f5c9bac24ebfb54039ec952aafca8d9a8ef85054a89dc25db91251af"
+      "baseline_yaml_content_hash": "0f5afe99386a3e04188be3746def0cd30af696b34596349fbc34de916d4d1b5c"
     },
     "py://packages/cascade-connector-mqtt/tests/unit/test_connector.py#test_mqtt_connector_instantiation": {
       "baseline_code_signature_text": "def test_mqtt_connector_instantiation():",
       "baseline_code_structure_hash": "078efa98fbd3d10ecd9ca8f48d5fb5dfce1c93de1d98b053dab8e9a183c4d31c",
-      "baseline_yaml_content_hash": "f0f868fc0f1fd5dadeca58b2f7c93b6c70e3b10af73e4229df0d5044d85e89b1"
+      "baseline_yaml_content_hash": "a483a89a22ca41be60f3b5e376ac0989edc41cd8cd89039b736c27d3883a8152"
     },
     "py://packages/cascade-connector-mqtt/tests/unit/test_connector.py#test_publish_sends_json_and_is_fire_and_forget": {
       "baseline_code_signature_text": "async def test_publish_sends_json_and_is_fire_and_forget(mock_aiomqtt_module):",
       "baseline_code_structure_hash": "2023c05a234940cc0e8b82ce41cacd105959495b4fcc6f721cb73b475748a562",
-      "baseline_yaml_content_hash": "a1348c0416a05f5c576ef50fe49c9231ce1a1c231d1d21d296641d3c44390b60"
+      "baseline_yaml_content_hash": "0700d932116faf1c6df3b0daf963055c94aaf284bfb82e09a9017c56c860cc93"
     },
     "py://packages/cascade-connector-mqtt/tests/unit/test_connector.py#test_publish_without_connect_does_nothing": {
       "baseline_code_signature_text": "async def test_publish_without_connect_does_nothing(mock_aiomqtt_module):",
       "baseline_code_structure_hash": "42ccdb50a4aac52890405744b9ae2416a268c912019c00e823fe1e02aafec15a",
-      "baseline_yaml_content_hash": "f175943de27037809e398c9941c3a6516b5d7688b27e1397e415d4113383e546"
+      "baseline_yaml_content_hash": "d64ad2cd408c49716da9c09e994b17067ea985c65f2dad5f946ba3da68fd434e"
     },
     "py://packages/cascade-connector-mqtt/tests/unit/test_connector.py#test_subscribe_receives_messages": {
       "baseline_code_signature_text": "async def test_subscribe_receives_messages(mock_aiomqtt_module):",
       "baseline_code_structure_hash": "ef0eb8137ae0ffa43c4ad243641e397fc2bb3513c2b9b468c1a1d6696114eb10",
-      "baseline_yaml_content_hash": "784362ce5fd725ad44105da9100f3c6aa633cbcfdae726887d704d99c9169669"
+      "baseline_yaml_content_hash": "0c81f6110149e1728c2fa70289ae8eff238cec9f0ed3f14848af3c1856cb291e"
     }
   },
   "version": "1.0"

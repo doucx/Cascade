@@ -70,7 +70,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#ControllerTestApp": {
       "baseline_code_signature_text": "class ControllerTestApp:",
       "baseline_code_structure_hash": "42da5c04ee3a0dba89b6b1a3fd3d6e020b451c935d745173470cb27c03c47d79",
-      "baseline_yaml_content_hash": "b628b899644b9edd0197a0cd89877810a04b7f1f9e19705536647198dce1b97d"
+      "baseline_yaml_content_hash": "48e4bdb5174a2ee68bced009d1c1f5993d239782b5cb043be0817c2e23f583cf"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#ControllerTestApp.__init__": {
       "baseline_code_signature_text": "def __init__(self, connector: Connector):",
@@ -92,7 +92,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector": {
       "baseline_code_signature_text": "class MockConnector(Connector):",
       "baseline_code_structure_hash": "3ba9e18fb8ead40191505e988640250b00c74898af6263a0e92109d291502ab2",
-      "baseline_yaml_content_hash": "a14a00b10d5ec116e2b07e69017fcbf9b02108ab9f0734b36f610402301d691d"
+      "baseline_yaml_content_hash": "1dae5c1294214e533afa3b97289bfb9c4a7df362bc2c8c9736e0bd3212793c63"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.__init__": {
       "baseline_code_signature_text": "def __init__(self):",
@@ -105,7 +105,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector._trigger_message": {
       "baseline_code_signature_text": "async def _trigger_message(self, topic: str, payload: Dict[str, Any]):",
       "baseline_code_structure_hash": "a6e04c68274cca8a6dab38b3378967dd999f8cf04351a385b67ee2587bc625d4",
-      "baseline_yaml_content_hash": "fa574bd8f20ac2eacce95c38deb423e6b99334ca02fe562e634e6c1e4b10f243"
+      "baseline_yaml_content_hash": "2242070a848e9fae225445953d3e116c6de529f63dcf038da01455a43e2dca15"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.connect": {
       "baseline_code_signature_text": "async def connect(self) -> None:",
@@ -120,14 +120,14 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.publish": {
       "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False) -> None:",
       "baseline_code_structure_hash": "fffa806eb7ae282b4fdadb2aa14bf5887f8f964a3f437db025760cfd8a8d5c66",
-      "baseline_yaml_content_hash": "eb8d2b442816041fa59795395636abe5c6d55021d8e397f912ba80da8cbcc266"
+      "baseline_yaml_content_hash": "1c33a0492297fa82a1f964ec27f2c4fcd5d746566de8a5af9b7a0d754d475a64"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.publish_log": {},
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.retained_messages": {},
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.seed_retained_message": {
       "baseline_code_signature_text": "def seed_retained_message(self, topic: str, payload: Dict[str, Any]):",
       "baseline_code_structure_hash": "bba0745ad66b9f7f86e90f9ab86bf173aceda1c3f343a274bcb9e38ca682c949",
-      "baseline_yaml_content_hash": "b4610b15a72b7a94a2854c01f389ffe3e100804d512bc2bab0c3774a32781b91"
+      "baseline_yaml_content_hash": "a10ca1c93d7d21cc81a058038cabe668487c5f0d124e10dc1fb8bf1bc0c7cf9a"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.subscribe": {
       "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",
@@ -137,7 +137,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockExecutor": {
       "baseline_code_signature_text": "class MockExecutor(Executor):",
       "baseline_code_structure_hash": "56fff47aa6c9847eaa801ef284d45868e626344e6451f9003e3df8cd6c122e2b",
-      "baseline_yaml_content_hash": "57ef73fe14a2dc9ed6b4c3c257b4a0fd0296ac84cce6daa1d9bf1cc193aadd9d"
+      "baseline_yaml_content_hash": "88d4e010f321f1c23cdf33a3efa774d4c1a4401452f5932b10180e2c884fd34d"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockExecutor.__init__": {
       "baseline_code_signature_text": "def __init__(self, delay: float = 0, return_value: Any = 'result'):",
@@ -152,7 +152,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSolver": {
       "baseline_code_signature_text": "class MockSolver(Solver):",
       "baseline_code_structure_hash": "f8bf3703d2e7600f4ed746182aa3470652957d17edd9a402139918c1614ae73f",
-      "baseline_yaml_content_hash": "57f4990e1b39b9c5c3acc72a68387346f34c38bf73a06cba3e1d798b7d59ddaf"
+      "baseline_yaml_content_hash": "a8424d6a35e67cc58e29c81a306d8b4822b95342e54f0e4a77d44fd61f6a027b"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSolver.__init__": {
       "baseline_code_signature_text": "def __init__(self, plan: ExecutionPlan):",
@@ -180,7 +180,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpyExecutor": {
       "baseline_code_signature_text": "class SpyExecutor(Executor):",
       "baseline_code_structure_hash": "fcbfacd05d4d6779d34bef60a20a85180845f165fa475b86be446e59b67ac204",
-      "baseline_yaml_content_hash": "74c48ffa3a5da4a617000d5d534207e276ee016eb1c7d56b257d0f32b3f0b8d9"
+      "baseline_yaml_content_hash": "d201cc9371c052f7f2934e75434e33b11ccf2f4ca3b75f54c89bdd02abf8b534"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpyExecutor.__init__": {
       "baseline_code_signature_text": "def __init__(self):",
@@ -194,7 +194,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySolver": {
       "baseline_code_signature_text": "class SpySolver(Solver):",
       "baseline_code_structure_hash": "8946c53be7bc03fb74e6d8ed4fa5baf73e0aa1aff0161bb4e46692350f0c0f02",
-      "baseline_yaml_content_hash": "0338c93b6e412a98b2e158ff085289c1a2ea5585ca35cebc6041f3b97c7e743c"
+      "baseline_yaml_content_hash": "5d6ef130b768abc962d7abb0319fa715bec7f85dc0837d5276d9fc4ab618b222"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySolver.__init__": {
       "baseline_code_signature_text": "def __init__(self, underlying_solver: Solver):",
@@ -208,7 +208,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySubscriber": {
       "baseline_code_signature_text": "class SpySubscriber:",
       "baseline_code_structure_hash": "f78a4cefa770e42253a1527794680173f75a442537cf034e36adb533a94ce882",
-      "baseline_yaml_content_hash": "c38faf2934fb0cf72b9c723a7b6cc0730c57e27408bfd4adaf2b92fcaf4d695b"
+      "baseline_yaml_content_hash": "5071b061d658456e4838c05c94ee31ec5d8a2e873d2c8dc2dbc34c05f6fdb29a"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySubscriber.__init__": {
       "baseline_code_signature_text": "def __init__(self, bus: EventBus):",
@@ -222,7 +222,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySubscriber.events_of_type": {
       "baseline_code_signature_text": "def events_of_type(self, event_type):",
       "baseline_code_structure_hash": "191c2fd44c193d6caf8694f764d7ba694809e6f8505c88c331fdb58a08ba8558",
-      "baseline_yaml_content_hash": "d208020df868688d8fffced12fb29fe9e6908d08f026b4da5eec304fdb757a99"
+      "baseline_yaml_content_hash": "b367c126858cd4027f60756ebda4dfa986e977683feb5f6ae0069f02eb209597"
     },
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#TimedMockExecutor": {
       "baseline_code_signature_text": "class TimedMockExecutor(LocalExecutor):",
@@ -241,7 +241,7 @@
     "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#override_resource": {
       "baseline_code_signature_text": "def override_resource(engine: Engine, name: str, new_resource_func: Callable[[], Any]):",
       "baseline_code_structure_hash": "8ea5effc00233918706c1f47ca08a5994e229e50505d8abaab84129f15c7613a",
-      "baseline_yaml_content_hash": "932b22888c00cdf70b11aef13d71f64faa42b8626587592469a9e8b0dea3fad0"
+      "baseline_yaml_content_hash": "fd6fb96ccb42295aa7f47dc3ba59a57d60cc2f2305687178871986ed8bf57ff1"
     }
   },
   "version": "1.0"

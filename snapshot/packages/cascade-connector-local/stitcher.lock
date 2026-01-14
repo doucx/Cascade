@@ -7,7 +7,7 @@
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector": {
       "baseline_code_signature_text": "class LocalBusConnector(Connector):",
       "baseline_code_structure_hash": "35be0ecf1b9541a06207710b612acedfe9f1ced897453abcbc419e933e6713a3",
-      "baseline_yaml_content_hash": "2c1f6e988d8e42253fb957d6bfe17d8c11cc5ed628fa3eea088a3e91fd55c290"
+      "baseline_yaml_content_hash": "532703170f708e694571efaf9936ae7ed36f311b08c4443bd3c2c8fe7a0823b6"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector.__init__": {
       "baseline_code_signature_text": "def __init__(self):",
@@ -17,26 +17,26 @@
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._get_lock": {
       "baseline_code_signature_text": "def _get_lock(cls) -> asyncio.Lock:",
       "baseline_code_structure_hash": "66cd40ea38ff46da03aeaa24ed02d302510cf2be1f8d7c71a84ab6a24471aa70",
-      "baseline_yaml_content_hash": "4b69d2bed8c17458f0c041f120da42515c4dfa5417161333d5983772f98c8fd7"
+      "baseline_yaml_content_hash": "e734de2e7ee9f79130141054107cbd58e24c786d66481f7fc609e03a2bda1509"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._is_connected": {},
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._listener_loop": {
       "baseline_code_signature_text": "async def _listener_loop(self, queue: asyncio.Queue, callback):",
       "baseline_code_structure_hash": "b1e312b3c929aabf1bacc47a3cdb9959490f9b9210e03079e9145d3d576ea140",
-      "baseline_yaml_content_hash": "08fae2514f3fda3b23320c9f090ebfcee57bb394c8bdd051bd5a4498cc46df9c"
+      "baseline_yaml_content_hash": "391491473da3c24bf3d1b70af37b5ee663684d048b85a028d0f58217d574b9ab"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._listener_tasks": {},
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._lock": {},
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._reset_broker_state": {
       "baseline_code_signature_text": "def _reset_broker_state(cls):",
       "baseline_code_structure_hash": "ee4fa8baee64b14c40ab55841fa834fd816ebb5a2209d3c3916396f4e869014b",
-      "baseline_yaml_content_hash": "e30cb96a53460e0ed7a08525a5f300b9abda9371f4f72c1da5e4119e06267586"
+      "baseline_yaml_content_hash": "872e3362e78233ce7ebb41f64a74d8cd1b83323c0222f5f63f9ec1ee4b2967cd"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._retained_messages": {},
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._topic_matches": {
       "baseline_code_signature_text": "def _topic_matches(subscription: str, topic: str) -> bool:",
       "baseline_code_structure_hash": "364368f2b303a3c1308fd43d9e8d1a833c90bb8bd8f5f393b27680394ee29f67",
-      "baseline_yaml_content_hash": "bf5326dfadc6969751802dcb1508fcac7d679120ab447845ff26906d0b372dcb"
+      "baseline_yaml_content_hash": "f72fac96c6e0b7fca6e3b68369ac1b4bc81faa3039a520ec87a7600e12d0639d"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector._wildcard_subscriptions": {},
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#LocalBusConnector.connect": {
@@ -58,7 +58,7 @@
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#_LocalSubscriptionHandle": {
       "baseline_code_signature_text": "class _LocalSubscriptionHandle(SubscriptionHandle):",
       "baseline_code_structure_hash": "e041b4714d4cfa6317dc6352a5a3d0b3f615f7ec08d309588af9582e3cc7d03e",
-      "baseline_yaml_content_hash": "dfce1195a894b39135e28d794ca1ef75ffe29c2a02adf40d07a65fab71c38436"
+      "baseline_yaml_content_hash": "13d4a8161f2337e82b7a5d74d5c908e259b039087e3a8f6a13147577e704e067"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/bus.py#_LocalSubscriptionHandle.__init__": {
       "baseline_code_signature_text": "def __init__(self, parent: LocalBusConnector, topic: str, queue: asyncio.Queue, listener_task: asyncio.Task):",
@@ -143,7 +143,7 @@
     "py://packages/cascade-connector-local/src/cascade/connectors/local/connector.py#UDSServerProtocol": {
       "baseline_code_signature_text": "class UDSServerProtocol(asyncio.DatagramProtocol):",
       "baseline_code_structure_hash": "396dbd708c1cb516bd8d8b8dcd7df900689a5505a66eddfaf5d2b84a4fd9f519",
-      "baseline_yaml_content_hash": "b9f5b3ace5191be684e568cbb8cd23b3cd8c9346db556b8ffab9b7ecba69e449"
+      "baseline_yaml_content_hash": "125ff1b4cc302c70524d6a2810a97c693fa99f5df70cd16a3799090d59fd097c"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/connector.py#UDSServerProtocol.__init__": {
       "baseline_code_signature_text": "def __init__(self, on_recv: asyncio.Event):",
@@ -171,7 +171,7 @@
     "py://packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py#UdsTelemetryServer": {
       "baseline_code_signature_text": "class UdsTelemetryServer:",
       "baseline_code_structure_hash": "885f7109cf544106540d7d5ad68966d1678241873dcfe340586328e8500753ae",
-      "baseline_yaml_content_hash": "2b6cc17e098527fa4ee71cc1f4884afbb4a6b1225764cc1b255d2e9129058db2"
+      "baseline_yaml_content_hash": "875c9992af24706f54869863812f76cd46a19c139d370b7d8ec77fe968f70d97"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py#UdsTelemetryServer.__init__": {
       "baseline_code_signature_text": "def __init__(self, uds_path: str):",
@@ -181,44 +181,44 @@
     "py://packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py#UdsTelemetryServer._handle_client": {
       "baseline_code_signature_text": "async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):",
       "baseline_code_structure_hash": "198b49c3f7d2d4d7adc208f95889fae483cf2988fa22136c6817c6f7486d46c8",
-      "baseline_yaml_content_hash": "d6fa0e77a76b7bae5362c46e984104a562c7d82e019f1d5e22033d0f797b113f"
+      "baseline_yaml_content_hash": "42366b207d0e484ca6018dbd817d58b25486d1d2c7ac39159088be086b1c91c8"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py#UdsTelemetryServer._server": {},
     "py://packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py#UdsTelemetryServer.broadcast": {
       "baseline_code_signature_text": "async def broadcast(self, message: dict):",
       "baseline_code_structure_hash": "f9fff752ff9663999e210ac214c4fba6bb35d46bdf734e98106c24d0d4c42100",
-      "baseline_yaml_content_hash": "1933f98150107f4d54c7402baeb986f26e0c1e5cddf7334d69d515669bd752c3"
+      "baseline_yaml_content_hash": "c1fc9cadd299ded4beaa82cf7786a5809a06cce1cb0a55f6d8b7a3a2f10e01bb"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py#UdsTelemetryServer.start": {
       "baseline_code_signature_text": "async def start(self):",
       "baseline_code_structure_hash": "01bd28ff5579240e6ebe8db6a4c2f204b580caab1b80cdf9bebe5d15c8c71145",
-      "baseline_yaml_content_hash": "a333003349b42fbd783460c7cf3b5280a5f45d2991f9111a65f268ee5029a5bd"
+      "baseline_yaml_content_hash": "4ac45e5ef2fc32932d219480d1bf57f94d1ecbb30825e01ad77c2c79b71395fe"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py#UdsTelemetryServer.stop": {
       "baseline_code_signature_text": "async def stop(self):",
       "baseline_code_structure_hash": "1f48cfa7a71a5939b9aba2870a46be9200945a459b0585266da50079e8f6ddcf",
-      "baseline_yaml_content_hash": "ba5977a86960ac14d830f33f9b39e26a9b8e30147597d4464a71c74c67005251"
+      "baseline_yaml_content_hash": "7c0752fd4abd2b729765e09feae0fd864fad7e7aa281658182adb20495cb5367"
     },
     "py://packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py#UdsTelemetryServer.uds_path": {},
     "py://packages/cascade-connector-local/tests/integration/test_local_connector.py#local_bus": {
       "baseline_code_signature_text": "def local_bus():",
       "baseline_code_structure_hash": "5386049f6b7a41cce8f0c909ac54e96ee0c99fac3b9af3c67b1319a7064558aa",
-      "baseline_yaml_content_hash": "6511b343139c15021569ddbc0acfd0492d34a005974708e755c63ee15e9da183"
+      "baseline_yaml_content_hash": "de8dc30d390369fa2a8cdce6e45853519cf86b2cb87741de2563c99cf505ff6b"
     },
     "py://packages/cascade-connector-local/tests/integration/test_local_connector.py#test_bus_connectivity_between_instances": {
       "baseline_code_signature_text": "async def test_bus_connectivity_between_instances(local_bus):",
       "baseline_code_structure_hash": "f5797f77a2c9198794d552580884c450d48c9fe6d9171cb4baf0c50d9114d529",
-      "baseline_yaml_content_hash": "7ad1cdb0d87171df57bcab4a0301a130bcad66d491ae24ef68f2e16907939034"
+      "baseline_yaml_content_hash": "43b0234c91a7916d2c8508c8be3f39743b807449a70c38c2995265442e72525a"
     },
     "py://packages/cascade-connector-local/tests/integration/test_local_connector.py#test_retained_messages": {
       "baseline_code_signature_text": "async def test_retained_messages(local_bus):",
       "baseline_code_structure_hash": "655c02da6edef891d46ae2f47619e408e0bbe2134b01d6448195d72ee4806369",
-      "baseline_yaml_content_hash": "cf25be2b0aa883fead93d7316251292348574efe3198905edc1528bfa2b1183d"
+      "baseline_yaml_content_hash": "11a2666d67ba8ebc0dfddd2f50c90094eb6961796e9b80de2ad03fb8eefdfcb7"
     },
     "py://packages/cascade-connector-local/tests/integration/test_local_connector.py#test_wildcards_and_clearing_retain": {
       "baseline_code_signature_text": "async def test_wildcards_and_clearing_retain(local_bus):",
       "baseline_code_structure_hash": "341d3f6a8abdb7dad3255950f468c8ee896e72f3baf727f598d1a3c551c89930",
-      "baseline_yaml_content_hash": "ccaf4673fdbd7f2a55fcb84f0f87b1c8ad803f34373d6999a9a7e2568ed0c61e"
+      "baseline_yaml_content_hash": "a2ce7367d03cb3232283cf0a9586304901002480387711fde39334885b89f945"
     }
   },
   "version": "1.0"

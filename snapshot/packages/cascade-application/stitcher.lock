@@ -4,7 +4,7 @@
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp": {
       "baseline_code_signature_text": "class CascadeApp:",
       "baseline_code_structure_hash": "9720e3aaae0fbec0bf1008f89953fa7942e02a18c7abed1a4eb66935c11cd679",
-      "baseline_yaml_content_hash": "b3520f79b9b6da64cabe7665b97ccbfa5773ba3f6911c38866f4360593ab05e5"
+      "baseline_yaml_content_hash": "f01e897c78c069fad47b5835157b6d6f1b91296df196900885d151ab457e7cf9"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.__init__": {
       "baseline_code_signature_text": "def __init__(self, target: Union[LazyResult, List[Any], Tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None):",
@@ -14,7 +14,7 @@
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.dry_run": {
       "baseline_code_signature_text": "def dry_run(self) -> None:",
       "baseline_code_structure_hash": "491bc3afe244751cf7a0504e2074c1e63f625da8700807dc3e2e08c103813ddc",
-      "baseline_yaml_content_hash": "9fa676fe1392b880d2e60c169e03aa3800c8101e8106142bc67d3d994bf2ae33"
+      "baseline_yaml_content_hash": "49db27aa057814db08f934ae490b7b45476535fff27afcdfdd179b8d675ecbef"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.engine": {},
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.event_bus": {},
@@ -26,7 +26,7 @@
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.run": {
       "baseline_code_signature_text": "def run(self) -> Any:",
       "baseline_code_structure_hash": "8f1710dd2fa4060b644ec50de7354d0fcbab022690385dc05530f9098cce2bce",
-      "baseline_yaml_content_hash": "d306b5a0657bf726f3379f5dec9e54bcdc1fd36e9be33d9fe334f401ef51bc37"
+      "baseline_yaml_content_hash": "cbe2e34b5bdd8bc8dd0eb7d3172f6aa6af8b4b18528d649e4e7576671b13d25a"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.sb_factory": {},
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.solver": {},
@@ -35,13 +35,13 @@
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.visualize": {
       "baseline_code_signature_text": "def visualize(self) -> str:",
       "baseline_code_structure_hash": "1f0b0ca039b1719081729287e03d3f990b817d0186b2494c3dbba1aa3dcb2bc1",
-      "baseline_yaml_content_hash": "85fc40663a40146ea4d44c8e009a751f65cfb1b79d763d69b432f963ab0aca84"
+      "baseline_yaml_content_hash": "62b5275310bbcf207d40ba9e00cdf6fa9fbaa164cca711942c8b4a77e66b2d87"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.workflow_target": {},
     "py://packages/cascade-application/src/cascade/app/__init__.py#DryRunConsoleSubscriber": {
       "baseline_code_signature_text": "class DryRunConsoleSubscriber:",
       "baseline_code_structure_hash": "cd26ff312b39c1d2980c3d1b7de6b64f365a409f3c5901038c2a81cd3b176187",
-      "baseline_yaml_content_hash": "92b2b5d2a5642e20775d1bbe90bcbef117575bf9f7b5029bdea0f5fa5ee039e9"
+      "baseline_yaml_content_hash": "6a8b3e45455c2b811ccb3ec0384a57308b47d45ebea8a008cd767559e2d41548"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#DryRunConsoleSubscriber.__init__": {
       "baseline_code_signature_text": "def __init__(self, bus: EventBus):",
@@ -66,27 +66,27 @@
     "py://packages/cascade-application/src/cascade/app/__init__.py#_get_node_shape": {
       "baseline_code_signature_text": "def _get_node_shape(node: Node) -> str:",
       "baseline_code_structure_hash": "4021344cae574d5f3c18470df50bb60fe42dd95a111dfc016d5633d06e566af4",
-      "baseline_yaml_content_hash": "0ac2e3d86f5e87af2feb37e44c8d8fc6115166127425b8c9909fb063ac244250"
+      "baseline_yaml_content_hash": "a07b473888f08199819e6434deaf361462674032dc6775e56f8d6930f2042e06"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#_internal_gather": {
       "baseline_code_signature_text": "def _internal_gather(*args: Any = ()) -> Any:",
       "baseline_code_structure_hash": "ece9f6e336b8a654bdd08585147b22f87ab7960d29a36fc76b83357304833a44",
-      "baseline_yaml_content_hash": "05ce77832e5f72a99990fa7531e4e48721aa54af1018a1e9c233f195532293f0"
+      "baseline_yaml_content_hash": "ab8b0d5f61a0c85d81b8cd328a1bd0050ed42d155bf98284bd3ad8088f7ee02b"
     },
     "py://packages/cascade-application/tests/integration/test_app_tools.py#test_app_dry_run_diamond_workflow": {
       "baseline_code_signature_text": "def test_app_dry_run_diamond_workflow(capsys):",
       "baseline_code_structure_hash": "ab7569b4f78f0855ce306a006cca8260b7ec60ffd545b03acad468cc1e202273",
-      "baseline_yaml_content_hash": "e5c650d86f93755359e70f533e84e3ff22ec2887943a8ac38b4d90c01bbec062"
+      "baseline_yaml_content_hash": "db4e589d9aa466748659aad9ae4098e6243dc9e5e496e032d160b8479062c053"
     },
     "py://packages/cascade-application/tests/integration/test_app_tools.py#test_app_dry_run_linear_workflow": {
       "baseline_code_signature_text": "def test_app_dry_run_linear_workflow(capsys):",
       "baseline_code_structure_hash": "e2cdd492d70398dcec3c80708aa05f9d9715b8f53048a8dcd000840a9a5bce20",
-      "baseline_yaml_content_hash": "5162859e8a825a5da0e1f25e1effb09ed462756729f36afdc71e57555ee98f70"
+      "baseline_yaml_content_hash": "7d9efb444e64c6a4fd72f493a4bebe13590b56440b1c94897e187fd536ec78aa"
     },
     "py://packages/cascade-application/tests/integration/test_app_tools.py#test_app_dry_run_with_list_input": {
       "baseline_code_signature_text": "def test_app_dry_run_with_list_input(capsys):",
       "baseline_code_structure_hash": "a6694a937f6b0e8cf2acf4f327fb94a0ec6a19c09ed09ed22cbb9905d0cdb997",
-      "baseline_yaml_content_hash": "dfde50547c35a34a97f8852444955dc00c5fea7413ef4042589640b1a367d428"
+      "baseline_yaml_content_hash": "281d92995be36e7ff7ab58ed5db89b3ee06c1c2e9df69b9b0a8b780737a98a5a"
     }
   },
   "version": "1.0"

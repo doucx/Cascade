@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from cascade.spec.runtime.interfaces import CachePolicy
+    from ..runtime.interfaces import CachePolicy
 
 # Forward reference for ResourceConstraint
 T = TypeVar("T")

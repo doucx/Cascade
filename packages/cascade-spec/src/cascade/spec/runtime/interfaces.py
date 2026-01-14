@@ -10,21 +10,24 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from cascade.execution.graph.model.model import Graph, Node
+    # Avoid circular dependency with implementation-heavy contexts
+    # These will be passed as 'Any' or via Generic types in the implementation
+    pass
 
 # An execution plan is a list of stages, where each stage is a list of nodes
 # that can be executed in parallel.
-ExecutionPlan = List[List["Node"]]
+# We use Any for Node/Graph here to avoid a circular dependency with the legacy execution-graph package.
+ExecutionPlan = List[List[Any]]
 
 
 class Solver(Protocol):
-    def resolve(self, graph: "Graph") -> ExecutionPlan: ...
+    def resolve(self, graph: Any) -> ExecutionPlan: ...
 
 
 class Executor(Protocol):
     async def execute(
         self,
-        node: "Node",
+        node: Any,
         callable_obj: Callable,
         args: List[Any],
         kwargs: Dict[str, Any],

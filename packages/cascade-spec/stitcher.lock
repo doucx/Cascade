@@ -783,7 +783,7 @@
     },
     "py://packages/cascade-spec/src/cascade/spec/runtime/interfaces.py#Executor.execute": {
       "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
-      "baseline_code_structure_hash": "42c33adc443e46043352bc8c2c8f3dc4febb95531e696f8dc5fd657b4ef76d58",
+      "baseline_code_structure_hash": "58ec9a795d79958fbbfb66c8d9875f728aed7c69452f5f5735b9f4a44ccc301f",
       "baseline_yaml_content_hash": "a7fb80d6d498218c3bb88830a6915fffae2d7bf7698186338ef702cf858bfaa0"
     },
     "py://packages/cascade-spec/src/cascade/spec/runtime/interfaces.py#LazyFactory": {
@@ -812,7 +812,7 @@
     },
     "py://packages/cascade-spec/src/cascade/spec/runtime/interfaces.py#Solver.resolve": {
       "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
-      "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
+      "baseline_code_structure_hash": "8c185dda399d36601ab4e1ffccf7387a3e1ee777800b4371be098b9c70e92c5e"
     },
     "py://packages/cascade-spec/src/cascade/spec/runtime/interfaces.py#StateBackend": {
       "baseline_code_signature_text": "class StateBackend(Protocol):",

@@ -13,7 +13,7 @@ import inspect
 if TYPE_CHECKING:
     pass
 
-from cascade.spec.dsl.fluent import (
+from .fluent import (
     LazyResult,
     MappedLazyResult,
 )

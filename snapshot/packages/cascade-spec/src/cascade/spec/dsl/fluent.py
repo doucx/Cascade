@@ -50,7 +50,7 @@ class LazyResult(Generic[T]):
 
     def with_constraints(self, **kwargs) -> "LazyResult[T]":
         # Import internally to avoid circular dependency at module level
-        from cascade.spec.dsl.constraint import ResourceConstraint
+        from .constraint import ResourceConstraint
 
         self._constraints = ResourceConstraint(requirements=kwargs)
         return self
@@ -90,7 +90,7 @@ class MappedLazyResult(Generic[T]):
         return self
 
     def with_constraints(self, **kwargs) -> "MappedLazyResult[T]":
-        from cascade.spec.dsl.constraint import ResourceConstraint
+        from .constraint import ResourceConstraint
 
         self._constraints = ResourceConstraint(requirements=kwargs)
         return self

@@ -1,40 +1,34 @@
-Your analysis is sharp. The first fix exposed a deeper, more subtle circular dependency rooted in how Python's namespace packages are resolved by static analysis tools.
+You are absolutely right to keep digging. This is a classic "hydra" problem with dependency cycles; fixing one reveals another. My apologies for not catching this related issue in the same file.
 
-You've correctly identified the new error loop. Let's break it down.
+The pattern is identical to the last one. Let's eradicate it.
 
-## [WIP] fix: Resolve circular dependency between spec and execution-graph (Part 2)
+## [WIP] fix: Resolve circular dependency between spec and execution-graph (Part 3)
 
 ### 错误分析
 
-在修复了 `interfaces.py` 的直接反向依赖后，`stitcher` 工具揭示了第二个、更隐蔽的循环依赖。
+在修复了 `fluent.py` 中对 `interfaces` 的导入后，`stitcher` 又发现了同一个文件 (`fluent.py`) 中的另一个问题。
 
-1.  **起点**: `packages/cascade-cli-observer/src/cascade/__init__.py` 导入了 `cascade.sdk`。
-2.  **路径**: `sdk` -> `spec.dsl.task` -> `spec.dsl.fluent`。
-3.  **闭环点**: `packages/cascade-spec/src/cascade/spec/dsl/fluent.py` 文件中，有一行 `from cascade.spec.runtime.interfaces import CachePolicy`。
-4.  **根本原因**: 这是一个**命名空间解析环路**。当静态分析器在 `cascade-spec` 包内部处理这个绝对导入 `cascade.spec...` 时，它会从 `sys.path` 的根部重新查找 `cascade` 命名空间。由于 `cascade-cli-observer` 也在路径上，并且提供了一个 `cascade/__init__.py`，分析器可能会错误地将 `cascade-cli-observer` 作为 `cascade` 命名空间的起点，从而进入了 `__init__.py` -> `sdk` -> ... 的循环，最终回到 `fluent.py`。
-
-问题的核心是 `fluent.py` 中一个**包内**的依赖，却使用了**绝对路径**导入，这在复杂的命名空间包（Namespace Packages）场景下会给静态分析工具带来歧义。
+1.  **路径**: 依赖环路与之前完全相同 (`cli-observer` -> `sdk` -> `spec.dsl.task` -> `spec.dsl.fluent`).
+2.  **闭环点**: 环路现在闭合于 `fluent.py` 文件内部的 `with_constraints` 方法中，该方法使用了绝对路径导入 `from cascade.spec.dsl.constraint import ResourceConstraint`。
+3.  **根本原因**: 这与上一个问题是同一类错误。`fluent.py` 模块正在尝试导入同一个目录下的兄弟模块 `constraint.py`，但它使用了绝对路径。在复杂的命名空间包环境中，这再次误导了静态分析器，使其重新从顶层 `cascade` 包开始解析，从而触发了循环依赖。
 
 ### 用户需求
 
-继续解决 `stitcher check` 报告的循环依赖问题。
+彻底解决 `stitcher check` 报告的所有循环依赖问题。
 
 ### 评论
 
-这是一个典型的由命名空间包和静态分析工具交互产生的复杂问题。解决方案非常直接：当一个模块需要导入同一包内的另一个模块时，应优先使用**相对导入**（relative import）。
-
-相对导入的语法（如 `from ..runtime import ...`）明确地告诉 Python 解释器和静态分析器：“从当前位置开始查找，不要去 `sys.path` 里重新搜索顶级包”。这消除了路径解析的歧义，从而切断了错误的依赖环路。
+我们已经确定了根本的模式：在 `cascade-spec` 包内部，必须使用相对导入来引用包内的其他模块，以消除静态分析器的路径解析歧义。`fluent.py` 中 `with_constraints` 方法里的内部导入违反了这一原则。
 
 ### 目标
 
 1.  修改 `packages/cascade-spec/src/cascade/spec/dsl/fluent.py` 文件。
-2.  将对 `interfaces` 模块的绝对导入 `from cascade.spec.runtime.interfaces import CachePolicy` 更改为相对导入。
+2.  定位 `LazyResult.with_constraints` 和 `MappedLazyResult.with_constraints` 两个方法。
+3.  将其中的绝对导入 `from cascade.spec.dsl.constraint import ResourceConstraint` 更改为相对导入 `from .constraint import ResourceConstraint`。
 
 ### 基本原理
 
-`fluent.py` 位于 `cascade/spec/dsl/`。它需要导入的 `interfaces.py` 位于 `cascade/spec/runtime/`。从 `dsl` 目录出发，需要先向上返回到 `spec` 目录，然后再进入 `runtime` 目录。因此，正确的相对导入路径是 `..runtime.interfaces`。
-
-这个改动对运行时的功能没有影响，但对静态分析器至关重要，它能精确地表达模块间的真实物理关系，避免了命名空间解析的陷阱。
+`fluent.py` 和 `constraint.py` 位于同一个 `dsl` 目录中。使用点号 (`.`) 的相对导入 `from .constraint import ...` 是最直接、最无歧-义的方式，它明确指示 Python 解释器和静态分析工具在当前目录查找 `constraint` 模块，从而彻底切断了导致问题的外部解析路径。
 
 ### 标签
 
@@ -44,37 +38,50 @@ You've correctly identified the new error loop. Let's break it down.
 
 ### Script
 
-#### Acts 1: 将 `fluent.py` 中的绝对导入改为相对导入
+#### Acts 1: 将 `fluent.py` 内部的绝对导入改为相对导入
 
-我们将修改 `fluent.py`，使用相对路径来导入 `CachePolicy`，从而打破静态分析器发现的命名空间解析循环。
+我们将修改 `LazyResult` 和 `MappedLazyResult` 类中的 `with_constraints` 方法，将内部的绝对导入更改为相对导入。
 
 ~~~~~act
 patch_file
 packages/cascade-spec/src/cascade/spec/dsl/fluent.py
 ~~~~~
 ~~~~~python.old
-from typing import TypeVar, Generic, Any, Dict, Optional, List, TYPE_CHECKING
-from dataclasses import dataclass, field
-from uuid import uuid4
+    def with_constraints(self, **kwargs) -> "LazyResult[T]":
+        # Import internally to avoid circular dependency at module level
+        from cascade.spec.dsl.constraint import ResourceConstraint
 
-if TYPE_CHECKING:
-    from cascade.spec.runtime.interfaces import CachePolicy
-
-# Forward reference for ResourceConstraint
-T = TypeVar("T")
+        self._constraints = ResourceConstraint(requirements=kwargs)
+        return self
 ~~~~~
 ~~~~~python.new
-from typing import TypeVar, Generic, Any, Dict, Optional, List, TYPE_CHECKING
-from dataclasses import dataclass, field
-from uuid import uuid4
+    def with_constraints(self, **kwargs) -> "LazyResult[T]":
+        # Import internally to avoid circular dependency at module level
+        from .constraint import ResourceConstraint
 
-if TYPE_CHECKING:
-    from ..runtime.interfaces import CachePolicy
+        self._constraints = ResourceConstraint(requirements=kwargs)
+        return self
+~~~~~
 
-# Forward reference for ResourceConstraint
-T = TypeVar("T")
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/dsl/fluent.py
+~~~~~
+~~~~~python.old
+    def with_constraints(self, **kwargs) -> "MappedLazyResult[T]":
+        from cascade.spec.dsl.constraint import ResourceConstraint
+
+        self._constraints = ResourceConstraint(requirements=kwargs)
+        return self
+~~~~~
+~~~~~python.new
+    def with_constraints(self, **kwargs) -> "MappedLazyResult[T]":
+        from .constraint import ResourceConstraint
+
+        self._constraints = ResourceConstraint(requirements=kwargs)
+        return self
 ~~~~~
 
 ### 下一步建议
 
-这个改动应该已经解决了所有已知的循环依赖问题。请再次运行 `stitcher check` 进行最终验证。如果检查通过，我们可以将这一系列修复工作合并为一个 `[COMMIT]` 计划。
+这应该就是这个特定依赖环路的最后一个问题了。请再次运行 `stitcher check`。如果检查通过，请告知我，我将为您创建一个 `[COMMIT]` 计划来将这三次修复作为一个原子提交进行归档。

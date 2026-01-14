@@ -1,7 +1,0 @@
-{
-  "create_cli": {
-    "baseline_code_signature_text": "def create_cli(target: LazyResult[Any]) -> Callable[[], None]:",
-    "baseline_code_structure_hash": "ebabdee8721517ae2a197575654ff96732e9edb863ad9a460257041fd5252807",
-    "baseline_yaml_content_hash": "080c9143ea2f2026c4907fa0528e742784042ba058a1a9ad3897343d9da5bf80"
-  }
-}

@@ -1,0 +1,543 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-compiler/src/cascade/__init__.py#__path__": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/__init__.py#__all__": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/__init__.py#__all__": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/builder.py#Builder": {
+      "baseline_code_signature_text": "class Builder:",
+      "baseline_code_structure_hash": "0c5f51b328f06605c0ef6d561c791c2575f963aeceee4112de8d39b67206f62b",
+      "baseline_yaml_content_hash": "f38ae52d6643445f021eed09c94ad19218ca9616810416ad7c7745d38c3bd262"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/builder.py#Builder.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/builder.py#Builder._expander": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/builder.py#Builder._expansion_policies": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/builder.py#Builder._validator": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/builder.py#Builder._wiring_policies": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/builder.py#Builder.build": {
+      "baseline_code_signature_text": "def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> CompilationArtifact:",
+      "baseline_code_structure_hash": "60239dd10f9bbb76eeb5e85f6b3a90e972275767c00a69b95a51d805db89bed4",
+      "baseline_yaml_content_hash": "a00c9b9088c83b0b4a1283c241bfe0a040f9346cabc246e993995b69d5321a8c"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expander.py#Expander": {
+      "baseline_code_signature_text": "class Expander:",
+      "baseline_code_structure_hash": "f9c0b5d0763263bc2a032596291bb4e5d0b8f0a9b493b60b8e3dc7307b061e0a",
+      "baseline_yaml_content_hash": "dfa569357cdd9d6a06a5d37f960806f050d73aa66c9658b9508b31430cf3ca6f"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expander.py#Expander.expand_node": {
+      "baseline_code_signature_text": "def expand_node(self, node_ir: NodeIR) -> SubGraph:",
+      "baseline_code_structure_hash": "157833d1cf9adbf7be81fd8466fc7248a67384e1363fd5e50e312206f40c7081",
+      "baseline_yaml_content_hash": "054ea16e2bb5b0e0ccafc437b5eb19ae6d547adbc858c5fd89f6d29d0b028d3f"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext": {
+      "baseline_code_signature_text": "class ExpansionContext:",
+      "baseline_code_structure_hash": "beb3540e06c7074ac151bc4e9c197664e0a44a875c83911b8725c9937f0f8243"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.environment": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.graph_ir": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.physical_graph": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.subgraphs": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py#ExpansionContext.wire": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/control.py#ControlFlowExpansionPolicy": {
+      "baseline_code_signature_text": "class ControlFlowExpansionPolicy(ExpansionPolicy):",
+      "baseline_code_structure_hash": "ceb66e0e1dd94224bf8c4a83abf9dcaa8a72bbe532cb7c3251f306fa5ec7fc0b"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/control.py#ControlFlowExpansionPolicy.expand": {
+      "baseline_code_signature_text": "def expand(self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "9e6f7eb4babef76415c4ab2830113301f0c8f5a48717e271ebae724abb97f673"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/parameter.py#ParameterExpansionPolicy": {
+      "baseline_code_signature_text": "class ParameterExpansionPolicy(ExpansionPolicy):",
+      "baseline_code_structure_hash": "ec086ac290fb85bae4cab8392806c348736c06d13bea10a83df2819d31709c66"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/parameter.py#ParameterExpansionPolicy.expand": {
+      "baseline_code_signature_text": "def expand(self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "9e6f7eb4babef76415c4ab2830113301f0c8f5a48717e271ebae724abb97f673"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/pulse.py#PulseExpansionPolicy": {
+      "baseline_code_signature_text": "class PulseExpansionPolicy(ExpansionPolicy):",
+      "baseline_code_structure_hash": "7428aa8afc73e762b4c3f9eb0498731fa321e20b0452c6048df5cabd36056b6d"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/pulse.py#PulseExpansionPolicy.expand": {
+      "baseline_code_signature_text": "def expand(self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "9e6f7eb4babef76415c4ab2830113301f0c8f5a48717e271ebae724abb97f673"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/resource.py#ResourceExpansionPolicy": {
+      "baseline_code_signature_text": "class ResourceExpansionPolicy(ExpansionPolicy):",
+      "baseline_code_structure_hash": "10df1f5aef724cc8b21f99305c6e30825e7de23238635a8ef83b10a0821db25d"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/resource.py#ResourceExpansionPolicy.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/resource.py#ResourceExpansionPolicy._get_prism": {
+      "baseline_code_signature_text": "def _get_prism(self, type_name: str) -> ResourcePrism:",
+      "baseline_code_structure_hash": "5bef25d05adac35a9396f588be94ecd81ee08682d6df2b563887ea28648c3772"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/resource.py#ResourceExpansionPolicy._prisms": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/resource.py#ResourceExpansionPolicy.expand": {
+      "baseline_code_signature_text": "def expand(self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "9e6f7eb4babef76415c4ab2830113301f0c8f5a48717e271ebae724abb97f673"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidationError": {
+      "baseline_code_signature_text": "class GraphValidationError(ValueError):",
+      "baseline_code_structure_hash": "6c455821e4cbc96083cfbbf8b32e9a87a037b2c37fd397e3b780d1e0e703e43f",
+      "baseline_yaml_content_hash": "9538afec46a8e97ed69bf0d97146393798125e88d7ceaf431903706e45324d13"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator": {
+      "baseline_code_signature_text": "class GraphValidator:",
+      "baseline_code_structure_hash": "d02510bffb89dc37b87af1b2ce6545d8cc2b4c21af38f3b98bf2d954c2609b82",
+      "baseline_yaml_content_hash": "62aebc504201a3912b9d295e682c7fe80eb3f772f78d74feacbf9d8178cdf20b"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator._check_bipartite_rule": {
+      "baseline_code_signature_text": "def _check_bipartite_rule(self, graph: BipartiteGraph) -> None:",
+      "baseline_code_structure_hash": "58b7f6760a5751047ba0d9437e5b15cf570f87af1a501ffaab5889a4397f6b83",
+      "baseline_yaml_content_hash": "01b9d715357166fd9a4247dcd57f622009bbeb0a62dcb0a694836ef4d4073caf"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator._check_node_integrity": {
+      "baseline_code_signature_text": "def _check_node_integrity(self, graph: BipartiteGraph) -> None:",
+      "baseline_code_structure_hash": "6b5f4f7d84ec9ba0f9f4037b3c2f1a424de206b095fd179dc4a141c4abf7ccca",
+      "baseline_yaml_content_hash": "3d600b91a73c8e00305259439ecd8f6d5c71e92f250e3dbcfc3361206ed3fd65"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator._check_port_connectivity": {
+      "baseline_code_signature_text": "def _check_port_connectivity(self, graph: BipartiteGraph) -> None:",
+      "baseline_code_structure_hash": "09a46fce50c04ab1d488cf46bc3d0b0e44b7f16f12fc417a4fd2b3f1d9b83af5",
+      "baseline_yaml_content_hash": "568d658ceac8c9a7da01383998713188a626afe9701f8eb3df3cab2d83827bdc"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/validator.py#GraphValidator.validate": {
+      "baseline_code_signature_text": "def validate(self, graph: BipartiteGraph, graph_ir: GraphIR) -> None:",
+      "baseline_code_structure_hash": "bbd6e6c3de20663bb3e1b14b7c7c1abde88ee275cce532acc52c621035f8aafd",
+      "baseline_yaml_content_hash": "2a51207d96ff6c42cc914a4ba73cc467debb1340e460ff6ca957149fce56ecf7"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/__init__.py#__all__": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/context.py#WiringContext": {
+      "baseline_code_signature_text": "class WiringContext(ExpansionContext):",
+      "baseline_code_structure_hash": "6b5bb7ba018650ddbcd7ad7020e7055b715de346cc44ed688c97bcb2e7500687",
+      "baseline_yaml_content_hash": "a88b0443269946609d3b9f0b9634537002cffb8e7b25dd84db2e04e954aa487a"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/context.py#WiringContext.get_subgraph": {
+      "baseline_code_signature_text": "def get_subgraph(self, node_id: str) -> SubGraph:",
+      "baseline_code_structure_hash": "04c76c38d47c1c37d51bcaac9388d81b583fe806068976c3e6007a527a87cacb"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/context.py#WiringContext.register_subgraph": {
+      "baseline_code_signature_text": "def register_subgraph(self, node_id: str, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "14397e0976ad4d8a4993aff213a0da3442684cb390b587693b00300ac3714702"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#ArchitectureViolationError": {
+      "baseline_code_signature_text": "class ArchitectureViolationError(RuntimeError):",
+      "baseline_code_structure_hash": "39856b655ebcdaaa3bf4adecb1b9ea9f9843016de49c4cbeb3a0f3e339f2984c"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringError": {
+      "baseline_code_signature_text": "class WiringError(ValueError):",
+      "baseline_code_structure_hash": "cc7276f70e5fef9cb6814c31074a41eac7fbff5b65b83adbc67dea95f3830537",
+      "baseline_yaml_content_hash": "3b21916298700b03378d763810845d75f019d0c3b202fbb3e232a44611803906"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringHarness": {
+      "baseline_code_signature_text": "class WiringHarness:",
+      "baseline_code_structure_hash": "480ee354d64b04aa1154c6148b1a9ccdf8a4f77800769f4291f23fe0790216dc",
+      "baseline_yaml_content_hash": "5f8872b883492c222cbc8389b970af74d211107686dd4c98399cb319cf196b66"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringHarness.__init__": {
+      "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph):",
+      "baseline_code_structure_hash": "9e2ed3a8078baff441a4fc10e9fb372d16867e2c940ba1c7945117b2955f25dd"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringHarness._locked": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringHarness.add_node": {
+      "baseline_code_signature_text": "def add_node(self, node: PhysicsNode) -> None:",
+      "baseline_code_structure_hash": "91e5d5cfbd46cd95ff5922ccf06026addc16955271c646a8cfbea2cddb1299f9",
+      "baseline_yaml_content_hash": "5ed23b86c4ff81622f77aeff313f995ce6127b78225e7ad768338f9bb038dcfe"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringHarness.add_subgraph": {
+      "baseline_code_signature_text": "def add_subgraph(self, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "de07b162c458adb0539445d98ab1a91cc64215588d8ef956c44caeb25e283a15",
+      "baseline_yaml_content_hash": "eb655121247ef2b32cb741c50425ff364fc2580eab8123579bb16e4f0d6387ad"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringHarness.connect": {
+      "baseline_code_signature_text": "def connect(self, source_id: str, source_port: str, target_id: str, target_port: str) -> None:",
+      "baseline_code_structure_hash": "3e982a76dd0bf5d5e8a3047cc15674deea00746c24920e0a678077346368d3c6",
+      "baseline_yaml_content_hash": "14a3550b91fd1bb514f62e05697a2369c55d497709d812c07dc309044573857d"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringHarness.graph": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/harness.py#WiringHarness.lock": {
+      "baseline_code_signature_text": "def lock(self) -> None:",
+      "baseline_code_structure_hash": "63955423c0720e4d5d405ff5f19341231babbb6a1b0d0cca0655c100c208f98b",
+      "baseline_yaml_content_hash": "655edde6a3aa1ec52ec82b7fdc3414a3034c36f0347f9069d5bf061641409f3c"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/control.py#ControlFlowWiringPolicy": {
+      "baseline_code_signature_text": "class ControlFlowWiringPolicy(WiringPolicy):",
+      "baseline_code_structure_hash": "24b597f449bad25d5c30dfe4ed2d41e80b3ee8f38e3891f6d740d270cff06ce1"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/control.py#ControlFlowWiringPolicy.apply": {
+      "baseline_code_signature_text": "def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "eff3dd8900ac3bfb8492a3138311eb9594eab43ef6c18ebf1d19066a360889c2"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/control.py#ControlFlowWiringPolicy.setup_globals": {
+      "baseline_code_signature_text": "def setup_globals(self, ctx: WiringContext) -> None:",
+      "baseline_code_structure_hash": "ab3f95fe902aab22c577e918f1621ba155bbbffd6bbb829f6b082557249a11e4"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/observability.py#ObservabilityWiringPolicy": {
+      "baseline_code_signature_text": "class ObservabilityWiringPolicy(WiringPolicy):",
+      "baseline_code_structure_hash": "616f56b9d9942e6671801637d94ad0384cc9062ca1cd47eb58dfb536fe50c7d7"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/observability.py#ObservabilityWiringPolicy.apply": {
+      "baseline_code_signature_text": "def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "eff3dd8900ac3bfb8492a3138311eb9594eab43ef6c18ebf1d19066a360889c2"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/observability.py#ObservabilityWiringPolicy.setup_globals": {
+      "baseline_code_signature_text": "def setup_globals(self, ctx: WiringContext) -> None:",
+      "baseline_code_structure_hash": "ab3f95fe902aab22c577e918f1621ba155bbbffd6bbb829f6b082557249a11e4"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py#ParameterWiringPolicy": {
+      "baseline_code_signature_text": "class ParameterWiringPolicy(WiringPolicy):",
+      "baseline_code_structure_hash": "154fbd82245aea2f43adeda6c2fb07505270321aeec4bc051787d97708be2b0b"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py#ParameterWiringPolicy.apply": {
+      "baseline_code_signature_text": "def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "eff3dd8900ac3bfb8492a3138311eb9594eab43ef6c18ebf1d19066a360889c2"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py#ParameterWiringPolicy.setup_globals": {
+      "baseline_code_signature_text": "def setup_globals(self, ctx: WiringContext) -> None:",
+      "baseline_code_structure_hash": "ab3f95fe902aab22c577e918f1621ba155bbbffd6bbb829f6b082557249a11e4"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/pulse.py#PulseWiringPolicy": {
+      "baseline_code_signature_text": "class PulseWiringPolicy(WiringPolicy):",
+      "baseline_code_structure_hash": "4bf7789359cfb3a484fcfad1aedfc554c596109722488baf11623d39942850ae"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/pulse.py#PulseWiringPolicy.apply": {
+      "baseline_code_signature_text": "def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "eff3dd8900ac3bfb8492a3138311eb9594eab43ef6c18ebf1d19066a360889c2"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/pulse.py#PulseWiringPolicy.setup_globals": {
+      "baseline_code_signature_text": "def setup_globals(self, ctx: WiringContext) -> None:",
+      "baseline_code_structure_hash": "ab3f95fe902aab22c577e918f1621ba155bbbffd6bbb829f6b082557249a11e4"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/resource.py#ResourceWiringPolicy": {
+      "baseline_code_signature_text": "class ResourceWiringPolicy(WiringPolicy):",
+      "baseline_code_structure_hash": "8db0c72c236ebb24e6b4187d4bb7a4ab846ac9a8588f621cf0cf40c4b932cf4d"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/resource.py#ResourceWiringPolicy.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/resource.py#ResourceWiringPolicy._get_prism": {
+      "baseline_code_signature_text": "def _get_prism(self, type_name: str) -> ResourcePrism:",
+      "baseline_code_structure_hash": "5bef25d05adac35a9396f588be94ecd81ee08682d6df2b563887ea28648c3772"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/resource.py#ResourceWiringPolicy._prisms": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/resource.py#ResourceWiringPolicy.apply": {
+      "baseline_code_signature_text": "def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+      "baseline_code_structure_hash": "eff3dd8900ac3bfb8492a3138311eb9594eab43ef6c18ebf1d19066a360889c2"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/resource.py#ResourceWiringPolicy.setup_globals": {
+      "baseline_code_signature_text": "def setup_globals(self, ctx: WiringContext) -> None:",
+      "baseline_code_structure_hash": "ab3f95fe902aab22c577e918f1621ba155bbbffd6bbb829f6b082557249a11e4"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/prism.py#ResourcePrism": {
+      "baseline_code_signature_text": "class ResourcePrism(Protocol):",
+      "baseline_code_structure_hash": "511dd14ccdb22f06b624b8ac470942178f76d117437c280f3fa4bebb0427ac71",
+      "baseline_yaml_content_hash": "bd350df09ed6ab0d942352586b7c75763a7a93e65cc98fdf70da13bf645cd6bf"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/prism.py#ResourcePrism.ensure_globals": {
+      "baseline_code_signature_text": "def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None:",
+      "baseline_code_structure_hash": "549c282d25d6e9fbd39bcf4d04d3777826aff1f6767dc4a732ea9cb01018e814",
+      "baseline_yaml_content_hash": "db1a7a604c1698b3e5031412d85bbe7845e6fdda30644790c314bfdbe3570db5"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/prism.py#ResourcePrism.expand_task": {
+      "baseline_code_signature_text": "def expand_task(self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+      "baseline_code_structure_hash": "aa40b10ff59ea5538b1ed609587e32acd355622f724dc0bc971ea16f84ab4ca4",
+      "baseline_yaml_content_hash": "1dd16a4f36cd28fbf7e1c3cec2f0783aa3195c9b82c33d57a2b171cc033cc4bf"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/prism.py#ResourcePrism.wire_task": {
+      "baseline_code_signature_text": "def wire_task(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+      "baseline_code_structure_hash": "a4e7be0b39e4f6c0e2f6577c03810351994fb35434c98f143ad006d68c671d2c",
+      "baseline_yaml_content_hash": "63ca40486ec6c30c5230c1461c7da57f794cfda7a8d156225d44424c0f5acbb3"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py#DiscreteResourcePrism": {
+      "baseline_code_signature_text": "class DiscreteResourcePrism(ResourcePrism):",
+      "baseline_code_structure_hash": "ac993d0c2d360ae5e2d54112bd9b4e9045d2ea22aad1fb40869ca210773c22c1"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py#DiscreteResourcePrism.ensure_globals": {
+      "baseline_code_signature_text": "def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None:",
+      "baseline_code_structure_hash": "549c282d25d6e9fbd39bcf4d04d3777826aff1f6767dc4a732ea9cb01018e814"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py#DiscreteResourcePrism.expand_task": {
+      "baseline_code_signature_text": "def expand_task(self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+      "baseline_code_structure_hash": "aa40b10ff59ea5538b1ed609587e32acd355622f724dc0bc971ea16f84ab4ca4"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py#DiscreteResourcePrism.wire_task": {
+      "baseline_code_signature_text": "def wire_task(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+      "baseline_code_structure_hash": "a4e7be0b39e4f6c0e2f6577c03810351994fb35434c98f143ad006d68c671d2c"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/__init__.py#__all__": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#GenerationResult": {
+      "baseline_code_signature_text": "class GenerationResult:",
+      "baseline_code_structure_hash": "1f1dd23ba2bcfcf37c31954185ce0a58a42b64f29247e639bfabe65baf8d4006"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#GenerationResult.executables": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#GenerationResult.ir": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator": {
+      "baseline_code_signature_text": "class IRGenerator:",
+      "baseline_code_structure_hash": "c349a0a81f29e3ef931794257e32372a24f4e772879a4cac9320e9691e326b11",
+      "baseline_yaml_content_hash": "b6e6160e835701817185578205b61947fe8da611396c9d4e982d2f8d00598360"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator._collect_deps_map": {
+      "baseline_code_signature_text": "def _collect_deps_map(self, lr: Any) -> Dict[str, NodeIR]:",
+      "baseline_code_structure_hash": "118db130a0eed2b5e5e5c1dd553e082fefb2055fc33469e8e2d4419d1142a97c"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator._extract_retry_policy": {
+      "baseline_code_signature_text": "def _extract_retry_policy(self, lr: Any) -> Optional[Dict[str, Any]]:",
+      "baseline_code_structure_hash": "33d0d67bd58b6f24b8258acba0dda7bcf3677582820b975e413a9da491a6861f"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator._visit": {
+      "baseline_code_signature_text": "def _visit(self, obj: Any) -> Any:",
+      "baseline_code_structure_hash": "07198286dfb3008b7b43e29b034e88b1fe3e7ffa523e78cd87488b853120d998",
+      "baseline_yaml_content_hash": "fcca4b9f1d793cc7f7ad56d325e8f68693a54e61f2168e021acad864a624857a"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator._visit_lazy_result": {
+      "baseline_code_signature_text": "def _visit_lazy_result(self, lr: LazyResult) -> str:",
+      "baseline_code_structure_hash": "d5b56625b97c3ff4a3d85533c8d44d23ca32070ade206362c966db52384eefb1"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator._visit_mapped_result": {
+      "baseline_code_signature_text": "def _visit_mapped_result(self, lr: MappedLazyResult) -> str:",
+      "baseline_code_structure_hash": "c7ca6bd26eb88976054d65838b6d96ba46370c3ba201a7600522272d4beabccb"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator._visit_router": {
+      "baseline_code_signature_text": "def _visit_router(self, router: Router) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "e451a52a16446c7b9d6b2ec7dc741df117391dc4225f7d5c8aa299942965cae6"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator._visited": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator.analyzer": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator.executables": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator.generate": {
+      "baseline_code_signature_text": "def generate(self, target: Any) -> GenerationResult:",
+      "baseline_code_structure_hash": "4a977f8ce6328eff84a8d447ae9e39370e287c9bedc182685ac54d51982ba20c",
+      "baseline_yaml_content_hash": "778e27b1ef9507d95012db476354a960c1b0af82e1543a2b0e7044fce81a6fba"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator.hashing_service": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/frontend/generator.py#IRGenerator.nodes": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/__init__.py#__all__": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector": {
+      "baseline_code_signature_text": "class GraphInspector:",
+      "baseline_code_structure_hash": "ea99e85b890a95f0814eb82f9d95a697c1ca4c0a37fc5a1ea2fc204afd922d89"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.__init__": {
+      "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph):",
+      "baseline_code_structure_hash": "9e2ed3a8078baff441a4fc10e9fb372d16867e2c940ba1c7945117b2955f25dd"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.assert_connection": {
+      "baseline_code_signature_text": "def assert_connection(self, source_id: str, target_id: str, source_port: Optional[str] = None, target_port: Optional[str] = None) -> Channel:",
+      "baseline_code_structure_hash": "c4201f27a0c0eb2e9de1570dd01e90efe191f05c98668b0706eadd09f682a3ce"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.assert_node_exists": {
+      "baseline_code_signature_text": "def assert_node_exists(self, node_id: str) -> None:",
+      "baseline_code_structure_hash": "be50f9e7ed4a7d460cd03ec81baf732a6a89d116d722167108cfc46195db6942"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.assert_port_count": {
+      "baseline_code_signature_text": "def assert_port_count(self, node_id: str, count: int, direction: str = 'output', role: Optional[PortRole] = None) -> None:",
+      "baseline_code_structure_hash": "1b177e4d815a1a76ad8dfa5f8ae6f2250470a835a5997dc6771d1e0f3c6dc90a"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.assert_port_exists": {
+      "baseline_code_signature_text": "def assert_port_exists(self, node_id: str, port_name: str, direction: str = 'output') -> None:",
+      "baseline_code_structure_hash": "950110f58d0b6f564f91f06d9f787ca77cb05c44835b8ec6bf4dd0ea379b3809",
+      "baseline_yaml_content_hash": "a2526fe784710b7117dac37955aebb51eac07128fc7dbe33ba27ec6f510c94dc"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.find_channels_from": {
+      "baseline_code_signature_text": "def find_channels_from(self, source_id: str, source_port: Optional[str] = None) -> List[Channel]:",
+      "baseline_code_structure_hash": "9856be7c6999e2fc67dad79054a68ff5fd4f36b5088a5fb79752e16d397f1ef0"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.get_data_node": {
+      "baseline_code_signature_text": "def get_data_node(self, node_id: str) -> PhysicsDataNode:",
+      "baseline_code_structure_hash": "b3012aba78fed00e3447917ef53f76e16b7c48a17a3e60d6f450a81dd0e3f716"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.get_func_node": {
+      "baseline_code_signature_text": "def get_func_node(self, node_id: str) -> PhysicsFuncNode:",
+      "baseline_code_structure_hash": "19803cd111c0a28ad89966fcf9a0978181bab2e90acd1769c2cc8ff0358189e8"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.get_node": {
+      "baseline_code_signature_text": "def get_node(self, node_id: str) -> PhysicsNode:",
+      "baseline_code_structure_hash": "32b6082729f22912710b45eac6cf8b00d6789fd8d739c8587fbf7c4dddbf6b36"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#GraphInspector.graph": {},
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/inspector.py#InspectionError": {
+      "baseline_code_signature_text": "class InspectionError(AssertionError):",
+      "baseline_code_structure_hash": "0e2ab8554b4c10bbd9a04d22677726943dff663816665ef5e401ad5bbd24331b"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/visualizer.py#GraphDumper": {
+      "baseline_code_signature_text": "class GraphDumper:",
+      "baseline_code_structure_hash": "fdcae98323e19169630034fa6e70c97b70afe674234cfe16a3a2da77495f71aa",
+      "baseline_yaml_content_hash": "ce3a4f4ae2ef5ad014a6f549e5fbd7f202af655ac140a1382dc743314d9281b4"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/visualizer.py#GraphDumper._get_node_attributes": {
+      "baseline_code_signature_text": "def _get_node_attributes(self, node: PhysicsNode) -> dict:",
+      "baseline_code_structure_hash": "9b48b15b4068ec039f90e6453367459c3549bb962d5e20be487ca58a4a69fff5"
+    },
+    "py://packages/cascade-compiler/src/cascade/compiler/utils/visualizer.py#GraphDumper.to_dot": {
+      "baseline_code_signature_text": "def to_dot(self, graph: BipartiteGraph) -> str:",
+      "baseline_code_structure_hash": "5f9e8705f8b7911f5b29f26cad4fcfd8a0bd035c349e63fe7c8434a301087d54"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_assembly_purity.py#add": {
+      "baseline_code_signature_text": "def add(a: int, b: int) -> int:",
+      "baseline_code_structure_hash": "6a0e278928c0b8f86e6fc8d18606e21229844e6b16bef22297ac533564b3dcc6"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_assembly_purity.py#square": {
+      "baseline_code_signature_text": "def square(n: int) -> int:",
+      "baseline_code_structure_hash": "cbe0ba853b2d4995d621005d310d766fee07751eea08f4a1144a594f447d0a86"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_assembly_purity.py#test_assembly_is_serializable_and_pure": {
+      "baseline_code_signature_text": "def test_assembly_is_serializable_and_pure():",
+      "baseline_code_structure_hash": "345b9241c4d1a7836d013e127f4eb3b8fb83bdc258b14bca16a7bbc75442b7b4",
+      "baseline_yaml_content_hash": "552ba3471e787851315472262f72d0f5d17ace3077bc58fca1a8a9cba7a98514"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_branching.py#branching_topology": {
+      "baseline_code_signature_text": "def branching_topology():",
+      "baseline_code_structure_hash": "8962de49f4899f6c4b082f862017876b103f543eee3bca80d1bf07f658fd9bbb"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_branching.py#switch_logic": {
+      "baseline_code_signature_text": "def switch_logic(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "771ffb822a81c29fcf928624faea0b6208d4dfa9e02e0fe68f20ccda7b887a02"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_branching.py#test_branching_path_a": {
+      "baseline_code_signature_text": "async def test_branching_path_a(branching_topology):",
+      "baseline_code_structure_hash": "06eecc3506566bd85e664e31e56ae4b58b9482d55322df42dfe6fa9d6ca4d276"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_branching.py#test_branching_path_b": {
+      "baseline_code_signature_text": "async def test_branching_path_b(branching_topology):",
+      "baseline_code_structure_hash": "4af1a72ba8f3006f18cb11ee6f8c703b646ac110c1bafcdac6ff8f99757fb6e7"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_graph_purity.py#add": {
+      "baseline_code_signature_text": "def add(a: int, b: int) -> int:",
+      "baseline_code_structure_hash": "6a0e278928c0b8f86e6fc8d18606e21229844e6b16bef22297ac533564b3dcc6"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_graph_purity.py#square": {
+      "baseline_code_signature_text": "def square(n: int) -> int:",
+      "baseline_code_structure_hash": "cbe0ba853b2d4995d621005d310d766fee07751eea08f4a1144a594f447d0a86"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_graph_purity.py#test_graph_is_serializable_and_pure": {
+      "baseline_code_signature_text": "def test_graph_is_serializable_and_pure():",
+      "baseline_code_structure_hash": "91fb1d936d81c62d8e7a7f16a335bbcf581e9b41d10e112c911c70aa6054d05b",
+      "baseline_yaml_content_hash": "d7c024bb16303189faad70fa1c9139ba96b69c5ff10d0d9dc50a6f61bd9d8d1e"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_manifest_content.py#add": {
+      "baseline_code_signature_text": "def add(a: int, b: int) -> int:",
+      "baseline_code_structure_hash": "6a0e278928c0b8f86e6fc8d18606e21229844e6b16bef22297ac533564b3dcc6"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_manifest_content.py#source": {
+      "baseline_code_signature_text": "def source():",
+      "baseline_code_structure_hash": "e5b73e7509d107390d28f570769d89b48295cd8043076704f069852dd1e8cd9c"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_manifest_content.py#square": {
+      "baseline_code_signature_text": "def square(n: int) -> int:",
+      "baseline_code_structure_hash": "cbe0ba853b2d4995d621005d310d766fee07751eea08f4a1144a594f447d0a86"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_manifest_content.py#test_manifest_is_populated_correctly": {
+      "baseline_code_signature_text": "def test_manifest_is_populated_correctly():",
+      "baseline_code_structure_hash": "cf71022335a8e74e2591d1557309bd379167bc9d8f99c467ebe9e6670a8b2a28"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_resource_backpressure.py#mock_worker": {
+      "baseline_code_signature_text": "def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "4c76656290a372a8c20a03926bc9909cd1a823e8d5f2d9d7ce0ef4f7214ef5a9"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_resource_backpressure.py#noop_observer": {
+      "baseline_code_signature_text": "def noop_observer(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "8abb5d2223170738156ff4f3d381f46398720633be070088946872239f98a08b"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_resource_backpressure.py#test_concurrency_limit": {
+      "baseline_code_signature_text": "async def test_concurrency_limit():",
+      "baseline_code_structure_hash": "9da62091328eeb6dd5d1dc4c2398e50381f68a8405e6c26384a6478b1dcfd5b2"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_sovereign_wiring.py#consumer": {
+      "baseline_code_signature_text": "def consumer(msg):",
+      "baseline_code_structure_hash": "052f6065705a395628489259dc602bc2f02e717240629c5d48597127c4879c59"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_sovereign_wiring.py#producer": {
+      "baseline_code_signature_text": "def producer():",
+      "baseline_code_structure_hash": "503f496f8c7887cc3a4e2a9d093d577a74a9f51d5e6259400adc4e7c9288de4e"
+    },
+    "py://packages/cascade-compiler/tests/integration/test_sovereign_wiring.py#test_sovereign_wiring_flow": {
+      "baseline_code_signature_text": "def test_sovereign_wiring_flow():",
+      "baseline_code_structure_hash": "b9658a16fae4151ac3fe6110e4e84c153fe30777a98d62deea6348ba8d0304ae",
+      "baseline_yaml_content_hash": "d998bbfb200026ea6ebb6ad978f951de6dc81085f8ee799ecc135eaee84a0fdc"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder.py#sample_graph_ir": {
+      "baseline_code_signature_text": "def sample_graph_ir():",
+      "baseline_code_structure_hash": "29e546ab4e74066a28b950ca903e20d0363b11377a065f2bccf12e42da5888f6",
+      "baseline_yaml_content_hash": "7f016edb97101be0cfc211a2eaefcdbc30a77600466593292fe84f68e7bbd867"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder.py#source_only_graph_ir": {
+      "baseline_code_signature_text": "def source_only_graph_ir():",
+      "baseline_code_structure_hash": "6886f3da4817730c5f4bab9f30ddac1ea55186e4441eec3e3eac216ea52b6b54"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder.py#test_builder_creates_pulse_for_source_node": {
+      "baseline_code_signature_text": "def test_builder_creates_pulse_for_source_node(source_only_graph_ir):",
+      "baseline_code_structure_hash": "8f3c65bc79fbb49aa24ee998b1097d8137be5d19b8ebfdc44669a9e15d664fc1"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder.py#test_builder_expands_and_wires_nodes": {
+      "baseline_code_signature_text": "def test_builder_expands_and_wires_nodes(sample_graph_ir):",
+      "baseline_code_structure_hash": "90c6b0dc91a9a0a1fec71db2e5c9122c83151ccbbb386b222eff020fcb97e53a"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder_environment.py#simple_graph_ir": {
+      "baseline_code_signature_text": "def simple_graph_ir():",
+      "baseline_code_structure_hash": "1d76c2a58d904f575a7e052bb50444dec452ba0525c5be8e68fbc1d513ab9e19"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder_environment.py#test_builder_creates_resources_from_env": {
+      "baseline_code_signature_text": "def test_builder_creates_resources_from_env(simple_graph_ir):",
+      "baseline_code_structure_hash": "42c9cc4bb2f4fbf55d5fafa1e94b91f1508a50771636e92eea6eb931d2d30e6c"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder_environment.py#test_builder_raises_on_missing_resource": {
+      "baseline_code_signature_text": "def test_builder_raises_on_missing_resource(simple_graph_ir):",
+      "baseline_code_structure_hash": "2968fe3a9c2d634829230917751c4d732fbfba6d8a543052a01480401a14cc72"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder_observability.py#empty_graph_ir": {
+      "baseline_code_signature_text": "def empty_graph_ir():",
+      "baseline_code_structure_hash": "cbe0c5d1be0e0fbeb42da2ad10a881f09ba5a78733948d1d446ee8f24ba4acb6"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_builder_observability.py#test_builder_creates_observer_sidecar": {
+      "baseline_code_signature_text": "def test_builder_creates_observer_sidecar(empty_graph_ir):",
+      "baseline_code_structure_hash": "ed73afb888230e48a6e82a759a2575b66a6d412057b7423a806f7226f0dada82"
+    },
+    "py://packages/cascade-compiler/tests/unit/backend/test_expander.py#test_expander_creates_triad_structure": {
+      "baseline_code_signature_text": "def test_expander_creates_triad_structure():",
+      "baseline_code_structure_hash": "d692d73cd82722536692ce1d1e0be0f194d09e35a50ba044dc11fa7ef9fc64f8"
+    },
+    "py://packages/cascade-compiler/tests/unit/frontend/test_generator.py#add": {
+      "baseline_code_signature_text": "def add(a: int, b: int) -> int:",
+      "baseline_code_structure_hash": "6a0e278928c0b8f86e6fc8d18606e21229844e6b16bef22297ac533564b3dcc6",
+      "baseline_yaml_content_hash": "14c8b7b87779ae4d8a0e911118abd6f5b444bb6d37c731fe7efdeabc7aed92c6"
+    },
+    "py://packages/cascade-compiler/tests/unit/frontend/test_generator.py#process_data": {
+      "baseline_code_signature_text": "def process_data(data: dict) -> str:",
+      "baseline_code_structure_hash": "e9ed4a8c82897b2ab993bc5cd64117ac20991a714a33351da9fe7bb1d50850d7",
+      "baseline_yaml_content_hash": "0d3a07fbc5f379427edf26f82595760e71e9d39d06fc0c0e807ad4d401ba815b"
+    },
+    "py://packages/cascade-compiler/tests/unit/frontend/test_generator.py#test_generate_simple_task": {
+      "baseline_code_signature_text": "def test_generate_simple_task():",
+      "baseline_code_structure_hash": "499227f697b13e3fdb0327e448002769fb71b202841eb5fcadecaaf52f4eb042",
+      "baseline_yaml_content_hash": "c12085925056441c24265d884f4dfd3ffbaaf2523865b62e6e26fdda6ff621d9"
+    },
+    "py://packages/cascade-compiler/tests/unit/frontend/test_generator.py#test_generate_task_with_dependency": {
+      "baseline_code_signature_text": "def test_generate_task_with_dependency():",
+      "baseline_code_structure_hash": "897e6b780eef280936025de3a28181c6ae3ea9e9ddcfd35f838db1bf89de4c90",
+      "baseline_yaml_content_hash": "f753de54f48c839b540438a07d9a6f6c1c88912a3f761a32eb3c66cd7187eb40"
+    },
+    "py://packages/cascade-compiler/tests/unit/frontend/test_generator.py#test_generate_task_with_kwargs": {
+      "baseline_code_signature_text": "def test_generate_task_with_kwargs():",
+      "baseline_code_structure_hash": "691a912d708ce1b8371adb0d48cf37e7cd4373d7316c1ae24df17c192b3317ce",
+      "baseline_yaml_content_hash": "02868768b054c31328087e7552fc254c001ec10c93178a923639727fdd1d1dcf"
+    },
+    "py://packages/cascade-compiler/tests/unit/test_sovereignty.py#test_expander_generates_sovereign_ports": {
+      "baseline_code_signature_text": "def test_expander_generates_sovereign_ports():",
+      "baseline_code_structure_hash": "0e33f67b9b976edb922d8791096184e7b4ed3927a95ace518f519de5b4772964"
+    },
+    "py://packages/cascade-compiler/tests/unit/utils/test_visualizer.py#test_dumper_generates_valid_dot": {
+      "baseline_code_signature_text": "def test_dumper_generates_valid_dot():",
+      "baseline_code_structure_hash": "9878db4b4b9d650925cf667ed7e3adb8e2875eaa8297837d15401dd542b55460"
+    }
+  },
+  "version": "1.0"
+}

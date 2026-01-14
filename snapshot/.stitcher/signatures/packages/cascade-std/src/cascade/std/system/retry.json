@@ -1,7 +1,0 @@
-{
-  "standard_retry_logic": {
-    "baseline_code_signature_text": "def standard_retry_logic(io: RetrySpec.IO, node: RetryNode, resources: Any) -> None:",
-    "baseline_code_structure_hash": "a09eea73ac8c2da536cc89ecea8cbe90d241f9a9eacf9b1d092b150bfb88e019",
-    "baseline_yaml_content_hash": "06b2c2cc6b7d250f7ed06aee1ed1c9f6fa860b9db6c7efbe6b0e452c81a29907"
-  }
-}

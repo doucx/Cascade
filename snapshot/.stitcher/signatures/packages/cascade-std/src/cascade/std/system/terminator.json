@@ -1,7 +1,0 @@
-{
-  "halt_signal": {
-    "baseline_code_signature_text": "def halt_signal(io: TerminatorSpec.IO, node: PhysicsNode, resources: Any) -> None:",
-    "baseline_code_structure_hash": "c772b4498498ef80b87c168106428975dc8cd51a6d54e1919f5a7b66bbfdf710",
-    "baseline_yaml_content_hash": "5270ac9ff236cf988e6c9df95c27c77a1094575588c733cb5d016e01e20a40e0"
-  }
-}

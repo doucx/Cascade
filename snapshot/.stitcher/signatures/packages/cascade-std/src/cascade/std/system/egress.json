@@ -1,7 +1,0 @@
-{
-  "standard_egress": {
-    "baseline_code_signature_text": "def standard_egress(io: EgressSpec.IO, node: PhysicsNode, resources: Any) -> None:",
-    "baseline_code_structure_hash": "fcb58bd35adf7d615676cf15f4026ddcff7ebc45c2eacd2ef7cb33005e51aff9",
-    "baseline_yaml_content_hash": "5deff5a9ad7acb115f86191ae22ad09946c2312ffb116713a1d3a038b10a7241"
-  }
-}

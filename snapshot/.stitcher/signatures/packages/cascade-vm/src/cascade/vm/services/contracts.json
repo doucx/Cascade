@@ -1,8 +1,0 @@
-{
-  "DelayRequest": {
-    "baseline_yaml_content_hash": "1dfab13fa98f07367c17728540be72c53b35844d11b3811776115302908e4cee"
-  },
-  "DelayRequest.delay_seconds": {},
-  "DelayRequest.target_nid": {},
-  "DelayRequest.token": {}
-}

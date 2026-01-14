@@ -1,0 +1,248 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-test-utils/src/cascade/test_utils/__init__.py#__all__": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner": {
+      "baseline_code_signature_text": "class EventDrivenRunner:",
+      "baseline_code_structure_hash": "9b72fe2f0accb48d5644707257db2c46e4f5e49e570b6036eef4da8a94b84302"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.__init__": {
+      "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, function_map: Dict[str, Callable], code_registry: CodeRegistry, reactor_factory: Optional[Callable[..., ReactorProtocol]] = None):",
+      "baseline_code_structure_hash": "cab12d61cc371edd366aae71afce9afb12c306b700d40d0c35fa0f94dc951ba9"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner._captured_events": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner._loop_task": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner._on_event": {
+      "baseline_code_signature_text": "def _on_event(self, event: Event):",
+      "baseline_code_structure_hash": "a4fd1e7b41e49f32e7ad17f691aed58fedbb9deee85a04cf8bf74a5caeabe774"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner._stop_event": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.chronos_queue": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.chronos_service": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.compute_queue": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.compute_service": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.egress_queue": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.event_bus": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.event_queue": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.from_assembly": {
+      "baseline_code_signature_text": "def from_assembly(cls, assembly: Assembly, code_registry: CodeRegistry, reactor_factory: Optional[Callable[..., ReactorProtocol]] = None) -> EventDrivenRunner:",
+      "baseline_code_structure_hash": "1c02c00d0423c401ae4def63ae78112f45968288adf49a15cadbb119fca47329"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.graph": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.ingress_queue": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.inject_input": {
+      "baseline_code_signature_text": "def inject_input(self, node_id: str, payload: Any, trace: Optional[Dict[str, Any]] = None):",
+      "baseline_code_structure_hash": "0af48699a7e9ad675092a5567d0a2781a7f1798f16b18e83ca50eb92fa79af33"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.kernel": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.machine": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.memory": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.object_store": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.prime": {
+      "baseline_code_signature_text": "def prime(self):",
+      "baseline_code_structure_hash": "c85e226f7edbe780ce9d34162baaead081e49167cf70dc028ba02606ee0d7206"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.reactor": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.resource_registry": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.run_id": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.run_until_complete": {
+      "baseline_code_signature_text": "async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> Event:",
+      "baseline_code_structure_hash": "7a507d7de4f62776310e5d5fd22d02d5e0a8f882da14a33951f3b5eec80fe70e"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.start_loop": {
+      "baseline_code_signature_text": "async def start_loop(self):",
+      "baseline_code_structure_hash": "0a9520fc821a4ef232e4e7303bc3a34b44af5d7f26ea6779ab01d161c54c3084"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.stop_loop": {
+      "baseline_code_signature_text": "async def stop_loop(self):",
+      "baseline_code_structure_hash": "d0a34527de60218a303489365f5ed74ca757d6def91589edc22d065198fc6e82"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.wait_for_event": {
+      "baseline_code_signature_text": "async def wait_for_event(self, predicate: Callable[[Event], bool], timeout: float = 1.0) -> Event:",
+      "baseline_code_structure_hash": "2735e23a1b74576928734e9e3aba0459b5ecd94d6632bf3bb7afc89861cb8003"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventDrivenRunner.wakeup_event": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#EventTimeoutError": {
+      "baseline_code_signature_text": "class EventTimeoutError(TimeoutError):",
+      "baseline_code_structure_hash": "4549988012f43e6ec23589f4c74d2ae01cef808ba62e4f9d84790f708429fee0"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#T": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/harness.py#logger": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#ControllerTestApp": {
+      "baseline_code_signature_text": "class ControllerTestApp:",
+      "baseline_code_structure_hash": "42da5c04ee3a0dba89b6b1a3fd3d6e020b451c935d745173470cb27c03c47d79",
+      "baseline_yaml_content_hash": "b628b899644b9edd0197a0cd89877810a04b7f1f9e19705536647198dce1b97d"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#ControllerTestApp.__init__": {
+      "baseline_code_signature_text": "def __init__(self, connector: Connector):",
+      "baseline_code_structure_hash": "246225c5f80ebdf5fe3c6d08b1663ead39b39bf4f06bd4a3d3d8d86ff4db6ee5"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#ControllerTestApp._publish": {
+      "baseline_code_signature_text": "async def _publish(self, scope: str, constraint: GlobalConstraint):",
+      "baseline_code_structure_hash": "c18f62b7fd20bc8f164d85b0fc9e1815aac490926607dfc9edf8cf0bfa6b4437"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#ControllerTestApp.connector": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#ControllerTestApp.pause": {
+      "baseline_code_signature_text": "async def pause(self, scope: str = 'global'):",
+      "baseline_code_structure_hash": "24286f0cac8e1bb0962d8dc0de62c8e488c9dcfb1d548e666fadcc14a8dd0bb2"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#ControllerTestApp.resume": {
+      "baseline_code_signature_text": "async def resume(self, scope: str = 'global'):",
+      "baseline_code_structure_hash": "39dec974c06daf7654911984b59f5df0226c2ffedb1fd6219e7f073542f475b7"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector": {
+      "baseline_code_signature_text": "class MockConnector(Connector):",
+      "baseline_code_structure_hash": "3ba9e18fb8ead40191505e988640250b00c74898af6263a0e92109d291502ab2",
+      "baseline_yaml_content_hash": "a14a00b10d5ec116e2b07e69017fcbf9b02108ab9f0734b36f610402301d691d"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector._topic_matches": {
+      "baseline_code_signature_text": "def _topic_matches(self, subscription: str, topic: str) -> bool:",
+      "baseline_code_structure_hash": "b1c63d95f187861ebf1b3cab2efa1f5996b25b9b6cf37be253b6173fa573307b"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector._trigger_message": {
+      "baseline_code_signature_text": "async def _trigger_message(self, topic: str, payload: Dict[str, Any]):",
+      "baseline_code_structure_hash": "a6e04c68274cca8a6dab38b3378967dd999f8cf04351a385b67ee2587bc625d4",
+      "baseline_yaml_content_hash": "fa574bd8f20ac2eacce95c38deb423e6b99334ca02fe562e634e6c1e4b10f243"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.connect": {
+      "baseline_code_signature_text": "async def connect(self) -> None:",
+      "baseline_code_structure_hash": "2ee85c950427d812bd0d9f58ac0d3106ee4fab5647f8bfa600b5aa45efa28869"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.connected": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.disconnect": {
+      "baseline_code_signature_text": "async def disconnect(self) -> None:",
+      "baseline_code_structure_hash": "5cb5a725bc2266bd83ffa2d30312eb2bb861f0934cbf1791166722c3e9f5572b"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.disconnected": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.publish": {
+      "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False) -> None:",
+      "baseline_code_structure_hash": "fffa806eb7ae282b4fdadb2aa14bf5887f8f964a3f437db025760cfd8a8d5c66",
+      "baseline_yaml_content_hash": "eb8d2b442816041fa59795395636abe5c6d55021d8e397f912ba80da8cbcc266"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.publish_log": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.retained_messages": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.seed_retained_message": {
+      "baseline_code_signature_text": "def seed_retained_message(self, topic: str, payload: Dict[str, Any]):",
+      "baseline_code_structure_hash": "bba0745ad66b9f7f86e90f9ab86bf173aceda1c3f343a274bcb9e38ca682c949",
+      "baseline_yaml_content_hash": "b4610b15a72b7a94a2854c01f389ffe3e100804d512bc2bab0c3774a32781b91"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.subscribe": {
+      "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",
+      "baseline_code_structure_hash": "c2addf29fd60240c9ff8400c72be68453d50b874a54b87a5fba2cd3b64ad5e02"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockConnector.subscriptions": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockExecutor": {
+      "baseline_code_signature_text": "class MockExecutor(Executor):",
+      "baseline_code_structure_hash": "56fff47aa6c9847eaa801ef284d45868e626344e6451f9003e3df8cd6c122e2b",
+      "baseline_yaml_content_hash": "57ef73fe14a2dc9ed6b4c3c257b4a0fd0296ac84cce6daa1d9bf1cc193aadd9d"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockExecutor.__init__": {
+      "baseline_code_signature_text": "def __init__(self, delay: float = 0, return_value: Any = 'result'):",
+      "baseline_code_structure_hash": "16511409a3efcd874093dc26849daab50fd1c8b62c53756c0a57970774eaa540"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockExecutor.delay": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockExecutor.execute": {
+      "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]):",
+      "baseline_code_structure_hash": "c2694369d4030d0896a7d2637ee1cdea348e82aeeda9301a0facc4d71a91513d"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockExecutor.return_value": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSolver": {
+      "baseline_code_signature_text": "class MockSolver(Solver):",
+      "baseline_code_structure_hash": "f8bf3703d2e7600f4ed746182aa3470652957d17edd9a402139918c1614ae73f",
+      "baseline_yaml_content_hash": "57f4990e1b39b9c5c3acc72a68387346f34c38bf73a06cba3e1d798b7d59ddaf"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSolver.__init__": {
+      "baseline_code_signature_text": "def __init__(self, plan: ExecutionPlan):",
+      "baseline_code_structure_hash": "536b66822f30cd7050e78fc8759a82c26ba0fd2ee1815b41895afa383bc49a1e"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSolver._plan": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSolver.resolve": {
+      "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
+      "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSubscriptionHandle": {
+      "baseline_code_signature_text": "class MockSubscriptionHandle(SubscriptionHandle):",
+      "baseline_code_structure_hash": "a0c3a4a0767c342d6d5a57dc92315e2c119874d8200141eb7ae256a9712ee7f9"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSubscriptionHandle.__init__": {
+      "baseline_code_signature_text": "def __init__(self, parent: MockConnector, topic: str):",
+      "baseline_code_structure_hash": "eb1347152c253fd68e8051fb6718bf8056157e78d316629a707f85bb5bb5eac5"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSubscriptionHandle._parent": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSubscriptionHandle._topic": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#MockSubscriptionHandle.unsubscribe": {
+      "baseline_code_signature_text": "async def unsubscribe(self) -> None:",
+      "baseline_code_structure_hash": "8db3add491babae6d33f8c27a23af07c012ac7395e700a61a643648621a7a3ef"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpyExecutor": {
+      "baseline_code_signature_text": "class SpyExecutor(Executor):",
+      "baseline_code_structure_hash": "fcbfacd05d4d6779d34bef60a20a85180845f165fa475b86be446e59b67ac204",
+      "baseline_yaml_content_hash": "74c48ffa3a5da4a617000d5d534207e276ee016eb1c7d56b257d0f32b3f0b8d9"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpyExecutor.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpyExecutor.call_log": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpyExecutor.execute": {
+      "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
+      "baseline_code_structure_hash": "42c33adc443e46043352bc8c2c8f3dc4febb95531e696f8dc5fd657b4ef76d58"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySolver": {
+      "baseline_code_signature_text": "class SpySolver(Solver):",
+      "baseline_code_structure_hash": "8946c53be7bc03fb74e6d8ed4fa5baf73e0aa1aff0161bb4e46692350f0c0f02",
+      "baseline_yaml_content_hash": "0338c93b6e412a98b2e158ff085289c1a2ea5585ca35cebc6041f3b97c7e743c"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySolver.__init__": {
+      "baseline_code_signature_text": "def __init__(self, underlying_solver: Solver):",
+      "baseline_code_structure_hash": "888919f477b512483f1c6a2647457d03c6e3fa6f1c38e533f833648c0fa693ff"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySolver.resolve": {
+      "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
+      "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySolver.underlying_solver": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySubscriber": {
+      "baseline_code_signature_text": "class SpySubscriber:",
+      "baseline_code_structure_hash": "f78a4cefa770e42253a1527794680173f75a442537cf034e36adb533a94ce882",
+      "baseline_yaml_content_hash": "c38faf2934fb0cf72b9c723a7b6cc0730c57e27408bfd4adaf2b92fcaf4d695b"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySubscriber.__init__": {
+      "baseline_code_signature_text": "def __init__(self, bus: EventBus):",
+      "baseline_code_structure_hash": "f0031b8dc0af4f513fb34481d680aaa74cb395a005af0bef448efa49d6f88ac7"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySubscriber.collect": {
+      "baseline_code_signature_text": "def collect(self, event: Event):",
+      "baseline_code_structure_hash": "e0920d24d1c8dedb4d420d9baaefbc57b1d579e7dc7d8dc732ebcf91c82b6628"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySubscriber.events": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#SpySubscriber.events_of_type": {
+      "baseline_code_signature_text": "def events_of_type(self, event_type):",
+      "baseline_code_structure_hash": "191c2fd44c193d6caf8694f764d7ba694809e6f8505c88c331fdb58a08ba8558",
+      "baseline_yaml_content_hash": "d208020df868688d8fffced12fb29fe9e6908d08f026b4da5eec304fdb757a99"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#TimedMockExecutor": {
+      "baseline_code_signature_text": "class TimedMockExecutor(LocalExecutor):",
+      "baseline_code_structure_hash": "4a4ec7f1e3621d79d346d0204a5d3f825e8763597641c1b8e59fdff8a1c3748f"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#TimedMockExecutor.__init__": {
+      "baseline_code_signature_text": "def __init__(self, delay: float = 0.0):",
+      "baseline_code_structure_hash": "789c7a8e5ba271367c9265bfcb953ae06373edf71ffa24a2e606f723ea95738b"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#TimedMockExecutor.delay": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#TimedMockExecutor.execute": {
+      "baseline_code_signature_text": "async def execute(self, node, callable_obj, args, kwargs):",
+      "baseline_code_structure_hash": "b4923a8c5804fefae795aa186c1bc66a4172fcdbef80b64f4c3f046cb3a36813"
+    },
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#__all__": {},
+    "py://packages/cascade-test-utils/src/cascade/test_utils/helpers.py#override_resource": {
+      "baseline_code_signature_text": "def override_resource(engine: Engine, name: str, new_resource_func: Callable[[], Any]):",
+      "baseline_code_structure_hash": "8ea5effc00233918706c1f47ca08a5994e229e50505d8abaab84129f15c7613a",
+      "baseline_yaml_content_hash": "932b22888c00cdf70b11aef13d71f64faa42b8626587592469a9e8b0dea3fad0"
+    }
+  },
+  "version": "1.0"
+}

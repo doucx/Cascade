@@ -1,6 +1,0 @@
-{
-  "test_dumper_generates_valid_dot": {
-    "baseline_code_signature_text": "def test_dumper_generates_valid_dot():",
-    "baseline_code_structure_hash": "9878db4b4b9d650925cf667ed7e3adb8e2875eaa8297837d15401dd542b55460"
-  }
-}

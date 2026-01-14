@@ -1,7 +1,0 @@
-{
-  "build_graph": {
-    "baseline_code_signature_text": "def build_graph(target: Any, registry: Optional[NodeRegistry] = None) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:",
-    "baseline_code_structure_hash": "43e4e933ffdc2fbfa3acdd74e73bdb46c0f24b4e27aae7b111d2144e8580c6db",
-    "baseline_yaml_content_hash": "88dbbc9cffe2d74743d02b4c7df3e3e0e38c3b5faa9332ccf87a9ee4a5dad5b7"
-  }
-}

@@ -1,7 +1,0 @@
-{
-  "param_probe": {
-    "baseline_code_signature_text": "def param_probe(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "b37f2d269140e24834ab01e9f290e54ad9d043f7a1e6a265955987e3fbd7b575",
-    "baseline_yaml_content_hash": "19e925bdd456abe1e4cd0f0402246d9d4f946a81fd2108378c2228c7ef0ea7ed"
-  }
-}

@@ -52,8 +52,8 @@ if TYPE_CHECKING:
     from cascade.control_flow import select_jump, bind
 
     from cascade.runtime.host.instance import Engine
-    from cascade.runtime.services.observability.bus import EventBus
-    from cascade.runtime.services.observability.events import Event
+    from cascade.bus.core import EventBus
+    from cascade.bus.events import Event
     from cascade.execution.graph.errors import DependencyMissingError
     from cascade.flow import sequence, pipeline
 

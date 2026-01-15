@@ -8,7 +8,7 @@ from cascade.cli.observer.app import app as observer_app
 from cascade.connectors.local import LocalConnector
 
 
-from cascade.common.messaging import bus
+from cascade.bus.feedback import bus
 from cascade.common.renderers import CliRenderer
 
 

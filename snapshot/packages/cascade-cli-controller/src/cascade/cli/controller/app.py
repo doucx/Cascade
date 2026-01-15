@@ -3,7 +3,7 @@ import time
 import typer
 from dataclasses import asdict
 
-from cascade.common.messaging import bus
+from cascade.bus.feedback import bus
 from cascade.common.renderers import CliRenderer
 from cascade.connectors.mqtt import MqttConnector
 from cascade.connectors.local import LocalConnector

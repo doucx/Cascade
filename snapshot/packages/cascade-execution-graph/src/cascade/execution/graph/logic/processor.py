@@ -8,12 +8,12 @@ from cascade.execution.graph.model.model import Node
 if TYPE_CHECKING:
     from cascade.execution.graph.model.model import MapNode
 from cascade.spec.runtime.interfaces import Executor, StateBackend, Solver
-from cascade.runtime.services.observability.bus import EventBus
+from cascade.bus.core import EventBus
 from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints.manager import ConstraintManager
 from cascade.execution.graph.logic.resolvers import ArgumentResolver, ConstraintResolver
 from cascade.spec import EventState
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
     TaskSkipped,

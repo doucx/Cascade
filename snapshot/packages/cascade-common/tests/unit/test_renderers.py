@@ -2,7 +2,7 @@ import io
 import json
 import pytest
 from cascade.common.renderers import CliRenderer, JsonRenderer
-from cascade.common.messaging import MessageStore
+from cascade.bus.messages import MessageStore
 
 
 @pytest.fixture

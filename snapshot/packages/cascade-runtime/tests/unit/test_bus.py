@@ -1,5 +1,5 @@
 import io
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     RunStarted,
     TaskExecutionFinished,
 )
@@ -7,7 +7,7 @@ from cascade.runtime.services.observability.subscribers import (
     HumanReadableLogSubscriber,
 )
 from cascade.runtime import EventBus as EventBus
-from cascade.common.messaging import bus as ui_bus
+from cascade.bus.feedback import bus as ui_bus
 from cascade.common.renderers import CliRenderer
 
 

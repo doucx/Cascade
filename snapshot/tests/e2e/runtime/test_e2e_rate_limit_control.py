@@ -3,7 +3,7 @@ import pytest
 import cascade as cs
 from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
-from cascade.runtime.services.observability.events import TaskExecutionFinished
+from cascade.bus.events import TaskExecutionFinished
 from cascade.test_utils.helpers import MockExecutor
 
 from .harness import InProcessConnector

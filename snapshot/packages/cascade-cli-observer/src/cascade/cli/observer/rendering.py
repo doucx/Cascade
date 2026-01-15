@@ -2,7 +2,8 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.theme import Theme
 
-from cascade.common.messaging import protocols, MessageStore
+from cascade.bus.messages import MessageStore
+from cascade.bus.protocols import Renderer
 
 LOG_LEVELS = {
     "DEBUG": 10,
@@ -22,7 +23,7 @@ custom_theme = Theme(
 )
 
 
-class RichCliRenderer(protocols.Renderer):
+class RichCliRenderer(Renderer):
     def __init__(
         self,
         store: MessageStore,

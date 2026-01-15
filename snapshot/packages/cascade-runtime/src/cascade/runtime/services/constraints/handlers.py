@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Dict, Any, Optional
 import fnmatch
-from cascade.common.messaging import bus
+from cascade.bus.feedback import bus
 
 from cascade.runtime.services.constraints.protocols import ConstraintHandler
 from cascade.execution.graph.model.model import Node

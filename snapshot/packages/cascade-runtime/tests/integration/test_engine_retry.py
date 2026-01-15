@@ -2,7 +2,7 @@ import pytest
 import cascade as cs
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     TaskRetrying,
     TaskExecutionFinished,
 )

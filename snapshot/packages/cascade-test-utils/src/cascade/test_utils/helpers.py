@@ -8,7 +8,7 @@ from cascade.runtime.io.executors.local import LocalExecutor
 
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.runtime.services.observability.events import Event
+from cascade.bus.events import Event
 from cascade.spec.runtime.interfaces import (
     Solver,
     Executor,

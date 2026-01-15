@@ -3,7 +3,7 @@ import asyncio
 from cascade.runtime.host.instance import Engine
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.strategies.vm import VMExecutionStrategy
-from cascade.runtime.services.observability.bus import EventBus
+from cascade.bus.core import EventBus
 from cascade.runtime.storage import InMemoryObjectStore
 from cascade.spec.dsl.task import task
 from cascade.test_utils.helpers import MockSolver

@@ -9,9 +9,9 @@ from contextlib import ExitStack
 from cascade.spec.dsl.resources import ResourceDefinition
 from cascade.spec.dsl.constraint import GlobalConstraint
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.runtime.services.observability.bus import EventBus
+from cascade.bus.core import EventBus
 from cascade.spec import EventState
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     RunStarted,
     RunFinished,
     ConnectorConnected,

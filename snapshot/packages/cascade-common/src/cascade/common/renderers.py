@@ -3,7 +3,8 @@ import json
 from typing import TextIO, Optional
 from datetime import datetime, timezone
 
-from cascade.common.messaging import MessageStore, protocols
+from cascade.bus.messages import MessageStore
+from cascade.bus.protocols import Renderer
 
 LOG_LEVELS = {
     "DEBUG": 10,
@@ -13,7 +14,7 @@ LOG_LEVELS = {
 }
 
 
-class CliRenderer(protocols.Renderer):
+class CliRenderer(Renderer):
     def __init__(
         self,
         store: MessageStore,
@@ -30,7 +31,7 @@ class CliRenderer(protocols.Renderer):
             print(message, file=self._stream)
 
 
-class JsonRenderer(protocols.Renderer):
+class JsonRenderer(Renderer):
     def __init__(
         self,
         stream: Optional[TextIO] = None,

@@ -1054,6 +1054,7 @@ version = "0.1.0"
 source = { editable = "packages/cascade-sdk" }
 dependencies = [
     { name = "cascade-application" },
+    { name = "cascade-bus" },
     { name = "cascade-common" },
     { name = "cascade-library" },
     { name = "cascade-runtime" },
@@ -1063,6 +1064,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cascade-application", editable = "packages/cascade-application" },
+    { name = "cascade-bus", editable = "packages/cascade-bus" },
     { name = "cascade-common", editable = "packages/cascade-common" },
     { name = "cascade-library", editable = "packages/cascade-library" },
     { name = "cascade-runtime", editable = "packages/cascade-runtime" },

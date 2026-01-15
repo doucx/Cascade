@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] 修正 `cascade-bus` 中的 `events.py` 实现", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768478445.8840222, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(bus): 将 EventBus 和 FeedbackBus 提取到 cascade-bus 包", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768478539.7967494, "duration_ms": 0}}

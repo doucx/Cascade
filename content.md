@@ -1,318 +1,56 @@
-非常抱歉，在搬运过程中遗漏了 **Tooling Events** 以及 `Event.from_ir` 的完整静态方法绑定逻辑，这导致了重定向后的 `ImportError`。
+好的，测试通过意味着我们已经成功完成了这次“换心手术”的第一个阶段。现在我们将这些变更作为一个完整的逻辑单元提交到 Git。
 
-我将立即修正 `cascade-bus` 中的 `events.py` 实现，并确保 `runtime` 中的薄封装（wrapper）完整覆盖所有导出的符号。
+## [COMMIT] refactor(bus): 将 EventBus 和 FeedbackBus 提取到 cascade-bus 包
 
-## [WIP] 修正 `cascade-bus` 中的 `events.py` 实现
+### 用户需求
+将分散在 `cascade-runtime` 和 `cascade-common` 中的总线逻辑提取到独立的 `cascade-bus` 包中，为后续迁移到 `pyneedle-bus` 奠定架构基础。
 
-## 标签
-#intent/fix #flow/ready #priority/critical
-#comp/bus #comp/runtime #concept/ui
+### 评论
+这是一次标准的架构解耦。通过引入 `cascade-bus`，我们确立了系统的“神经系统”是一个独立的、可复用的组件，而不是运行时的附属品。同时，通过薄封装保持了现有代码的零成本兼容。
+
+### 目标
+1.  提交新创建的 `cascade-bus` 包。
+2.  提交对 `runtime` 和 `common` 包依赖及代码的重构。
+3.  提交根目录工作区的配置更新。
+
+### 基本原理
+遵循“提取 -> 隔离”原则。我们不仅移动了代码，还移动了相关的资源文件（Locales），并确保了所有的 Import 路径在 `cascade-bus` 内部是自洽的。通过在原位置保留同名模块并进行 re-export，我们实现了对现有代码库的透明迁移。
+
+### 标签
+#intent/refine #flow/ready #priority/medium
+#comp/bus #comp/runtime #comp/common #scope/core
 #ai/instruct
-#task/domain/infrastructure #task/object/cascade-bus #task/action/fix-migration #task/state/continue
+#task/domain/infrastructure #task/object/cascade-bus #task/action/migration #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 完整重写 `cascade-bus` 的 `events.py`
+#### Acts 1: 提交变更
 
-我们将补全缺失的 `ToolEvent` 及其子类，并恢复完整的 `_from_ir` 及其后期的静态方法绑定。
+我们将所有涉及到的包和配置文件添加到暂存区并创建提交。
 
 ~~~~~act
-write_file
-packages/cascade-bus/src/cascade/bus/events.py
+git_add
 ~~~~~
-~~~~~python
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-import time
-import itertools
-import logging
-
-from cascade.spec import EventIR, EventType, EventState
-
-logger = logging.getLogger(__name__)
-
-# Fast, thread-safe counter for event IDs
-_event_id_gen = itertools.count()
-
-
-@dataclass(frozen=True)
-class Event:
-    event_id: str = field(default_factory=lambda: str(next(_event_id_gen)))
-    timestamp: float = field(default_factory=time.time)
-
-    # In a real run, this would be injected by the Engine context
-    run_id: Optional[str] = None
-
-    @staticmethod
-    def from_ir(ir: "EventIR") -> "Event":
-        # This is a stub for the type checker. The real implementation is assigned later
-        # at the end of the file to break a circular dependency while keeping pyright happy.
-        raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class RunStarted(Event):
-    target_tasks: List[str] = field(default_factory=list)
-    params: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class RunFinished(Event):
-    status: EventState = EventState.SUCCEEDED
-    duration: float = 0.0
-    error: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class TaskEvent(Event):
-    task_id: str = ""
-    task_name: str = ""
-
-
-@dataclass(frozen=True)
-class TaskExecutionStarted(TaskEvent):
-    pass
-
-
-@dataclass(frozen=True)
-class TaskExecutionFinished(TaskEvent):
-    status: EventState = EventState.SUCCEEDED
-    duration: float = 0.0
-    result_preview: Optional[str] = None
-    error: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class TaskSkipped(TaskEvent):
-    reason: str = "Unknown"  # "CacheHit", "ConditionFalse"
-
-
-@dataclass(frozen=True)
-class TaskRetrying(TaskEvent):
-    attempt: int = 0
-    max_attempts: int = 0
-    delay: float = 0.0
-    error: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class TaskBlocked(TaskEvent):
-    reason: str = "Unknown"  # e.g. "RateLimit", "ConcurrencyLimit"
-
-
-@dataclass(frozen=True)
-class StaticAnalysisWarning(TaskEvent):
-    warning_code: str = ""  # e.g. "CS-W001"
-    message: str = ""
-
-
-@dataclass(frozen=True)
-class ResourceEvent(Event):
-    resource_name: str = ""
-
-
-@dataclass(frozen=True)
-class ResourceAcquired(ResourceEvent):
-    pass
-
-
-@dataclass(frozen=True)
-class ResourceReleased(ResourceEvent):
-    pass
-
-
-@dataclass(frozen=True)
-class ConnectorConnected(Event):
-    pass
-
-
-@dataclass(frozen=True)
-class ConnectorDisconnected(Event):
-    pass
-
-
-# --- Tooling Events ---
-
-
-@dataclass(frozen=True)
-class ToolEvent(Event):
-    pass
-
-
-@dataclass(frozen=True)
-class PlanAnalysisStarted(ToolEvent):
-    target_node_id: str = ""
-
-    def _get_payload(self) -> Dict[str, Any]:
-        return {"target_node_id": self.target_node_id}
-
-
-@dataclass(frozen=True)
-class PlanNodeInspected(ToolEvent):
-    index: int = 0
-    total_nodes: int = 0
-    node_id: str = ""
-    node_name: str = ""
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
-
-    def _get_payload(self) -> Dict[str, Any]:
-        return {
-            "index": self.index,
-            "total_nodes": self.total_nodes,
-            "node_id": self.node_id,
-            "node_name": self.node_name,
-            "input_bindings": self.input_bindings,
-        }
-
-
-@dataclass(frozen=True)
-class PlanAnalysisFinished(ToolEvent):
-    total_steps: int = 0
-
-    def _get_payload(self) -> Dict[str, Any]:
-        return {"total_steps": self.total_steps}
-
-
-# --- Event Hydration Logic (Late Binding) ---
-
-
-def _from_ir(ir: EventIR) -> "Event":
-    try:
-        # Extract Common Metadata
-        ctx = ir.get("ctx", {})
-        run_id = ctx.get("rid")
-        timestamp = ir["ts"]
-        event_type = ir["t"]
-
-        if event_type == EventType.LIFECYCLE:
-            return _hydrate_lifecycle(ir, run_id, timestamp)
-
-        # Fallback for unknown types
-        return Event(timestamp=timestamp, run_id=run_id)
-    except Exception as e:
-        logger.warning(f"Failed to hydrate EventIR: {e}. Raw: {ir}")
-        # Return a generic event to prevent crashing the bus
-        return Event()
-
-
-def _hydrate_lifecycle(
-    ir: EventIR, run_id: Optional[str], timestamp: float
-) -> "TaskEvent":
-    data = ir["data"]
-    phy = ir.get("phy", {})
-
-    # Prefer logical IDs from data, fallback to physical IDs
-    task_id = data.get("task_id", phy.get("nid", ""))
-    task_name = data.get("task_name", "unknown")
-    state_raw = data.get("state")
-
-    base_kwargs = {
-        "timestamp": timestamp,
-        "run_id": run_id,
-        "task_id": task_id,
-        "task_name": task_name,
-    }
-
-    # Early exit for invalid or missing state
-    if not state_raw:
-        return TaskEvent(**base_kwargs)
-    try:
-        state = EventState(state_raw)
-    except ValueError:
-        logger.warning(f"Unknown EventState '{state_raw}' in EventIR data.")
-        return TaskEvent(**base_kwargs)
-
-    # --- From this point, `state` is guaranteed to be a valid EventState member ---
-
-    if state == EventState.RUNNING:
-        return TaskExecutionStarted(**base_kwargs)
-
-    if state in (EventState.SUCCEEDED, EventState.FAILED):
-        # Convert ms to seconds for internal Event model compatibility
-        duration_sec = data.get("duration_ms", 0.0) / 1000.0
-
-        return TaskExecutionFinished(
-            **base_kwargs,
-            status=state,
-            duration=duration_sec,
-            error=data.get("error"),
-            result_preview=data.get("result_preview"),
-        )
-
-    if state == EventState.SKIPPED:
-        return TaskSkipped(
-            **base_kwargs,
-            reason=data.get("reason", "Unknown"),
-        )
-
-    if state == EventState.PENDING:
-        # Map Pending to generic TaskEvent or a specific one if needed later
-        return TaskEvent(**base_kwargs)
-
-    # Fallback for any other valid but unhandled state
-    return TaskEvent(**base_kwargs)
-
-
-# Bind the factory method to the Event class
-Event.from_ir = staticmethod(_from_ir)
-~~~~~
-
-#### Acts 2: 完善 `runtime` 中的 Events 封装
-
-我们将所有缺失的符号添加到 `__all__` 中，确保下游代码可以正确导入。
 
 ~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/runtime/services/observability/events.py
+git_commit
 ~~~~~
-~~~~~python
-from cascade.bus.events import (
-    Event,
-    RunStarted,
-    RunFinished,
-    TaskEvent,
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-    TaskSkipped,
-    TaskRetrying,
-    TaskBlocked,
-    StaticAnalysisWarning,
-    ResourceEvent,
-    ResourceAcquired,
-    ResourceReleased,
-    ConnectorConnected,
-    ConnectorDisconnected,
-    ToolEvent,
-    PlanAnalysisStarted,
-    PlanNodeInspected,
-    PlanAnalysisFinished,
-)
+~~~~~text
+refactor(bus): extract EventBus and FeedbackBus into dedicated cascade-bus package
 
-# Re-export everything to maintain API compatibility
-__all__ = [
-    "Event",
-    "RunStarted",
-    "RunFinished",
-    "TaskEvent",
-    "TaskExecutionStarted",
-    "TaskExecutionFinished",
-    "TaskSkipped",
-    "TaskRetrying",
-    "TaskBlocked",
-    "StaticAnalysisWarning",
-    "ResourceEvent",
-    "ResourceAcquired",
-    "ResourceReleased",
-    "ConnectorConnected",
-    "ConnectorDisconnected",
-    "ToolEvent",
-    "PlanAnalysisStarted",
-    "PlanNodeInspected",
-    "PlanAnalysisFinished",
-]
+Moves event-driven telemetry and user feedback messaging out of 'runtime' and 'common' modules. This is the first stage of the Needle-Bus migration, isolating bus logic to prepare for unification under the PyNeedle kernel.
+
+- Created 'cascade-bus' package with 'core' (EventBus) and 'feedback' (FeedbackBus) modules.
+- Migrated i18n locales to 'cascade-bus'.
+- Implemented thin wrappers in 'cascade-runtime' and 'cascade-common' to maintain API compatibility.
+- Updated workspace dependencies and build configurations.
 ~~~~~
 
 ### 下一步建议
-迁移工作已完成补全。你可以通过运行测试（如 `pytest packages/cascade-runtime`）来验证 import 链路是否完全恢复正常。如果测试通过，我们可以继续后续的 `stitcher` 总线剥离或 `pyneedle` 的构建。
+
+`cascade-bus` 已经稳固地建立起来了。接下来的建议：
+- **Stitcher 迁移**: 按照相同的模式，处理 `stitcher` 的总线提取。
+- **构建 `pyneedle-bus`**: 开始实现真正的统一内核。
+- **清理封装**: 在 `pyneedle` 就绪后，我们将彻底删除这些“薄封装”，直接指向最终的统一总线。

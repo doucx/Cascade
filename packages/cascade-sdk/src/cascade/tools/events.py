@@ -1,4 +1,4 @@
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     ToolEvent,
     PlanAnalysisStarted,
     PlanNodeInspected,

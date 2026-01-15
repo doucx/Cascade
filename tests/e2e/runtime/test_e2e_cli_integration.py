@@ -3,7 +3,7 @@ import pytest
 import cascade as cs
 from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
-from cascade.runtime.services.observability.events import TaskExecutionFinished
+from cascade.bus.events import TaskExecutionFinished
 from cascade.test_utils.helpers import MockExecutor
 
 # 导入 app 模块中的核心异步逻辑函数

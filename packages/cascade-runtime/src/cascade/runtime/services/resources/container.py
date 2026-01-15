@@ -6,8 +6,8 @@ from cascade.execution.graph.model.model import Graph
 from cascade.spec.dsl.resources import ResourceDefinition, Inject
 from contextlib import contextmanager
 
-from cascade.runtime.services.observability.bus import EventBus
-from cascade.runtime.services.observability.events import (
+from cascade.bus.core import EventBus
+from cascade.bus.events import (
     ResourceAcquired,
     ResourceReleased,
 )

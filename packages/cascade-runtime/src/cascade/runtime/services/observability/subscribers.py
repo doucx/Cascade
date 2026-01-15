@@ -2,10 +2,10 @@ import platform
 import os
 import asyncio
 from datetime import datetime, timezone
-from cascade.runtime.services.observability.bus import EventBus
-from cascade.common.messaging import bus
+from cascade.bus.core import EventBus
+from cascade.bus.feedback import bus
 from cascade.spec import EventState
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     RunStarted,
     RunFinished,
     TaskExecutionStarted,

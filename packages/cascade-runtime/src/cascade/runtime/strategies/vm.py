@@ -20,7 +20,7 @@ from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.linker import Linker
-from cascade.runtime.services.observability.bus import EventBus
+from cascade.bus.core import EventBus
 
 from cascade.compiler.frontend import IRGenerator, GenerationResult
 from cascade.compiler.backend import Builder

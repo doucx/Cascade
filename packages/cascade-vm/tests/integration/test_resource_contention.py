@@ -7,7 +7,7 @@ from cascade.compiler.backend.builder import Builder
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.spec.physical.ports import PortRole
 from cascade.test_utils import EventDrivenRunner
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     Event,
     TaskExecutionStarted,
     TaskExecutionFinished,

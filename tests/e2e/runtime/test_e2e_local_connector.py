@@ -5,7 +5,7 @@ import pytest
 import cascade as cs
 from cascade.runtime.host.instance import Engine
 from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
 )

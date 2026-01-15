@@ -10,7 +10,7 @@ from cascade.spec.physical.triad import (
 )
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.runtime.observability import EventState
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
 )

@@ -2,7 +2,7 @@ import asyncio
 from collections import defaultdict
 from typing import Dict, List, Any, Callable, Awaitable, Optional
 from cascade.spec.runtime.interfaces import Connector, SubscriptionHandle
-from cascade.common.messaging import bus
+from cascade.bus.feedback import bus
 
 
 class _LocalSubscriptionHandle(SubscriptionHandle):

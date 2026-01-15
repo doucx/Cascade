@@ -1,10 +1,10 @@
-from cascade.runtime.services.observability.bus import EventBus
+from cascade.bus.core import EventBus
 from cascade.runtime.host.instance import Engine
 from cascade.runtime.services.observability.subscribers import (
     HumanReadableLogSubscriber,
     TelemetrySubscriber,
 )
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     Event,
     RunStarted,
     RunFinished,

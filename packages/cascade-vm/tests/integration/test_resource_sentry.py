@@ -9,7 +9,7 @@ from cascade.spec.dsl.task import task
 from cascade.test_utils import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.compiler.utils.inspector import GraphInspector
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     Event,
     TaskExecutionStarted,
     TaskExecutionFinished,

@@ -100,8 +100,8 @@
       "baseline_yaml_content_hash": "d397dc2452109be0c30695b9ada197351dd7ab463c018ec91146711b36e52d5f"
     },
     "py://packages/cascade-common/src/cascade/common/renderers.py#CliRenderer": {
-      "baseline_code_signature_text": "class CliRenderer(protocols.Renderer):",
-      "baseline_code_structure_hash": "be99441fa563ad512ea7af90b657f1a2cca2298be2167ba456a763f9103e9a72",
+      "baseline_code_signature_text": "class CliRenderer(Renderer):",
+      "baseline_code_structure_hash": "8007414900955aae60b45dc023c965dd3c7fffcf654e749d4e90e2a3ae655779",
       "baseline_yaml_content_hash": "baa1c0444a8fda7a34dc5ca3943d3c0740557066a71aa831b0cb08ad96360286"
     },
     "py://packages/cascade-common/src/cascade/common/renderers.py#CliRenderer.__init__": {
@@ -116,8 +116,8 @@
       "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
     },
     "py://packages/cascade-common/src/cascade/common/renderers.py#JsonRenderer": {
-      "baseline_code_signature_text": "class JsonRenderer(protocols.Renderer):",
-      "baseline_code_structure_hash": "0b68fa7b0b6b8a40b967057cfc53eb51b95a607481f8dcbd2ad00e959ea92c5b",
+      "baseline_code_signature_text": "class JsonRenderer(Renderer):",
+      "baseline_code_structure_hash": "e43b4628c02e4ccb1abad34fbfba129e7d151b7ac2176aea383ec6ab8cffd27b",
       "baseline_yaml_content_hash": "642e33173b28bb079895416c36477382725cd2950ff0ecdd0a212e534fc4b179"
     },
     "py://packages/cascade-common/src/cascade/common/renderers.py#JsonRenderer.__init__": {

@@ -11,8 +11,8 @@ from cascade.spec.vm.interfaces import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.kernel import PhysicsKernel
-from cascade.runtime.services.observability.bus import EventBus
-from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
+from cascade.bus.core import EventBus
+from cascade.bus.events import Event, TaskExecutionFinished
 from cascade.vm.compute import ComputeRequest, LocalComputeService
 from cascade.vm.services.chronos import ChronosService
 from cascade.vm.services.contracts import DelayRequest

@@ -17,7 +17,7 @@ from cascade.vm.registry import CodeRegistry
 from cascade.vm.compute import ComputeRequest, LocalComputeService
 from cascade.vm.services.chronos import ChronosService
 from cascade.vm.services.contracts import DelayRequest
-from cascade.runtime.services.observability.bus import EventBus
+from cascade.bus.core import EventBus
 from cascade.runtime.storage import InMemoryObjectStore
 
 # Standard Library ICs

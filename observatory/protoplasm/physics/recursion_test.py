@@ -5,7 +5,7 @@ import re
 
 import cascade as cs
 from cascade.runtime.subscribers import HumanReadableLogSubscriber
-from cascade.common.messaging import bus as global_bus
+from cascade.bus.feedback import bus as global_bus
 from cascade.common.renderers import CliRenderer
 
 # --- Memory Monitoring Utils ---

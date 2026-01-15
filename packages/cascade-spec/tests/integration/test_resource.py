@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 import cascade as cs
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     ResourceAcquired,
     ResourceReleased,
     Event,

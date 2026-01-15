@@ -9,12 +9,12 @@ from cascade.execution.graph.model.registry import NodeRegistry
 from cascade.execution.graph.model.hashing import BlueprintHasher
 from cascade.spec.runtime.interfaces import Solver, StateBackend
 from cascade.spec.dsl.jump import Jump
-from cascade.runtime.services.observability.bus import EventBus
+from cascade.bus.core import EventBus
 from cascade.runtime.services.resources.container import ResourceContainer
 from cascade.execution.graph.logic.processor import NodeProcessor
 from cascade.execution.graph.logic.flow import FlowManager
 from cascade.execution.graph.errors import DependencyMissingError
-from cascade.runtime.services.observability.events import TaskSkipped, TaskBlocked
+from cascade.bus.events import TaskSkipped, TaskBlocked
 from cascade.runtime.services.constraints.manager import ConstraintManager
 from cascade.spec.runtime import ExecutionContext
 

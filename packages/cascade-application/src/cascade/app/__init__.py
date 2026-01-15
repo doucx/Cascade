@@ -10,7 +10,7 @@ from cascade.execution.graph.model.model import Node, EdgeType
 
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.runtime.services.observability.events import (
+from cascade.bus.events import (
     PlanAnalysisStarted,
     PlanNodeInspected,
     PlanAnalysisFinished,
@@ -22,7 +22,7 @@ from cascade.runtime.services.observability.subscribers import (
 from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.io.executors.local import LocalExecutor
 
-from cascade.common.messaging import bus
+from cascade.bus.feedback import bus
 from cascade.common.renderers import CliRenderer, JsonRenderer
 
 

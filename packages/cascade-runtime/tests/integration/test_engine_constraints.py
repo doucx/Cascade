@@ -31,7 +31,7 @@ def engine_with_connector(mock_connector):
 
 
 async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
-    from cascade.runtime.services.observability.events import TaskExecutionFinished
+    from cascade.bus.events import TaskExecutionFinished
 
     start_time = asyncio.get_event_loop().time()
     while asyncio.get_event_loop().time() - start_time < timeout:
@@ -43,7 +43,7 @@ async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
 
 
 async def wait_for_task_start(spy, task_name: str, timeout: float = 2.0):
-    from cascade.runtime.services.observability.events import TaskExecutionStarted
+    from cascade.bus.events import TaskExecutionStarted
 
     start_time = asyncio.get_event_loop().time()
     while asyncio.get_event_loop().time() - start_time < timeout:
@@ -172,7 +172,7 @@ async def test_engine_handles_malformed_constraint_payload(
 @pytest.mark.asyncio
 async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
     from cascade.spec.dsl.task import task
-    from cascade.runtime.services.observability.events import TaskExecutionStarted
+    from cascade.bus.events import TaskExecutionStarted
 
     bus, spy = bus_and_spy
     engine = Engine(
@@ -239,7 +239,7 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
 @pytest.mark.asyncio
 async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):
     from cascade.spec.dsl.task import task
-    from cascade.runtime.services.observability.events import (
+    from cascade.bus.events import (
         TaskExecutionStarted,
         TaskExecutionFinished,
     )

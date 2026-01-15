@@ -9,7 +9,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from cascade.common.messaging import bus
+from cascade.bus.feedback import bus
 from .rendering import RichCliRenderer
 from cascade.connectors.mqtt import MqttConnector
 from cascade.connectors.local.connector import DEFAULT_TELEMETRY_UDS_PATH

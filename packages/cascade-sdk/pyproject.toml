@@ -12,7 +12,8 @@ dependencies = [
   "cascade-runtime",
   "cascade-common",
   "cascade-application",
-  "cascade-library"
+  "cascade-library",
+  "cascade-bus"
 ]
 
 [project.optional-dependencies]
@@ -31,3 +32,4 @@ cascade-runtime = { workspace = true }
 cascade-common = { workspace = true }
 cascade-application = { workspace = true }
 cascade-graph = { workspace = true }
+cascade-bus = { workspace = true }

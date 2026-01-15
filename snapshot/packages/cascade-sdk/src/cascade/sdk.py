@@ -17,9 +17,9 @@ _IMPORT_MAP = {
     "bind": ("cascade.control_flow", "bind"),
     # Runtime
     "Engine": ("cascade.runtime.host.instance", "Engine"),
-    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
-    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
-    "Event": ("cascade.runtime.services.observability.events", "Event"),
+    "EventBus": ("cascade.bus.core", "EventBus"),
+    "FeedbackBus": ("cascade.bus.feedback", "FeedbackBus"),
+    "Event": ("cascade.bus.events", "Event"),
     "DependencyMissingError": (
         "cascade.execution.graph.errors",
         "DependencyMissingError",
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
     from cascade.runtime.host.instance import Engine
     from cascade.bus.core import EventBus
+    from cascade.bus.feedback import FeedbackBus
     from cascade.bus.events import Event
     from cascade.execution.graph.errors import DependencyMissingError
     from cascade.flow import sequence, pipeline

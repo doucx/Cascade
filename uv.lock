@@ -10,6 +10,7 @@ resolution-markers = [
 [manifest]
 members = [
     "cascade-application",
+    "cascade-bus",
     "cascade-cli-controller",
     "cascade-cli-observer",
     "cascade-common",
@@ -679,6 +680,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "cascade-bus"
+version = "0.1.0"
+source = { editable = "packages/cascade-bus" }
+dependencies = [
+    { name = "cascade-spec" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "cascade-spec", editable = "packages/cascade-spec" }]
+
+[[package]]
 name = "cascade-cli-controller"
 version = "0.1.0"
 source = { editable = "packages/cascade-cli-controller" }
@@ -725,11 +737,15 @@ name = "cascade-common"
 version = "0.1.0"
 source = { editable = "packages/cascade-common" }
 dependencies = [
+    { name = "cascade-bus" },
     { name = "cascade-spec" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "cascade-spec", editable = "packages/cascade-spec" }]
+requires-dist = [
+    { name = "cascade-bus", editable = "packages/cascade-bus" },
+    { name = "cascade-spec", editable = "packages/cascade-spec" },
+]
 
 [[package]]
 name = "cascade-compiler"
@@ -864,6 +880,7 @@ name = "cascade-monorepo"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cascade-bus" },
     { name = "cascade-compiler" },
     { name = "cascade-library" },
     { name = "cascade-runtime" },
@@ -879,6 +896,7 @@ dev = [
     { name = "aiohttp", version = "3.10.11", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
     { name = "aiohttp", version = "3.13.2", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version >= '3.9'" },
     { name = "cascade-application" },
+    { name = "cascade-bus" },
     { name = "cascade-cli-controller" },
     { name = "cascade-cli-observer" },
     { name = "cascade-compiler" },
@@ -930,6 +948,8 @@ requires-dist = [
     { name = "aiobotocore", marker = "extra == 'dev'" },
     { name = "aiohttp", marker = "extra == 'dev'" },
     { name = "cascade-application", marker = "extra == 'dev'", editable = "packages/cascade-application" },
+    { name = "cascade-bus", editable = "packages/cascade-bus" },
+    { name = "cascade-bus", marker = "extra == 'dev'", editable = "packages/cascade-bus" },
     { name = "cascade-cli-controller", marker = "extra == 'dev'", editable = "packages/cascade-cli-controller" },
     { name = "cascade-cli-observer", marker = "extra == 'dev'", editable = "packages/cascade-cli-observer" },
     { name = "cascade-compiler", editable = "packages/cascade-compiler" },
@@ -1001,6 +1021,7 @@ name = "cascade-runtime"
 version = "0.1.0"
 source = { editable = "packages/cascade-runtime" }
 dependencies = [
+    { name = "cascade-bus" },
     { name = "cascade-common" },
     { name = "cascade-compiler" },
     { name = "cascade-reflection" },
@@ -1017,6 +1038,7 @@ redis = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cascade-bus", editable = "packages/cascade-bus" },
     { name = "cascade-common", editable = "packages/cascade-common" },
     { name = "cascade-compiler", editable = "packages/cascade-compiler" },
     { name = "cascade-reflection", editable = "packages/cascade-reflection" },

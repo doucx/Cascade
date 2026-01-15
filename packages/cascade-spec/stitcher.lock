@@ -782,7 +782,7 @@
       "baseline_yaml_content_hash": "7791c078d8e6e44721e453d7a6585d1e9e7211f82629ceca53685edb9f3aa13a"
     },
     "py://packages/cascade-spec/src/cascade/spec/runtime/interfaces.py#Executor.execute": {
-      "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
+      "baseline_code_signature_text": "async def execute(self, node: Any, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
       "baseline_code_structure_hash": "58ec9a795d79958fbbfb66c8d9875f728aed7c69452f5f5735b9f4a44ccc301f",
       "baseline_yaml_content_hash": "a7fb80d6d498218c3bb88830a6915fffae2d7bf7698186338ef702cf858bfaa0"
     },
@@ -811,7 +811,7 @@
       "baseline_yaml_content_hash": "523774d6b38d923aab329ad15197294b0dbdb23e903bf2068cfdfb67ebd0edf2"
     },
     "py://packages/cascade-spec/src/cascade/spec/runtime/interfaces.py#Solver.resolve": {
-      "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
+      "baseline_code_signature_text": "def resolve(self, graph: Any) -> ExecutionPlan:",
       "baseline_code_structure_hash": "8c185dda399d36601ab4e1ffccf7387a3e1ee777800b4371be098b9c70e92c5e"
     },
     "py://packages/cascade-spec/src/cascade/spec/runtime/interfaces.py#StateBackend": {

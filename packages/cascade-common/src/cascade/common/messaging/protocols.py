@@ -1,5 +1,3 @@
-from typing import Protocol, Any
+from cascade.bus.protocols import Renderer
 
-
-class Renderer(Protocol):
-    def render(self, msg_id: str, level: str, **kwargs: Any) -> None: ...
+__all__ = ["Renderer"]

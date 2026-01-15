@@ -3,13 +3,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade-common"
+name = "cascade-bus"
 version = "0.1.0"
-description = "Common utilities, protocols, and components for the Cascade ecosystem."
+description = "The unified event and feedback bus for the Cascade ecosystem."
 requires-python = ">=3.8"
 dependencies = [
-  "cascade-spec",
-  "cascade-bus"
+  "cascade-spec"
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -20,4 +19,3 @@ allow-direct-references = true
 
 [tool.uv.sources]
 cascade-spec = { workspace = true }
-cascade-bus = { workspace = true }

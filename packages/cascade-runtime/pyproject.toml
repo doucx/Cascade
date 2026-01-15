@@ -13,6 +13,7 @@ dependencies = [
   "cascade-reflection",
   "cascade-compiler",
   "cascade-vm",
+  "cascade-bus",
 ]
 
 [project.optional-dependencies]
@@ -27,3 +28,4 @@ allow-direct-references = true
 [tool.uv.sources]
 cascade-spec = { workspace = true }
 cascade-common = { workspace = true }
+cascade-bus = { workspace = true }

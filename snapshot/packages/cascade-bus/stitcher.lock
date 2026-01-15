@@ -1,0 +1,181 @@
+{
+  "fingerprints": {
+    "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus": {
+      "baseline_code_signature_text": "class EventBus:",
+      "baseline_code_structure_hash": "455856406d09ec8e0013faa4eeae6ba1eea073bd305bba1e9d6e6c88375888a1"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus.__init__": {
+      "baseline_code_signature_text": "def __init__(self):",
+      "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus.publish": {
+      "baseline_code_signature_text": "def publish(self, event: Event):",
+      "baseline_code_structure_hash": "8af1449f40bb54d7c3cb3e911e803addabc3e4083a5af32083200df7b936dd74"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus.publish_ir": {
+      "baseline_code_signature_text": "def publish_ir(self, ir: EventIR):",
+      "baseline_code_structure_hash": "3d3cd143985be3514e8e017869d4ca1d2cc3ebdc4559c2a3dbe81931f1c9f979"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus.subscribe": {
+      "baseline_code_signature_text": "def subscribe(self, event_type: Type[Event], handler: Handler):",
+      "baseline_code_structure_hash": "d7409aa8a0504d6bccbdca20aadce93d300ca8aec9ad28b54d98501e21b80772"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#ConnectorConnected": {
+      "baseline_code_signature_text": "class ConnectorConnected(Event):",
+      "baseline_code_structure_hash": "4e21923fdff2adc5352bce5baa4a16b93f381b302a8557ea68bdc017c3d9aa10"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#ConnectorDisconnected": {
+      "baseline_code_signature_text": "class ConnectorDisconnected(Event):",
+      "baseline_code_structure_hash": "480a1ab7cb99c0d02120e157ac0850e0006c3853cb41c995be72aae4070955c5"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#Event": {
+      "baseline_code_signature_text": "class Event:",
+      "baseline_code_structure_hash": "f6e849b1f78865d6819f3b3b35b4d21a3ba525fdf871a40c1d3239c0174ca29a"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#Event.from_ir": {
+      "baseline_code_signature_text": "def from_ir(ir: EventIR) -> Event:",
+      "baseline_code_structure_hash": "9044e2feb2c4d85c8d7304cbc414b8c7ff3b7ecd640ba082b4e4e7b51d7f2391"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#PlanAnalysisFinished": {
+      "baseline_code_signature_text": "class PlanAnalysisFinished(ToolEvent):",
+      "baseline_code_structure_hash": "54e64c3a7110db490c37967d72215b2a995a8c1411db2921846f8abfbe06058a"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#PlanAnalysisFinished._get_payload": {
+      "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#PlanAnalysisStarted": {
+      "baseline_code_signature_text": "class PlanAnalysisStarted(ToolEvent):",
+      "baseline_code_structure_hash": "d81a6d3812d3fb04221403ecc4d5355393e77785ea3eb3f8a1c874c723661d55"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#PlanAnalysisStarted._get_payload": {
+      "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#PlanNodeInspected": {
+      "baseline_code_signature_text": "class PlanNodeInspected(ToolEvent):",
+      "baseline_code_structure_hash": "94f70bdeea28bf74a9d548df837caa955a44d7f3ee812bbee2eaf871452d505e"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#PlanNodeInspected._get_payload": {
+      "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
+      "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#ResourceAcquired": {
+      "baseline_code_signature_text": "class ResourceAcquired(ResourceEvent):",
+      "baseline_code_structure_hash": "7cb05c46241ae53051121f4ea85182bea33cdc6e6f9b27f92ce0b22a3beded97"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#ResourceEvent": {
+      "baseline_code_signature_text": "class ResourceEvent(Event):",
+      "baseline_code_structure_hash": "142864708267fd5987f27167b124cd04ffc6a65f78c716af83f05a02f512b7b9"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#ResourceReleased": {
+      "baseline_code_signature_text": "class ResourceReleased(ResourceEvent):",
+      "baseline_code_structure_hash": "364e8776cb00d2a21a1e6bfa1ffa02355793da141f4d5da8ac0ad5da405b2a95"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#RunFinished": {
+      "baseline_code_signature_text": "class RunFinished(Event):",
+      "baseline_code_structure_hash": "3317af5980a1b87f4e24a97b4f7b4a94e6c773563375d96a61a14056e5a396a1"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#RunStarted": {
+      "baseline_code_signature_text": "class RunStarted(Event):",
+      "baseline_code_structure_hash": "658ac67754d46a14b2afa704f341cfa8611a0732c922bf2d3a527767c8e87333"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#StaticAnalysisWarning": {
+      "baseline_code_signature_text": "class StaticAnalysisWarning(TaskEvent):",
+      "baseline_code_structure_hash": "1d77c7ff4dcbc4f2c81038628085c0a84b449de7567a25025ba18ffb28f1398c"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#TaskBlocked": {
+      "baseline_code_signature_text": "class TaskBlocked(TaskEvent):",
+      "baseline_code_structure_hash": "2954b7d53b883741ebe545ab0128aca05e4b303d0bf9e3aeaecf3c764cfa2c36"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#TaskEvent": {
+      "baseline_code_signature_text": "class TaskEvent(Event):",
+      "baseline_code_structure_hash": "b1a26455eef37111f3c15eee928f9e41a6b510a11b442006e67b633399b663f6"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#TaskExecutionFinished": {
+      "baseline_code_signature_text": "class TaskExecutionFinished(TaskEvent):",
+      "baseline_code_structure_hash": "2978ae5a3a451614bdc119cc08685827e21d9a6ea1ca2c207e7fd809666b3d0b"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#TaskExecutionStarted": {
+      "baseline_code_signature_text": "class TaskExecutionStarted(TaskEvent):",
+      "baseline_code_structure_hash": "8de71bd9ef848699ee388d68c086271837ef85ff770d6dff762b16b7906a1007"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#TaskRetrying": {
+      "baseline_code_signature_text": "class TaskRetrying(TaskEvent):",
+      "baseline_code_structure_hash": "50b6299cac3de80940e3bcc9d446e4d9962ac2fffaf6997bcc3dba7ccabac9ba"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#TaskSkipped": {
+      "baseline_code_signature_text": "class TaskSkipped(TaskEvent):",
+      "baseline_code_structure_hash": "bb5912d354376482fceb1f6a615340629078837f6ffbc59a07b8259f8ba4fed5"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#ToolEvent": {
+      "baseline_code_signature_text": "class ToolEvent(Event):",
+      "baseline_code_structure_hash": "8617611db13345b99a8a417c62beb714b3fb8cd86f869d70e97acd3dfe02acba"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#_from_ir": {
+      "baseline_code_signature_text": "def _from_ir(ir: EventIR) -> Event:",
+      "baseline_code_structure_hash": "696779d8a5b7da5c913c31c0b8a79ac20a19b13354f0d25fd1587604ce16376e"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/events.py#_hydrate_lifecycle": {
+      "baseline_code_signature_text": "def _hydrate_lifecycle(ir: EventIR, run_id: Optional[str], timestamp: float) -> TaskEvent:",
+      "baseline_code_structure_hash": "82e250aac322e9086bebbf4adfa0dd281f835e1df08f8bafc7c3c428f156720d"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/feedback.py#FeedbackBus": {
+      "baseline_code_signature_text": "class FeedbackBus:",
+      "baseline_code_structure_hash": "7deb756b2b17cf076baa1237a420d12b6f6eb487e0522b17991cdaa36fcd3782"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/feedback.py#FeedbackBus.__init__": {
+      "baseline_code_signature_text": "def __init__(self, store: MessageStore):",
+      "baseline_code_structure_hash": "5040b88be06643bddcbfbf61c0cb7dd729aa4df78c9ef146ace3c1f75f8dc2cb"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/feedback.py#FeedbackBus._render": {
+      "baseline_code_signature_text": "def _render(self, level: str, msg_id: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "7b67b33671aee186d0dc28c75867da51167de2ba06bbc2409bc9952631e6959b"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/feedback.py#FeedbackBus.error": {
+      "baseline_code_signature_text": "def error(self, msg_id: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "74d0e1591df1ba06fd66e12c1295ee60cd7c01bb3259f824dd0a77c2c4f80d78"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/feedback.py#FeedbackBus.info": {
+      "baseline_code_signature_text": "def info(self, msg_id: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "817afd5b683cfac505c18cbd0364e790a65d78753b848dcdde052c7850b79b84"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/feedback.py#FeedbackBus.set_renderer": {
+      "baseline_code_signature_text": "def set_renderer(self, renderer: Renderer):",
+      "baseline_code_structure_hash": "ce3ded2742fb947176e357aadf1a2a16da320a95d72c9a6c393d91f26a2c70a4"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/feedback.py#FeedbackBus.warning": {
+      "baseline_code_signature_text": "def warning(self, msg_id: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "a6b1deb421acfd2525d3145f5beb41d63b230ec1ea40663f73d3852c239d3e05"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/messages.py#MessageStore": {
+      "baseline_code_signature_text": "class MessageStore:",
+      "baseline_code_structure_hash": "9df57f0f801e88c5b8fd96ffd3720dda29c3cb154d5ad24782443d813fffbf5d"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/messages.py#MessageStore.__init__": {
+      "baseline_code_signature_text": "def __init__(self, locale: str = 'en'):",
+      "baseline_code_structure_hash": "f164a2dd5f9d11755204babace26e8807b83d4df64015d6fc82bbe78e518b443"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/messages.py#MessageStore._find_locales_dir": {
+      "baseline_code_signature_text": "def _find_locales_dir(self) -> Optional[Path]:",
+      "baseline_code_structure_hash": "02193bf75f7f5a553b0228a25f6d5b23b2c958ae1bfb54853912c766da534df2"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/messages.py#MessageStore._load_messages": {
+      "baseline_code_signature_text": "def _load_messages(self):",
+      "baseline_code_structure_hash": "8674d570a06445321b723026b09b798de3b061f6120b58ce658b9042a36e31bb"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/messages.py#MessageStore.get": {
+      "baseline_code_signature_text": "def get(self, msg_id: str, default: str = '', **kwargs = {}) -> str:",
+      "baseline_code_structure_hash": "6495b38cd6eee18bd02002e79fc95b23c49da555ce5533124f58eec2a898e38c"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/protocols.py#Renderer": {
+      "baseline_code_signature_text": "class Renderer(Protocol):",
+      "baseline_code_structure_hash": "8342694db8d308b36ba5d1ecf2dc07bba1460712ac3a9a9438c5abba24852b3d"
+    },
+    "py://packages/cascade-bus/src/cascade/bus/protocols.py#Renderer.render": {
+      "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs: Any = {}) -> None:",
+      "baseline_code_structure_hash": "2785386165127926edf6b708c1e63953c18505e0f1a1e4391b2166ee367c0988"
+    }
+  },
+  "version": "1.0"
+}

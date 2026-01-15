@@ -53,7 +53,6 @@ if TYPE_CHECKING:
 
     from cascade.runtime.host.instance import Engine
     from cascade.bus.core import EventBus
-    from cascade.bus.feedback import FeedbackBus
     from cascade.bus.events import Event
     from cascade.execution.graph.errors import DependencyMissingError
     from cascade.flow import sequence, pipeline

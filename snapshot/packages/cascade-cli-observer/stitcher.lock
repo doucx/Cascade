@@ -51,8 +51,8 @@
     },
     "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#LOG_LEVELS": {},
     "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#RichCliRenderer": {
-      "baseline_code_signature_text": "class RichCliRenderer(protocols.Renderer):",
-      "baseline_code_structure_hash": "5cd9aeb55d7a45e6cd9476479b950f7ad8e8d4f30d9d7e164f531466b4ae6b3b",
+      "baseline_code_signature_text": "class RichCliRenderer(Renderer):",
+      "baseline_code_structure_hash": "4d9008f0330893e3de2b37e9bc44d13aa28a742d0d1e5967c5a7928c5461b0f5",
       "baseline_yaml_content_hash": "6fb2e827bab7d5a650b051d7cf46dd70b653e7db0fa8729bb642d137685f27ee"
     },
     "py://packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py#RichCliRenderer.__init__": {

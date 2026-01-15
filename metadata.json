@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] 为 `cascade-bus` 创建包骨架，并更新相关的 `pyproject.toml` 文件", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768478093.068117, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M uv.lock", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768478220.6124868, "duration_ms": 0}}

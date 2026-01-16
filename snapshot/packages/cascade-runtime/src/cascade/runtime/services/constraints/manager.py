@@ -2,11 +2,11 @@ import time
 from typing import Dict, Any
 from cascade.spec.dsl.constraint import GlobalConstraint
 from cascade.execution.graph.model.model import Node
-from .protocols import ConstraintHandler
+from .protocols import ConstraintHandler, HandlerContext
 from ..resources.manager import ResourceManager
 
 
-class ConstraintManager:
+class ConstraintManager(HandlerContext):
     def __init__(self, resource_manager: ResourceManager):
         self.resource_manager = resource_manager
         # Stores active constraints by their unique ID
@@ -18,6 +18,9 @@ class ConstraintManager:
 
     def set_wakeup_callback(self, callback: Any) -> None:
         self._wakeup_callback = callback
+
+    def get_resource_manager(self) -> ResourceManager:
+        return self.resource_manager
 
     def request_wakeup(self, delay: float) -> None:
         if self._wakeup_callback:

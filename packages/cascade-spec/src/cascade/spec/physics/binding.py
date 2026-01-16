@@ -1,7 +1,7 @@
 from functools import wraps
 from typing import Dict, Any, Type, TypeVar, MutableMapping
-from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.spec.physics import PhysicsSpec
+from ..physical.nodes import Token, PhysicsNode
+from .spec import PhysicsSpec
 
 T = TypeVar("T", bound=PhysicsSpec)
 

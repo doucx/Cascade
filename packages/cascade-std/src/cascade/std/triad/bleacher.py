@@ -6,7 +6,7 @@ from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.triad import BleachNode
 from cascade.spec.physical.ports import PortRole
 from cascade.std.specs import BleacherSpec
-from cascade.std.kernel_tools import implements
+from cascade.spec.physics.binding import implements
 
 
 @implements(BleacherSpec)

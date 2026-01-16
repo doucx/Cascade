@@ -2,7 +2,7 @@ from typing import Any
 from dataclasses import dataclass
 from cascade.spec.physical.nodes import Token, PhysicsNode
 from cascade.std.specs import ContinuousAllocatorSpec, ContinuousReclaimerSpec
-from cascade.std.kernel_tools import implements
+from cascade.spec.physics.binding import implements
 
 
 @dataclass

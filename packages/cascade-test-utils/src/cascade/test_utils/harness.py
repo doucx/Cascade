@@ -6,6 +6,9 @@ from typing import Dict, Any, Callable, TypeVar, Optional, List, Tuple
 from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.nodes import Token, PhysicsDataNode
 from cascade.spec.physical.object import Ref
+
+from cascade.spec.runtime import DelayRequest
+
 from cascade.vm.reactor import Reactor
 from cascade.spec.vm.interfaces import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
@@ -13,9 +16,9 @@ from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.kernel import PhysicsKernel
 from cascade.bus.core import EventBus
 from cascade.bus.events import Event, TaskExecutionFinished
-from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.spec.runtime import ComputeRequest
+from cascade.vm.compute import LocalComputeService
 from cascade.vm.services.chronos import ChronosService
-from cascade.vm.services.contracts import DelayRequest
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.linker import Linker
 from cascade.spec.physical.assembly import Assembly

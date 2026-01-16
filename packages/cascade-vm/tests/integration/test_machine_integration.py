@@ -16,7 +16,7 @@ from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.compute import ComputeRequest, LocalComputeService
 from cascade.vm.services.chronos import ChronosService
-from cascade.vm.services.contracts import DelayRequest
+from cascade.spec.runtime import DelayRequest
 from cascade.bus.core import EventBus
 from cascade.runtime.storage import InMemoryObjectStore
 

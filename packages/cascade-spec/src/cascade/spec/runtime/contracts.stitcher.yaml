@@ -1,0 +1,4 @@
+ComputeRequest: |-
+  A request sent from the VM's dispatcher to a ComputeService.
+DelayRequest: |-
+  A request sent from a 'sleep' IC to the ChronosService.

@@ -2,7 +2,7 @@ import logging
 from typing import Dict, Any
 
 from cascade.spec.physical.nodes import Token, PhysicsFuncNode
-from cascade.vm.services.contracts import DelayRequest
+from cascade.spec.runtime import DelayRequest
 from cascade.reflection import PhysicalIdGenerator
 
 logger = logging.getLogger(__name__)

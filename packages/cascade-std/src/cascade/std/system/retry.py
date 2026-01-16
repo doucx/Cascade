@@ -2,7 +2,7 @@ from typing import Any
 
 from cascade.spec import RetryNode
 from cascade.std.specs import RetrySpec
-from cascade.std.kernel_tools import implements
+from cascade.spec.physics.binding import implements
 
 
 @implements(RetrySpec)

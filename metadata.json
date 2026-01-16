@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M test_builder.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768552093.0702271, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(dyad): 定义二元体物理契约与标准 IC 实现", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768552627.3897583, "duration_ms": 0}}

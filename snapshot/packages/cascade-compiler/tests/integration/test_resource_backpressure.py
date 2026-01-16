@@ -159,32 +159,34 @@ async def test_concurrency_limit():
     # In Triad, Bleacher would fire Worker which would fire Stainer, eventually releasing resource.
     # In Dyad, Launcher fires and... stops (from Reactor's perspective).
     # To simulate completion, we must MANUALLY simulate the Compute Service returning the result.
-    
+
     # We find which task launched by checking who is holding the resource?
     # Or simpler: we just inject a result into one of the Result nodes to simulate completion.
-    
+
     # Let's find the result node for node_1 or node_2.
     # We don't know which one got the resource (it's non-deterministic race in simulator).
     # But we can check the queue if we had access.
     # Instead, let's just cheat and say Node 1 finishes.
-    
+
     node_1_result_id = "node_1.result"
-    
+
     # Manually inject result to trigger Lander -> Release Resource
     # We need a valid token.
     # Note: We need to fake the trace so Lander knows what to release.
     # The trace must contain "resource_amounts": {"gpu": 1}.
     fake_trace = {"resource_amounts": {"gpu": 1}}
-    memory.put(physical_graph.nodes[node_1_result_id], Token(payload="done", trace=fake_trace))
-    
+    memory.put(
+        physical_graph.nodes[node_1_result_id], Token(payload="done", trace=fake_trace)
+    )
+
     # Now run steps to let Lander fire and Reclaimer fire.
     # Lander fires -> Releases to RelBuffer
     # Reclaimer fires -> Updates Ledger
-    
+
     max_steps = 10
     for _ in range(max_steps):
         reactor.step()
-        
+
         # Check if resource returned
         ledger = memory.take(ledger_node_id).payload
         memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
@@ -198,7 +200,7 @@ async def test_concurrency_limit():
     # We step enough times to ensure the second task also launches.
     for _ in range(10):
         reactor.step()
-        
+
     # Final check: The second request should have been consumed from the buffer
     assert memory.get_count(req_buffer_id) == 0
 

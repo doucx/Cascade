@@ -27,7 +27,7 @@ def test_expander_creates_dyad_structure():
 
     launcher = subgraph.launcher
     lander = subgraph.lander
-    
+
     assert isinstance(launcher, LauncherNode)
     assert isinstance(lander, LanderNode)
     assert launcher.id == "node_1.launch"

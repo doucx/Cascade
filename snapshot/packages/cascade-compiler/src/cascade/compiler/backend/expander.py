@@ -22,7 +22,7 @@ class Expander:
         # 2. Create Launcher Node
         # Inputs = Task Args + Resource Constraints + Signals
         launcher_inputs = {}
-        
+
         # 2.1 Static Args from Task Def
         for arg in node_ir.task.args:
             if arg.kind == ArgumentKind.VAR_POSITIONAL:
@@ -56,12 +56,10 @@ class Expander:
         # 2.6 Pulse (if pure source)
         if not launcher_inputs:
             pulse_name = LauncherSpec.pulse.name
-            launcher_inputs[pulse_name] = PortDef(
-                pulse_name, PortRole.SIGNAL
-            )
+            launcher_inputs[pulse_name] = PortDef(pulse_name, PortRole.SIGNAL)
 
         canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]
-        
+
         f_launcher = LauncherNode(
             id=f_launch_id,
             name=f"Launch({node_ir.name})",
@@ -72,7 +70,7 @@ class Expander:
                 "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event")
             },
             canonical_code_structure_hash=canonical_hash,
-            reply_to_nid=d_result_id
+            reply_to_nid=d_result_id,
         )
 
         # 3. Create Result Data Node (The Landing Pad)
@@ -85,7 +83,7 @@ class Expander:
             "output_error": PortDef("output_error", PortRole.DATA, "Token"),
             "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
         }
-        
+
         # 4.1 Resource Returns
         for res_name in node_ir.constraints.keys():
             port_name = f"res_{res_name}"
@@ -99,7 +97,9 @@ class Expander:
             name=f"Land({node_ir.name})",
             input_ports={
                 # Lander receives the raw result token
-                LanderSpec.result_token.name: PortDef(LanderSpec.result_token.name, PortRole.DATA, "Any")
+                LanderSpec.result_token.name: PortDef(
+                    LanderSpec.result_token.name, PortRole.DATA, "Any"
+                )
             },
             output_ports=lander_outputs,
         )
@@ -108,7 +108,7 @@ class Expander:
         subgraph.nodes = {
             f_launch_id: f_launcher,
             d_result_id: d_result,
-            f_land_id: f_lander
+            f_land_id: f_lander,
         }
         subgraph.launcher = f_launcher
         subgraph.lander = f_lander

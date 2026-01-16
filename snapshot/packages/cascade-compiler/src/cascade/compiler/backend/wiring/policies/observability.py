@@ -48,7 +48,7 @@ class ObservabilityWiringPolicy(WiringPolicy):
         ctx.wire.connect(
             subgraph.launcher.id, LauncherSpec.obs_output.name, d_life_id, "in"
         )
-        
+
         # Wire Lander observability (FINISHED event)
         ctx.wire.connect(
             subgraph.lander.id, LanderSpec.obs_output.name, d_life_id, "in"

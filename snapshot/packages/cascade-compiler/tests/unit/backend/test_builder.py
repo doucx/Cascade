@@ -119,7 +119,7 @@ def test_builder_creates_pulse_for_source_node(source_only_graph_ir):
     # 2. Assert Launcher port definition
     launcher_id = "source_node.launch"
     launcher_node = graph.nodes[launcher_id]
-    from cascade.spec.specs.dyad import LauncherSpec
+
     assert LauncherSpec.pulse.name in launcher_node.input_ports
 
     # 3. Assert Connection: D_pulse -> F_launch

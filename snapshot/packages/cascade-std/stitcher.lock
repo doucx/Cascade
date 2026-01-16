@@ -1,6 +1,14 @@
 {
   "fingerprints": {
     "py://packages/cascade-std/src/cascade/__init__.py#__path__": {},
+    "py://packages/cascade-std/src/cascade/std/dyad/lander.py#standard_lander": {
+      "baseline_code_signature_text": "def standard_lander(io: LanderSpec.IO, node: LanderNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "c57a40aee3bfe7a1d6a7a06f0783122bcbf55d7638ccb617c3819b60fee6e482"
+    },
+    "py://packages/cascade-std/src/cascade/std/dyad/launcher.py#standard_launcher": {
+      "baseline_code_signature_text": "def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -> None:",
+      "baseline_code_structure_hash": "02a03cfeea9a6fa1162677873075a2ff7c4926f37185827281dcb82fca215b34"
+    },
     "py://packages/cascade-std/src/cascade/std/kernel_tools.py#DynamicOutputMap": {
       "baseline_code_signature_text": "class DynamicOutputMap(MutableMapping):",
       "baseline_code_structure_hash": "0c97ca6bc316f51cf663556b80907139723af9b52ea50d5a79f0c598d8ff4dcb",
@@ -237,6 +245,10 @@
       "baseline_code_structure_hash": "2c5ec9ef5af2118fc25ee9e2f5aeb728fab01d7867a0bf9c27d469a374af4587",
       "baseline_yaml_content_hash": "6a800f7e157669b56feb63d3d590594c5c7d4d0fd5b2b3876efb8454e573b9b3"
     },
+    "py://packages/cascade-std/src/cascade/std/system/observer.py#standard_observer": {
+      "baseline_code_signature_text": "def standard_observer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+      "baseline_code_structure_hash": "24ec1527a1b41bd235fc71fc84d7df263c22aa7a13beb0bbdb23350662d07626"
+    },
     "py://packages/cascade-std/src/cascade/std/system/retry.py#standard_retry_logic": {
       "baseline_code_signature_text": "def standard_retry_logic(io: RetrySpec.IO, node: RetryNode, resources: Any) -> None:",
       "baseline_code_structure_hash": "a09eea73ac8c2da536cc89ecea8cbe90d241f9a9eacf9b1d092b150bfb88e019",
@@ -274,6 +286,46 @@
       "baseline_code_signature_text": "def standard_stainer(inputs: Dict[str, Token], node: StainNode, resources: Any) -> Dict[str, Token]:",
       "baseline_code_structure_hash": "5400f5c50cf10ab5d8e2f7fd5e96b875c2fb4790e7763d8a2a80101884bdd2a7",
       "baseline_yaml_content_hash": "590e1206575b9091caf8bc02717638153c940b04b2a4c6d04a9f5152d29ac85c"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_lander.py#create_mock_lander_node": {
+      "baseline_code_signature_text": "def create_mock_lander_node(output_ports_config):",
+      "baseline_code_structure_hash": "2ef0eb9409f4ecf02d297af1630831186c635c2acab31861cd357866b0281776"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_lander.py#test_standard_lander_error_path": {
+      "baseline_code_signature_text": "def test_standard_lander_error_path():",
+      "baseline_code_structure_hash": "63b37c089ef64d32ec2554c2b8e38acc3622db8c3ac4a3e46260cab126bd4e72"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_lander.py#test_standard_lander_success_path": {
+      "baseline_code_signature_text": "def test_standard_lander_success_path():",
+      "baseline_code_structure_hash": "1e410d782a20ef7756360cfe039d86bec0a5d4eec33cdea687cdb792022a2afa"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_launcher.py#create_mock_launcher_node": {
+      "baseline_code_signature_text": "def create_mock_launcher_node(input_ports_config):",
+      "baseline_code_structure_hash": "2be3d97004731327a3faf93a6b84f918c3c63ab59cbe09e756af239f66a4abf1"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_launcher.py#test_standard_launcher_dispatches_request": {
+      "baseline_code_signature_text": "def test_standard_launcher_dispatches_request():",
+      "baseline_code_structure_hash": "65aebaecdfcbc6138e285dc26a2513e5aa9333c45e342ed8f11f68ca9a86b4f0"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_launcher.py#test_standard_launcher_emits_observability_event": {
+      "baseline_code_signature_text": "def test_standard_launcher_emits_observability_event():",
+      "baseline_code_structure_hash": "f66c085e2e63ad021f5a46a85ae7e8e604b5daade1c08079ac9d773c03bc5373"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_observer.py#mock_bus": {
+      "baseline_code_signature_text": "def mock_bus() -> MagicMock:",
+      "baseline_code_structure_hash": "0037e75f5349bdb710e313e7906bf98bdc88b4e4d5b3f573417f9137cab33b65"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_observer.py#mock_resources": {
+      "baseline_code_signature_text": "def mock_resources(mock_bus: MagicMock) -> MagicMock:",
+      "baseline_code_structure_hash": "7889110c5ec7317ed9410f326c82bf405eac395c3462101c471331bc450771e3"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_observer.py#test_observer_handles_no_bus": {
+      "baseline_code_signature_text": "def test_observer_handles_no_bus(mock_resources: MagicMock):",
+      "baseline_code_structure_hash": "f0d709737cae91f11da194c86bd99a4b56df9b056d768092be34e0744ba1e10d"
+    },
+    "py://packages/cascade-std/tests/unit/dyad/test_observer.py#test_observer_publishes_ir_to_bus": {
+      "baseline_code_signature_text": "def test_observer_publishes_ir_to_bus(mock_bus: MagicMock, mock_resources: MagicMock):",
+      "baseline_code_structure_hash": "a018ca741b180908f26d5b91a53664c8daea5da4fda231f68a813c80fe04c399"
     },
     "py://packages/cascade-std/tests/unit/resource/test_continuous.py#partial_ledger": {
       "baseline_code_signature_text": "def partial_ledger() -> ContinuousLedger:",

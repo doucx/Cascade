@@ -6,7 +6,7 @@ from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.dyad import LauncherNode, LanderNode
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.specs.dyad import LauncherSpec, LanderSpec
+from cascade.spec.specs.dyad import LanderSpec
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
 from cascade.reflection import PhysicalIdGenerator
 from cascade.vm.machine import Machine
@@ -27,6 +27,7 @@ from cascade.std.dyad.lander import standard_lander
 
 
 # --- Test Fixtures ---
+
 
 async def user_square(n: int) -> int:
     await asyncio.sleep(0.01)
@@ -56,14 +57,14 @@ def build_test_graph() -> BipartiteGraph:
 
     # Nodes
     d_in = PhysicsDataNode(id=d_in_id, name="Input")
-    
+
     f_launch = LauncherNode(
         id=f_launch_id,
         name="Launch(square)",
         input_ports={"n": PortDef("n", PortRole.DATA)},
         output_ports={"obs_output": PortDef("obs_output", PortRole.OBSERVABILITY)},
         canonical_code_structure_hash="hash_for_user_square",
-        reply_to_nid=d_result_id
+        reply_to_nid=d_result_id,
     )
 
     d_result = PhysicsDataNode(id=d_result_id, name="Result(square)")
@@ -71,7 +72,11 @@ def build_test_graph() -> BipartiteGraph:
     f_land = LanderNode(
         id=f_land_id,
         name="Land(square)",
-        input_ports={LanderSpec.result_token.name: PortDef(LanderSpec.result_token.name, PortRole.DATA)},
+        input_ports={
+            LanderSpec.result_token.name: PortDef(
+                LanderSpec.result_token.name, PortRole.DATA
+            )
+        },
         output_ports={
             "output_default": PortDef("output_default", PortRole.DATA),
             "output_error": PortDef("output_error", PortRole.DATA),
@@ -90,30 +95,28 @@ def build_test_graph() -> BipartiteGraph:
             "ctrl": PortDef("ctrl", PortRole.SIGNAL),
         },
     )
-    
+
     d_final = PhysicsDataNode(id=d_final_id, name="FinalOutput")
 
     for node in [d_in, f_launch, d_result, f_land, d_out, f_halt, d_final]:
         graph.nodes[node.id] = node
 
     # Channels
-    graph.channels.extend([
-        # Input -> Launcher
-        Channel(d_in_id, "out", f_launch_id, "n"),
-        
-        # Note: Launcher -> Queue is NOT a physical channel.
-        # Queue -> D_result is NOT a physical channel (handled by ComputeService).
-        
-        # D_result -> Lander
-        Channel(d_result_id, "out", f_land_id, LanderSpec.result_token.name),
-        
-        # Lander -> Output
-        Channel(f_land_id, "output_default", d_out_id, "in"),
-        
-        # Output -> Halt
-        Channel(d_out_id, "out", f_halt_id, "in"),
-        Channel(f_halt_id, "out", d_final_id, "in")
-    ])
+    graph.channels.extend(
+        [
+            # Input -> Launcher
+            Channel(d_in_id, "out", f_launch_id, "n"),
+            # Note: Launcher -> Queue is NOT a physical channel.
+            # Queue -> D_result is NOT a physical channel (handled by ComputeService).
+            # D_result -> Lander
+            Channel(d_result_id, "out", f_land_id, LanderSpec.result_token.name),
+            # Lander -> Output
+            Channel(f_land_id, "output_default", d_out_id, "in"),
+            # Output -> Halt
+            Channel(d_out_id, "out", f_halt_id, "in"),
+            Channel(f_halt_id, "out", d_final_id, "in"),
+        ]
+    )
 
     return graph
 
@@ -132,7 +135,7 @@ async def test_machine_self_terminating_flow():
     code_registry = CodeRegistry()
     code_registry.register("hash_for_user_square", user_square)
     object_store = InMemoryObjectStore()
-    
+
     compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
     chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
     ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
@@ -147,7 +150,7 @@ async def test_machine_self_terminating_flow():
 
     kernel = PhysicsKernel(function_map, resource_registry)
     reactor = Reactor(graph, memory, kernel, ingress_queue)
-    
+
     compute_service = LocalComputeService(
         store=object_store,
         registry=code_registry,
@@ -155,13 +158,13 @@ async def test_machine_self_terminating_flow():
         outbound_queue=ingress_queue,
         wakeup_event=wakeup_event,
     )
-    
+
     chronos_service = ChronosService(
         inbound_queue=chronos_queue,
         outbound_queue=ingress_queue,
         wakeup_event=wakeup_event,
     )
-    
+
     machine = Machine(reactor, compute_service, chronos_service, wakeup_event)
 
     # Prime

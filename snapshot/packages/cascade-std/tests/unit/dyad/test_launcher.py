@@ -1,5 +1,4 @@
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.ports import PortDef, PortRole
@@ -38,7 +37,7 @@ def test_standard_launcher_dispatches_request():
     # Verify Queue Interaction
     mock_queue.put_nowait.assert_called_once()
     request = mock_queue.put_nowait.call_args[0][0]
-    
+
     assert isinstance(request, ComputeRequest)
     assert request.code_hash == "abc-123"
     assert request.reply_to_nid == "test_node.result"
@@ -51,12 +50,12 @@ def test_standard_launcher_emits_observability_event():
     mock_queue = MagicMock()
     resources = {"system.compute_queue": mock_queue}
 
-    # Use IO capture (simulated by return value in test harness, 
+    # Use IO capture (simulated by return value in test harness,
     # but strictly standard_launcher uses @implements which returns dict)
     # The @implements decorator logic wraps it, but for unit testing the inner function logic:
     # We need to simulate the IO wrapper if we were testing the inner logic directly,
     # OR we invoke the decorated function. standard_launcher IS the decorated function.
-    
+
     outputs = standard_launcher({}, node, resources)
 
     assert "obs_output" in outputs

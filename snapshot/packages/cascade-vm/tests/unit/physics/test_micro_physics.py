@@ -73,13 +73,17 @@ async def test_physics_the_crash():
     # Topology: D_res -> Lander -> (D_ok, D_err)
     # We simulate the lander receiving a failed result
 
-    d_res = PhysicsDataNode(id="D_res", name="WorkerResult")  # Holds the Exception (and trace)
+    d_res = PhysicsDataNode(
+        id="D_res", name="WorkerResult"
+    )  # Holds the Exception (and trace)
 
     f_land = LanderNode(
         id="F_land",
         name="Lander",
         input_ports={
-            LanderSpec.result_token.name: PortDef(LanderSpec.result_token.name, PortRole.DATA)
+            LanderSpec.result_token.name: PortDef(
+                LanderSpec.result_token.name, PortRole.DATA
+            )
         },
         output_ports={
             "output_default": PortDef("output_default", PortRole.DATA),
@@ -96,7 +100,9 @@ async def test_physics_the_crash():
     graph.nodes = {n.id: n for n in [d_res, f_land, d_ok, d_err, d_obs]}
 
     # Wiring
-    graph.channels.append(Channel(d_res.id, "out", f_land.id, LanderSpec.result_token.name))
+    graph.channels.append(
+        Channel(d_res.id, "out", f_land.id, LanderSpec.result_token.name)
+    )
 
     graph.channels.append(Channel(f_land.id, "output_default", d_ok.id, "in"))
     graph.channels.append(Channel(f_land.id, "output_error", d_err.id, "in"))
@@ -108,10 +114,13 @@ async def test_physics_the_crash():
     reactor = Reactor(graph, memory, kernel)
 
     # Inject Fault (Trace embedded in Token)
-    memory.put(d_res, Token(
-        payload=ValueError("Micro-Physics Failure"),
-        trace={"rid": "test-crash", "start_ts": 1000.0}
-    ))
+    memory.put(
+        d_res,
+        Token(
+            payload=ValueError("Micro-Physics Failure"),
+            trace={"rid": "test-crash", "start_ts": 1000.0},
+        ),
+    )
 
     # Action
     fired = reactor.step()

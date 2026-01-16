@@ -1,4 +1,4 @@
-import cascade as cs
+import cascade.sdk as cs
 import re
 from typing import List
 

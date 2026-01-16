@@ -1,5 +1,5 @@
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 from cascade.tools.lisp import to_lisp
 
 # Skip if typer is not installed (dependency of cs.create_cli, often in same env)

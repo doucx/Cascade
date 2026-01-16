@@ -2,7 +2,7 @@ import pickle
 import pytest
 from unittest.mock import MagicMock
 
-import cascade as cs
+import cascade.sdk as cs
 
 
 # A simple task for testing

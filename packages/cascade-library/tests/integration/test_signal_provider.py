@@ -1,7 +1,7 @@
 import asyncio
 import time
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 
 from cascade.runtime import Engine, EventBus
 from cascade.execution.graph.solvers.native import NativeSolver

@@ -2,7 +2,7 @@ import asyncio
 import random
 from typing import Any
 
-import cascade as cs
+import cascade.sdk as cs
 from cascade.runtime.events import (
     TaskBlocked,
     TaskExecutionStarted,

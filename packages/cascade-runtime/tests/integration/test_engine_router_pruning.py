@@ -1,5 +1,5 @@
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 from cascade.runtime import EventBus
 from cascade.runtime.host.instance import Engine
 from cascade.bus.events import TaskSkipped

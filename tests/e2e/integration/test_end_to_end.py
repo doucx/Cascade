@@ -1,10 +1,8 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock
-import cascade as cs
-from cascade.runtime.host.instance import Engine
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
+import cascade.sdk as cs
+from cascade.runtime import HumanReadableLogSubscriber
 
 
 @pytest.fixture
@@ -32,9 +30,9 @@ def test_e2e_linear_workflow(mock_messaging_bus):
 
     # We use the event_bus for engine events, which is internal.
     # The subscriber will translate these to calls on the mocked messaging_bus.
-    event_bus = cs.runtime.EventBus()
-    cs.runtime.HumanReadableLogSubscriber(event_bus)
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=event_bus)
+    event_bus = cs.EventBus()
+    HumanReadableLogSubscriber(event_bus)
+    engine = cs.Engine(solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=event_bus)
 
     result = asyncio.run(engine.run(final_greeting))
 
@@ -64,9 +62,9 @@ def test_e2e_failure_propagation(mock_messaging_bus):
     def failing_task():
         raise ValueError("Something went wrong")
 
-    event_bus = cs.runtime.EventBus()
-    cs.runtime.HumanReadableLogSubscriber(event_bus)
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=event_bus)
+    event_bus = cs.EventBus()
+    HumanReadableLogSubscriber(event_bus)
+    engine = cs.Engine(solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=event_bus)
 
     with pytest.raises(ValueError, match="Something went wrong"):
         asyncio.run(engine.run(failing_task()))

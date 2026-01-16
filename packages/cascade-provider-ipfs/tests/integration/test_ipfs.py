@@ -1,5 +1,5 @@
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 from aiohttp import web
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus

@@ -1,6 +1,6 @@
 import time
 import pytest
-from cascade import task
+from cascade.sdk import task
 
 
 @task(mode="blocking")

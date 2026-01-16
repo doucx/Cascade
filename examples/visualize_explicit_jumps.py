@@ -11,7 +11,7 @@ Cascade 显式跳转可视化演示 (v1.4+)
 4. 修复 (Fix) -> 修复后跳回 Lint 重新开始
 """
 
-import cascade as cs
+import cascade.sdk as cs
 
 # --- 1. 定义原子任务 ---
 

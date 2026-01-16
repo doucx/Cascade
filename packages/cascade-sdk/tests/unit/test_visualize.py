@@ -1,4 +1,4 @@
-import cascade as cs
+import cascade.sdk as cs
 
 
 def test_visualize_diamond_graph():

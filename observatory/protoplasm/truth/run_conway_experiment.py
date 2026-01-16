@@ -3,7 +3,7 @@ import numpy as np
 import shutil
 from typing import List
 
-import cascade as cs
+import cascade.sdk as cs
 from cascade.connectors.local import LocalBusConnector
 from cascade.spec.resource import resource
 

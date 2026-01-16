@@ -1,5 +1,5 @@
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.execution.graph.solvers.native import NativeSolver
 
@@ -8,7 +8,7 @@ from cascade.execution.graph.solvers.native import NativeSolver
 def subflow_file(tmp_path):
     p = tmp_path / "my_flow.py"
     content = """
-import cascade as cs
+import cascade.sdk as cs
 
 # Define a parameter
 multiplier = cs.Param("multiplier", default=1)

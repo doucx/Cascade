@@ -1,6 +1,6 @@
 import pytest
 
-from cascade import task, Engine
+from cascade.sdk import task, Engine
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime import EventBus

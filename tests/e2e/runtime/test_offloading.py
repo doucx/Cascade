@@ -1,7 +1,7 @@
 import asyncio
 import time
 import pytest
-from cascade import task
+from cascade.sdk import task
 
 
 @task(pure=True)

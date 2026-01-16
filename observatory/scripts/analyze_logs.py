@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 
-import cascade as cs
+import cascade.sdk as cs
 
 
 @cs.task

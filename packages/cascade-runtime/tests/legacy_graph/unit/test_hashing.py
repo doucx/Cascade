@@ -1,4 +1,4 @@
-from cascade import task
+from cascade.sdk import task
 from cascade.execution.graph.model.build import build_graph
 
 

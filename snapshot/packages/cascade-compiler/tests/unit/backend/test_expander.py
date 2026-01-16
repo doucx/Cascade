@@ -21,51 +21,39 @@ def test_expander_creates_triad_structure():
     subgraph = expander.expand_node(node_ir)
 
     # 3. Assert Nodes
-    # We expect 6 nodes: Bleach, Worker, Stain, D_in, D_out, D_trace
-    assert len(subgraph.nodes) == 6
+    # We expect 3 nodes: Launcher, Result, Lander
+    assert len(subgraph.nodes) == 3
 
-    bleacher = subgraph.bleacher
-    stainer = subgraph.stainer
+    launcher = subgraph.launcher
+    lander = subgraph.lander
+    
+    # Imports might be missing in the original file, we assume they are present or will be added if needed,
+    # but since this is a patch, we rely on existing context or structural typing if classes aren't imported.
+    # However, to be safe, we check properties.
+    assert launcher.id == "node_1.launch"
+    assert lander.id == "node_1.land"
 
-    assert isinstance(bleacher, BleachNode)
-    assert isinstance(stainer, StainNode)
-    assert bleacher.id == "node_1.bleach"
-    assert stainer.id == "node_1.stain"
-
-    # Check intermediate nodes
-    worker = subgraph.worker
-    assert isinstance(worker, WorkerNode)
-    assert worker.id == "node_1.worker"
-
-    d_trace = subgraph.nodes["node_1.data.trace"]
-    assert isinstance(d_trace, PhysicsDataNode)
+    # Check intermediate node
+    d_result = subgraph.nodes["node_1.result"]
+    assert isinstance(d_result, PhysicsDataNode)
 
     # 4. Assert Channels
-    # We expect 6 internal channels
-    assert len(subgraph.channels) == 6
+    # We expect 1 internal channel: D_result -> Lander
+    assert len(subgraph.channels) == 1
 
     # Verify connections
-    # Bleach -> Trace
-    trace_channel = next(
+    # D_result -> Lander
+    result_channel = next(
         c
         for c in subgraph.channels
-        if c.source_node_id == bleacher.id and c.target_node_id == d_trace.id
+        if c.source_node_id == d_result.id and c.target_node_id == lander.id
     )
-    assert trace_channel.source_port == "trace_output"
+    assert result_channel.target_port == "result_token"
 
     # Verify Port Definitions
-    assert "x" in bleacher.input_ports
-    assert bleacher.input_ports["x"].role == PortRole.DATA
-    assert bleacher.output_ports["trace_output"].role == PortRole.DATA
-    assert bleacher.output_ports["obs_output"].role == PortRole.OBSERVABILITY
+    assert "x" in launcher.input_ports
+    assert launcher.input_ports["x"].role == PortRole.DATA
+    assert launcher.output_ports["obs_output"].role == PortRole.OBSERVABILITY
 
-    assert stainer.input_ports["worker_result"].role == PortRole.DATA
-    assert stainer.output_ports["output_default"].role == PortRole.DATA
-
-    # Trace -> Stain
-    trace_in_channel = next(
-        c
-        for c in subgraph.channels
-        if c.source_node_id == d_trace.id and c.target_node_id == stainer.id
-    )
-    assert trace_in_channel.source_port == "out"  # implicit port for data node
+    assert lander.input_ports["result_token"].role == PortRole.DATA
+    assert lander.output_ports["output_default"].role == PortRole.DATA

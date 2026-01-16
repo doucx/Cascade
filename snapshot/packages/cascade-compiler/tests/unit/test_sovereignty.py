@@ -15,15 +15,15 @@ def test_expander_generates_sovereign_ports():
     # 2. Expand
     expander = Expander()
     subgraph = expander.expand_node(node_ir)
-    stainer = subgraph.stainer
+    lander = subgraph.lander
 
     # 3. Assert Ports
-    assert "output_default" in stainer.output_ports
-    assert "output_error" in stainer.output_ports
+    assert "output_default" in lander.output_ports
+    assert "output_error" in lander.output_ports
 
     # Check roles
-    assert stainer.output_ports["output_default"].role == PortRole.DATA
-    assert stainer.output_ports["output_error"].role == PortRole.DATA
+    assert lander.output_ports["output_default"].role == PortRole.DATA
+    assert lander.output_ports["output_error"].role == PortRole.DATA
 
     # Ensure legacy 'output' is gone
-    assert "output" not in stainer.output_ports
+    assert "output" not in lander.output_ports

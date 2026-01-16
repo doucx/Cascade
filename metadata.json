@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 修复 Builder 以适配 Dyad SubGraph 模型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768553787.108036, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 修复编译器测试以适配 Dyad 架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768553950.9429321, "duration_ms": 0}}

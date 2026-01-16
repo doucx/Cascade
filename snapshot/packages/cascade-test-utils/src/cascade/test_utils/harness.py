@@ -16,7 +16,8 @@ from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.kernel import PhysicsKernel
 from cascade.bus.core import EventBus
 from cascade.bus.events import Event, TaskExecutionFinished
-from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.spec.runtime import ComputeRequest
+from cascade.vm.compute import LocalComputeService
 from cascade.vm.services.chronos import ChronosService
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.linker import Linker

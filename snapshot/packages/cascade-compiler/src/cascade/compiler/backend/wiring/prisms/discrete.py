@@ -15,7 +15,7 @@ from ...expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from ..context import WiringContext
 from ...expansion.context import ExpansionContext
-from ..prism import ResourcePrism
+from cascade.spec.compiler.interfaces import ResourcePrism
 
 
 class DiscreteResourcePrism(ResourcePrism):

@@ -3,8 +3,7 @@ from typing import Dict
 from cascade.spec.ir.graph import NodeIR
 from ...expander import SubGraph
 from ..context import WiringContext
-from cascade.spec.compiler.interfaces import WiringPolicy
-from ..prism import ResourcePrism
+from cascade.spec.compiler.interfaces import WiringPolicy, ResourcePrism
 from ..prisms.discrete import DiscreteResourcePrism
 
 

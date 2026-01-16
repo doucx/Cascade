@@ -33,6 +33,10 @@
     },
     "py://packages/cascade-sdk/src/cascade/sdk.py#_IMPORT_MAP": {},
     "py://packages/cascade-sdk/src/cascade/sdk.py#__all__": {},
+    "py://packages/cascade-sdk/src/cascade/sdk.py#__dir__": {
+      "baseline_code_signature_text": "def __dir__():",
+      "baseline_code_structure_hash": "a5f3ba33704c1f392f4d2fe11f63ccdc537ba2fc62f0058fd44b28e91ef0d8a1"
+    },
     "py://packages/cascade-sdk/src/cascade/sdk.py#__getattr__": {
       "baseline_code_signature_text": "def __getattr__(name: str) -> Any:",
       "baseline_code_structure_hash": "e4c6375eacd59d709311f755b6d45a5256cf3f5517bc10b7eaf8e38228d9701f"

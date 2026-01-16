@@ -9,7 +9,7 @@ from .harness import InProcessConnector
 
 
 @pytest.mark.asyncio
-async def test_startup_telemetry_no_race_condition():
+async def test_startup_telemetry_no_race_condition(engine_factory):
     """
     Verifies that the initial 'RunStarted' telemetry event is correctly published
     to the connector.
@@ -53,12 +53,7 @@ async def test_startup_telemetry_no_race_condition():
     #   b. Publish 'RunStarted' (which triggers telemetry via the subscriber)
     #   c. Run the task
     # If (b) happens before (a), the message is dropped.
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus,
-        connector=connector,
-    )
+    engine = engine_factory(bus=bus, connector=connector)
     # CRITICAL: Register the subscriber with the engine for lifecycle management
     engine.add_subscriber(telemetry_subscriber)
 

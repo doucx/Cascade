@@ -7,7 +7,7 @@ from cascade.runtime import EventBus
 
 
 @pytest.mark.asyncio
-async def test_jump_overrides_param():
+async def test_jump_overrides_param(engine):
     """
     Test that data provided by cs.Jump (input_overrides) takes precedence over
     upstream dependencies (like cs.Param) defined in the static graph.
@@ -32,9 +32,6 @@ async def test_jump_overrides_param():
     t = recursive_task(cs.Param("n", 3, int))
     cs.bind(t, cs.select_jump({"continue": t}))
 
-    bus = EventBus()
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
-
     # Run with initial param n=3
     final_res = await engine.run(t, params={"n": 3})
 
@@ -45,7 +42,7 @@ async def test_jump_overrides_param():
 
 
 @pytest.mark.asyncio
-async def test_jump_overrides_param_complex_path():
+async def test_jump_overrides_param_complex_path(engine):
     """
     Same as the above test, but forces the ArgumentResolver's "complex path"
     by including a resource injection, ensuring the fix works in both code paths.
@@ -74,8 +71,6 @@ async def test_jump_overrides_param_complex_path():
     t = recursive_task_with_injection(cs.Param("n", 3, int))
     cs.bind(t, cs.select_jump({"continue": t}))
 
-    bus = EventBus()
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     # Register the resource required by the task
     engine.register(dummy_resource)
 

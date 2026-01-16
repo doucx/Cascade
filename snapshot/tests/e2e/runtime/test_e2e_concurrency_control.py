@@ -3,9 +3,6 @@ from dataclasses import asdict
 
 import pytest
 import cascade.sdk as cs
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.host.instance import Engine
-from cascade.runtime import EventBus
 from cascade.spec.dsl.constraint import GlobalConstraint
 
 # Use the deterministic Mock infrastructure from the SDK
@@ -13,7 +10,7 @@ from cascade.test_utils.helpers import MockExecutor, MockConnector
 
 
 @pytest.mark.asyncio
-async def test_e2e_concurrency_control():
+async def test_e2e_concurrency_control(engine_factory):
     """
     Full end-to-end test with Retained Messages.
     1. Controller state is pre-seeded (Retained).
@@ -46,10 +43,8 @@ async def test_e2e_concurrency_control():
     workflow = slow_task.map(x=[1, 2, 3, 4])
 
     # 4. Setup the Engine
-    engine = Engine(
-        solver=NativeSolver(),
+    engine = engine_factory(
         executor=MockExecutor(delay=0.05),
-        bus=EventBus(),
         connector=connector,
     )
 

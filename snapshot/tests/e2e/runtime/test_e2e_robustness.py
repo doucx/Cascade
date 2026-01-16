@@ -23,7 +23,7 @@ def mock_ui_bus(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_engine_recovers_from_malformed_rate_limit(bus_and_spy, mock_ui_bus):
+async def test_engine_recovers_from_malformed_rate_limit(engine_factory, bus_and_spy, mock_ui_bus):
     """
     Verifies that the Engine:
     1. Does not deadlock when receiving a malformed rate_limit constraint.
@@ -52,9 +52,7 @@ async def test_engine_recovers_from_malformed_rate_limit(bus_and_spy, mock_ui_bu
     workflow = task_b(task_a())
 
     # 2. Configure and start the engine in the background
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
+    engine = engine_factory(
         bus=engine_bus,
         connector=engine_connector,
     )

@@ -1,16 +1,13 @@
 import time
 import pytest
 import cascade.sdk as cs
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.host.instance import Engine
-from cascade.runtime import EventBus
 from cascade.test_utils.helpers import MockExecutor
 
 from .harness import InProcessConnector
 
 
 @pytest.mark.asyncio
-async def test_e2e_ttl_expiration():
+async def test_e2e_ttl_expiration(engine_factory):
     """
     Tests that a pause constraint automatically expires after TTL.
     """
@@ -45,27 +42,8 @@ async def test_e2e_ttl_expiration():
 
     workflow = simple_task()
 
-    engine = Engine(
-        solver=NativeSolver(),
+    engine = engine_factory(
         executor=MockExecutor(),
-        bus=EventBus(),
-        connector=connector,
-    )
-
-    # 1. Publish a pause with short TTL (0.2s)
-    # We use a slightly longer TTL than the check interval to ensure we catch the pause state
-    await pause_with_ttl(scope="global", ttl=0.25)
-
-    @cs.task
-    def simple_task():
-        return True
-
-    workflow = simple_task()
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=MockExecutor(),
-        bus=EventBus(),
         connector=connector,
     )
 

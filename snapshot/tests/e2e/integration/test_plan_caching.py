@@ -1,9 +1,7 @@
 import pytest
 
-from cascade.sdk import task, Engine
-from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.sdk import task
 from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime import EventBus
 from cascade.test_utils.helpers import SpySolver
 
 
@@ -14,16 +12,12 @@ def add(a: int, b: int) -> int:
 
 
 @pytest.fixture
-def engine_with_spy_solver():
+def engine_with_spy_solver(engine_factory):
     """Provides an Engine with a solver that spies on `resolve` calls."""
     # The spy wraps a real solver to ensure the test can actually run
     spy_solver = SpySolver(NativeSolver())
 
-    engine = Engine(
-        solver=spy_solver,
-        executor=LocalExecutor(),
-        bus=EventBus(),  # A silent bus for clean test output
-    )
+    engine = engine_factory(solver=spy_solver)
     # Return the engine and the mock object for making assertions
     return engine, spy_solver.resolve
 

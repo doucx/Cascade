@@ -18,21 +18,12 @@ def short_sync_compute_task(duration: float) -> float:
 
 
 @pytest.mark.asyncio
-async def test_compute_tasks_are_isolated_from_blocking_tasks():
+async def test_compute_tasks_are_isolated_from_blocking_tasks(engine_factory):
     """
     Verifies that 'compute' and 'blocking' tasks run in separate thread pools
     and do not block each other.
     """
-    from cascade.runtime.host.instance import Engine
-    from cascade.runtime import EventBus
-    from cascade.execution.graph.solvers.native import NativeSolver
-    from cascade.runtime.io.executors.local import LocalExecutor
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=EventBus(),
-    )
+    engine = engine_factory()
 
     # A short compute task (0.1s) and a long blocking task (0.2s)
     compute_lr = short_sync_compute_task(0.1)

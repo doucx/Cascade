@@ -2,11 +2,11 @@ from cascade.spec.ir.graph import NodeIR, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.ir.fingerprint import Fingerprint
 from cascade.spec.physical.ports import PortRole
 from cascade.compiler.backend.expander import Expander
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
+from cascade.spec.physical.dyad import LauncherNode, LanderNode
 from cascade.spec.physical.nodes import PhysicsDataNode
 
 
-def test_expander_creates_triad_structure():
+def test_expander_creates_dyad_structure():
     # 1. Setup IR
     fp = Fingerprint({"canonical_code_structure_hash": "abc"})
     task_def = TaskDef(
@@ -21,51 +21,56 @@ def test_expander_creates_triad_structure():
     subgraph = expander.expand_node(node_ir)
 
     # 3. Assert Nodes
-    # We expect 6 nodes: Bleach, Worker, Stain, D_in, D_out, D_trace
-    assert len(subgraph.nodes) == 6
+    # We expect 3 nodes: Launcher, Lander, D_result
+    assert len(subgraph.nodes) == 3
 
-    bleacher = subgraph.bleacher
-    stainer = subgraph.stainer
+    launcher = subgraph.launcher
+    lander = subgraph.lander
+    d_result = subgraph.nodes["node_1.result"]
 
-    assert isinstance(bleacher, BleachNode)
-    assert isinstance(stainer, StainNode)
-    assert bleacher.id == "node_1.bleach"
-    assert stainer.id == "node_1.stain"
+    assert isinstance(launcher, LauncherNode)
+    assert isinstance(lander, LanderNode)
+    assert isinstance(d_result, PhysicsDataNode)
 
-    # Check intermediate nodes
-    worker = subgraph.worker
-    assert isinstance(worker, WorkerNode)
-    assert worker.id == "node_1.worker"
+    assert launcher.id == "node_1.launch"
+    assert lander.id == "node_1.land"
 
-    d_trace = subgraph.nodes["node_1.data.trace"]
-    assert isinstance(d_trace, PhysicsDataNode)
+    # 4. Assert Launcher Properties
+    assert launcher.canonical_code_structure_hash == "abc"
+    assert launcher.reply_to_nid == "node_1.result"
 
-    # 4. Assert Channels
-    # We expect 6 internal channels
-    assert len(subgraph.channels) == 6
+    # 5. Assert Internal Channel
+    # Only one connection: D_result -> Lander
+    assert len(subgraph.channels) == 1
+    channel = subgraph.channels[0]
+    assert channel.source_node_id == "node_1.result"
+    assert channel.target_node_id == "node_1.land"
+    assert channel.target_port == "result_token"
 
-    # Verify connections
-    # Bleach -> Trace
-    trace_channel = next(
-        c
-        for c in subgraph.channels
-        if c.source_node_id == bleacher.id and c.target_node_id == d_trace.id
+    # 6. Assert Port Definitions
+    assert "x" in launcher.input_ports
+    assert launcher.input_ports["x"].role == PortRole.DATA
+    assert launcher.output_ports["obs_output"].role == PortRole.OBSERVABILITY
+
+
+def test_expander_generates_sovereign_ports_on_lander():
+    # This test merges the intent of the old test_sovereignty.py
+    # 1. Setup IR
+    fp = Fingerprint({"canonical_code_structure_hash": "abc"})
+    task_def = TaskDef(name="my_task", args=[], fingerprint=fp)
+    node_ir = NodeIR(
+        current_node_instance_hash="node_sov", name="SovereignNode", task=task_def
     )
-    assert trace_channel.source_port == "trace_output"
 
-    # Verify Port Definitions
-    assert "x" in bleacher.input_ports
-    assert bleacher.input_ports["x"].role == PortRole.DATA
-    assert bleacher.output_ports["trace_output"].role == PortRole.DATA
-    assert bleacher.output_ports["obs_output"].role == PortRole.OBSERVABILITY
+    # 2. Expand
+    expander = Expander()
+    subgraph = expander.expand_node(node_ir)
+    lander = subgraph.lander
 
-    assert stainer.input_ports["worker_result"].role == PortRole.DATA
-    assert stainer.output_ports["output_default"].role == PortRole.DATA
+    # 3. Assert Ports
+    assert "output_default" in lander.output_ports
+    assert "output_error" in lander.output_ports
 
-    # Trace -> Stain
-    trace_in_channel = next(
-        c
-        for c in subgraph.channels
-        if c.source_node_id == d_trace.id and c.target_node_id == stainer.id
-    )
-    assert trace_in_channel.source_port == "out"  # implicit port for data node
+    # Check roles
+    assert lander.output_ports["output_default"].role == PortRole.DATA
+    assert lander.output_ports["output_error"].role == PortRole.DATA

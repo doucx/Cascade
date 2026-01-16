@@ -46,10 +46,9 @@ def test_builder_creates_resources_from_env(simple_graph_ir):
     assert reclaimer_id in graph.nodes
 
     ledger_node = graph.nodes[ledger_id]
-    # The Ledger Node holds the DiscreteLedger object, capacity is just 1 (slot for the object)
     assert ledger_node.capacity == 1
     assert ledger_node.initial_tokens == 1
-    # Check the payload of the initial token
+    
     initial_ledger = ledger_node.initial_payload
     assert initial_ledger.total == 4
     assert initial_ledger.available == 4

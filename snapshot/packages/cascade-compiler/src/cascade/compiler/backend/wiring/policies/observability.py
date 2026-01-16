@@ -3,7 +3,8 @@ from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.triad import ObservabilityNode
 from cascade.spec.physical.ports import PortRole, PortDef
-from cascade.spec.components import ObservabilitySpec, BleacherSpec, StainerSpec
+from cascade.spec.components import ObservabilitySpec
+from cascade.spec.specs.dyad import LauncherSpec, LanderSpec
 from ...expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from ..context import WiringContext
@@ -38,15 +39,17 @@ class ObservabilityWiringPolicy(WiringPolicy):
         ctx.wire.connect(d_life_id, "out", f_obs_id, spec.event_token.name)
 
     def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:
-        assert subgraph.bleacher is not None
-        assert subgraph.stainer is not None
+        assert subgraph.launcher is not None
+        assert subgraph.lander is not None
 
         d_life_id = PhysicalIdGenerator.observability_bus()
 
-        # Wire task observability TO the sidecar bus
+        # Wire Launcher observability (STARTED event)
         ctx.wire.connect(
-            subgraph.bleacher.id, BleacherSpec.obs_output.name, d_life_id, "in"
+            subgraph.launcher.id, LauncherSpec.obs_output.name, d_life_id, "in"
         )
+        
+        # Wire Lander observability (FINISHED event)
         ctx.wire.connect(
-            subgraph.stainer.id, StainerSpec.obs_output.name, d_life_id, "in"
+            subgraph.lander.id, LanderSpec.obs_output.name, d_life_id, "in"
         )

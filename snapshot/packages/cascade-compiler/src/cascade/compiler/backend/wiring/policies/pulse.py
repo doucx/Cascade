@@ -1,5 +1,5 @@
 from cascade.spec.ir.graph import NodeIR
-from cascade.spec.components import BleacherSpec
+from cascade.spec.specs.dyad import LauncherSpec
 from ...expander import SubGraph
 from ..context import WiringContext
 from cascade.spec.compiler.interfaces import WiringPolicy
@@ -10,11 +10,11 @@ class PulseWiringPolicy(WiringPolicy):
         pass
 
     def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:
-        assert subgraph.bleacher is not None
+        assert subgraph.launcher is not None
 
         # Check if a pulse source was created for this node during expansion
         if "pulse_source" in subgraph.controls:
             d_pulse = subgraph.controls["pulse_source"]
             ctx.wire.connect(
-                d_pulse.id, "out", subgraph.bleacher.id, BleacherSpec.pulse.name
+                d_pulse.id, "out", subgraph.launcher.id, LauncherSpec.pulse.name
             )

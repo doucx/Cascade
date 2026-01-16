@@ -184,7 +184,6 @@ class DiscreteResourcePrism(ResourcePrism):
         ctx.wire.add_node(d_gnt)
 
         # Register components in SubGraph
-        # We store them as a list: [D_amt, F_req, D_gnt]
         subgraph.resources[res_name] = [d_amt, f_req, d_gnt]
         subgraph.nodes[d_amt_id] = d_amt
         subgraph.nodes[f_req_id] = f_req
@@ -219,33 +218,29 @@ class DiscreteResourcePrism(ResourcePrism):
         ctx.wire.connect(f_req_id, req.req_out.name, req_buffer_id, "in")
 
         # --- B. Grant Wiring (Sovereign Ports) ---
-        # Use prefix from Spec for dynamic port name
         spec = DiscreteAllocatorSpec
         gnt_port_name = f"{spec.grants.prefix}{f_req_id}"
 
-        # Add this port to the Allocator definition
-        # Note: In a pure HFEA approach, ports should ideally be defined in Expansion phase too,
-        # but dynamic ports on global nodes are tricky. We allow this modification in Wiring phase for now.
         allocator_node = ctx.physical_graph.nodes[allocator_id]
         assert isinstance(allocator_node, PhysicsFuncNode)
         allocator_node.output_ports[gnt_port_name] = PortDef(
             gnt_port_name, PortRole.RESOURCE
         )
 
-        # Allocator -> Dedicated DataNode
+        # Allocator -> Dedicated DataNode (D_gnt)
         ctx.wire.connect(allocator_id, gnt_port_name, d_gnt_id, "in")
 
-        # Dedicated DataNode -> Bleacher
-        assert subgraph.bleacher is not None
-        bleacher_port_name = f"res_{res_name}"
-        ctx.wire.connect(d_gnt_id, "out", subgraph.bleacher.id, bleacher_port_name)
+        # Dedicated DataNode -> Launcher
+        assert subgraph.launcher is not None
+        launcher_port_name = f"res_{res_name}"
+        ctx.wire.connect(d_gnt_id, "out", subgraph.launcher.id, launcher_port_name)
 
         # --- C. Release Wiring ---
-        # Stainer -> RelBuffer
-        assert subgraph.stainer is not None
+        # Lander -> RelBuffer
+        assert subgraph.lander is not None
         release_port_name = f"res_{res_name}"
         ctx.wire.connect(
-            subgraph.stainer.id,
+            subgraph.lander.id,
             release_port_name,
             rel_buffer_id,
             "in",

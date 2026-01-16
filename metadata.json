@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 实施 Dyad 架构的编译器模型重构与扩展逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768553258.017044, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 适配 Wiring Policies 与 Prisms 以支持 Dyad 架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768553376.9472241, "duration_ms": 0}}

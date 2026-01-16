@@ -2,7 +2,7 @@ import pytest
 from typing import Dict, Callable
 
 from cascade.spec.physical.nodes import Token, PhysicsDataNode
-from cascade.spec.physical.triad import RetryNode
+from cascade.spec.physical.system_nodes import RetryNode
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.test_utils import EventDrivenRunner

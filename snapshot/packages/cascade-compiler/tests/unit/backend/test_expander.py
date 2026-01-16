@@ -2,11 +2,12 @@ from cascade.spec.ir.graph import NodeIR, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.ir.fingerprint import Fingerprint
 from cascade.spec.physical.ports import PortRole
 from cascade.compiler.backend.expander import Expander
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
+from cascade.spec.physical.dyad import LauncherNode, LanderNode
 from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.specs.dyad import LanderSpec
 
 
-def test_expander_creates_triad_structure():
+def test_expander_creates_dyad_structure():
     # 1. Setup IR
     fp = Fingerprint({"canonical_code_structure_hash": "abc"})
     task_def = TaskDef(
@@ -27,9 +28,8 @@ def test_expander_creates_triad_structure():
     launcher = subgraph.launcher
     lander = subgraph.lander
     
-    # Imports might be missing in the original file, we assume they are present or will be added if needed,
-    # but since this is a patch, we rely on existing context or structural typing if classes aren't imported.
-    # However, to be safe, we check properties.
+    assert isinstance(launcher, LauncherNode)
+    assert isinstance(lander, LanderNode)
     assert launcher.id == "node_1.launch"
     assert lander.id == "node_1.land"
 
@@ -48,12 +48,12 @@ def test_expander_creates_triad_structure():
         for c in subgraph.channels
         if c.source_node_id == d_result.id and c.target_node_id == lander.id
     )
-    assert result_channel.target_port == "result_token"
+    assert result_channel.target_port == LanderSpec.result_token.name
 
     # Verify Port Definitions
     assert "x" in launcher.input_ports
     assert launcher.input_ports["x"].role == PortRole.DATA
     assert launcher.output_ports["obs_output"].role == PortRole.OBSERVABILITY
 
-    assert lander.input_ports["result_token"].role == PortRole.DATA
+    assert lander.input_ports[LanderSpec.result_token.name].role == PortRole.DATA
     assert lander.output_ports["output_default"].role == PortRole.DATA

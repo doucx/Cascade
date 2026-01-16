@@ -3,13 +3,14 @@ import pytest
 from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.system_nodes import StainNode
+from cascade.spec.physical.dyad import LanderNode
+from cascade.spec.specs.dyad import LanderSpec
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.resource_registry import ResourceRegistry
-from cascade.std.triad.stainer import standard_stainer
+from cascade.std.dyad.lander import standard_lander
 from cascade.std.system.terminator import halt_signal
 
 
@@ -69,22 +70,20 @@ async def test_physics_the_spark():
 
 @pytest.mark.asyncio
 async def test_physics_the_crash():
-    # Topology: D_in -> Stainer -> (D_ok, D_err)
-    # We simulate the stainer receiving a failed result from a worker
+    # Topology: D_res -> Lander -> (D_ok, D_err)
+    # We simulate the lander receiving a failed result
 
-    d_res = PhysicsDataNode(id="D_res", name="WorkerResult")  # Holds the Exception
-    d_trace = PhysicsDataNode(id="D_trace", name="TraceCtx")
+    d_res = PhysicsDataNode(id="D_res", name="WorkerResult")  # Holds the Exception (and trace)
 
-    f_stain = StainNode(
-        id="F_stain",
-        name="Stainer",
+    f_land = LanderNode(
+        id="F_land",
+        name="Lander",
         input_ports={
-            "worker_result": PortDef("worker_result", PortRole.DATA),
-            "trace_input": PortDef("trace_input", PortRole.DATA),
+            LanderSpec.result_token.name: PortDef(LanderSpec.result_token.name, PortRole.DATA)
         },
         output_ports={
             "output_default": PortDef("output_default", PortRole.DATA),
-            "output_error": PortDef("output_error", PortRole.DATA),  # Sovereign Port
+            "output_error": PortDef("output_error", PortRole.DATA),
             "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
         },
     )
@@ -94,24 +93,25 @@ async def test_physics_the_crash():
     d_obs = PhysicsDataNode(id="global.observability.bus", name="Bus", capacity=100)
 
     graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d_res, d_trace, f_stain, d_ok, d_err, d_obs]}
+    graph.nodes = {n.id: n for n in [d_res, f_land, d_ok, d_err, d_obs]}
 
     # Wiring
-    graph.channels.append(Channel(d_res.id, "out", f_stain.id, "worker_result"))
-    graph.channels.append(Channel(d_trace.id, "out", f_stain.id, "trace_input"))
+    graph.channels.append(Channel(d_res.id, "out", f_land.id, LanderSpec.result_token.name))
 
-    graph.channels.append(Channel(f_stain.id, "output_default", d_ok.id, "in"))
-    graph.channels.append(Channel(f_stain.id, "output_error", d_err.id, "in"))
-    graph.channels.append(Channel(f_stain.id, "obs_output", d_obs.id, "in"))
+    graph.channels.append(Channel(f_land.id, "output_default", d_ok.id, "in"))
+    graph.channels.append(Channel(f_land.id, "output_error", d_err.id, "in"))
+    graph.channels.append(Channel(f_land.id, "obs_output", d_obs.id, "in"))
 
     memory = VolatileMemory()
     resources = ResourceRegistry()
-    kernel = PhysicsKernel({f_stain.id: standard_stainer}, resources)
+    kernel = PhysicsKernel({f_land.id: standard_lander}, resources)
     reactor = Reactor(graph, memory, kernel)
 
-    # Inject Fault
-    memory.put(d_res, Token(payload=ValueError("Micro-Physics Failure")))
-    memory.put(d_trace, Token(payload={"rid": "test-crash"}))
+    # Inject Fault (Trace embedded in Token)
+    memory.put(d_res, Token(
+        payload=ValueError("Micro-Physics Failure"),
+        trace={"rid": "test-crash", "start_ts": 1000.0}
+    ))
 
     # Action
     fired = reactor.step()

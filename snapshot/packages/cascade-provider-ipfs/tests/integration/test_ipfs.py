@@ -1,10 +1,6 @@
 import pytest
 import cascade.sdk as cs
 from aiohttp import web
-from cascade.runtime.host.instance import Engine
-from cascade.runtime import EventBus
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
 
 # The CID we will request in the test
 TEST_CID = "QmZULkCELmmk5XNfCgTnflahDcwr9ssAAkAJd15uiNpdEp"
@@ -63,12 +59,11 @@ async def mock_ipfs_server(aiohttp_client):
 
 
 @pytest.mark.asyncio
-async def test_ipfs_cat_provider(mock_ipfs_server):
+async def test_ipfs_cat_provider(engine, mock_ipfs_server):
     # Define the Cascade workflow, passing the mock URL explicitly
     workflow = cs.ipfs.cat(cid=TEST_CID, api_base_url=mock_ipfs_server)
 
     # Run the workflow
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     # Assert the result
@@ -76,7 +71,7 @@ async def test_ipfs_cat_provider(mock_ipfs_server):
 
 
 @pytest.mark.asyncio
-async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
+async def test_ipfs_add_provider(engine, mock_ipfs_server, tmp_path):
     # Create a temporary file to upload
     test_file = tmp_path / "test.txt"
     test_file.write_bytes(FAKE_CONTENT)
@@ -85,7 +80,6 @@ async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
     workflow = cs.ipfs.add(path=str(test_file), api_base_url=mock_ipfs_server)
 
     # Run
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     # Assert we got the hash from the JSON response

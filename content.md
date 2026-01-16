@@ -1,256 +1,340 @@
-好的，我明白了。上一轮的修复引入了一个更深层次的架构问题，而这些测试失败是其直接症状。
+好的，这是我们架构重构的最后一批清理工作。这些测试文件来自不同的包，但问题是完全相同的：它们都在手动实例化 `Engine`，而没有遵循新的依赖注入契约。
 
-所有失败的根本原因都是同一个：**`Engine` 和 `GraphExecutionStrategy` 之间存在状态隔离**。
+我将一次性修复所有这些遗留问题，将它们全部迁移到统一的 `engine` fixture 体系。
 
-具体来说：
-
-1.  **`ResourceContainer` 的分裂**: 我们在 `Engine` 内部创建了一个 `ResourceContainer` 实例，并在 `run()` 方法中用它来注册内部资源（如 `_internal_connector`）。然而，我们传递给 `GraphExecutionStrategy` 的是**另一个** `ResourceContainer` 实例（在 `engine_factory` 中创建）。
-2.  **状态不一致**:
-    *   当测试调用 `engine.register(sqlite_db)` 时，资源被注册到了 `Engine` 的 `ResourceContainer` 中。
-    *   当 `engine.run()` 调用 `strategy.execute()` 时，`Strategy` 使用它自己的、**空的** `ResourceContainer` 来扫描和设置资源。
-    *   因此，当 `Strategy` 寻找 `sqlite_db` 或 `_internal_connector` 时，它在自己的容器里找不到，从而抛出 `NameError`。
-3.  **`AssertionError` 的根源**: `test_recv_blocks_and_wakes_up` 的 `AssertionError: Engine finished prematurely` 是 `NameError` 的副作用。因为 `_internal_connector` 资源未找到导致 `run()` 提前异常退出，所以 `engine_task` 立即结束了，触发了断言失败。
-
-我们之前解决了 `ConstraintManager` 的分裂问题，现在必须对 `ResourceContainer` 应用同样的修复。
-
-我们将再次深化依赖注入模式，将 `ResourceContainer` 也提升为一个由外部创建并注入到 `Engine` 中的核心服务。
-
-1.  **修改 `Engine.__init__`**: 使其接收一个 `ResourceContainer` 实例，而不是在内部创建它。
-2.  **更新 `create_engine` 工厂**: 让工厂函数负责创建唯一的 `ResourceContainer` 实例，并将其同时注入到 `Engine` 和 `GraphExecutionStrategy` 中。
-
-这样，`engine.register()` 和 `strategy.execute()` 将操作同一个 `ResourceContainer` 实例，确保了状态的完全一致。
-
-## [WIP] fix(runtime): Unify ResourceContainer instance via dependency injection
+## [WIP] fix(tests): Finalize migration to global engine fixture across all packages
 
 ### 错误分析
 
-`Engine` 和 `GraphExecutionStrategy` 各自持有一个独立的 `ResourceContainer` 实例。这导致了 `engine.register()` 注册的资源（如 `sqlite_db`）或 `engine.run()` 内部注册的资源（如 `_internal_connector`）对于 `GraphExecutionStrategy` 来说是不可见的，从而在资源扫描阶段引发 `NameError`。
+在 `cascade-provider-ipfs`、`cascade-sdk` 和 `cascade-spec` 的集成测试中，仍然存在手动调用 `Engine(...)` 的代码。由于 `Engine` 的构造函数签名已更改为需要注入 `strategy`, `constraint_manager` 等核心服务，这些旧的调用方式导致了 `TypeError`。
 
 ### 用户需求
 
-修复所有因 `NameError: Resource ... not registered` 导致的测试失败，并确保整个运行时共享一个统一的 `ResourceContainer` 实例。
+修复所有剩余的 `TypeError`，完成整个代码库向新的 `engine` fixture 架构的迁移。
 
 ### 评论
 
-这是对我们依赖注入架构的最后一次关键修正。通过将 `ResourceContainer` 的所有权也移出 `Engine` 并交由工厂管理，我们最终实现了一个纯粹的、无状态的服务容器 `Engine`。现在，所有的核心服务（`Strategy`, `ConstraintManager`, `ResourceContainer`）都是可替换、可共享的，这使得系统架构更加健壮和清晰。
+这次提交标志着我们依赖注入重构的成功完成。通过根除所有分散的、手动的 `Engine` 实例化，并用统一的、由工厂支持的 fixture 取而代之，我们不仅修复了所有相关的 `TypeError`，还极大地提高了测试套件的**一致性、可读性和可维护性**。这是一个完美的例子，展示了如何通过坚持架构原则（如依赖注入）来构建一个更健壮、更易于管理的系统。
 
 ### 目标
 
-1.  修改 `Engine` 的构造函数，使其接收一个 `resource_container` 作为必需参数。
-2.  更新 `cascade.runtime.host.factory.create_engine` 函数，让它创建 `ResourceContainer` 并将其注入到 `Engine` 和 `GraphExecutionStrategy` 中。
+1.  修改 `cascade-provider-ipfs/tests/integration/test_ipfs.py`，使用全局 `engine` fixture。
+2.  修改 `cascade-sdk/tests/integration/test_llm_pattern.py`，使用全局 `engine` fixture。
+3.  重构 `cascade-spec/tests/integration/test_resource.py`，将其中的同步测试（内部使用 `asyncio.run`）改造为标准的 `async` 测试，并使用 `engine` 和 `engine_factory` fixture。
 
 ### 基本原理
 
-我们将遵循与 `ConstraintManager` 相同的修复模式。`create_engine` 工厂将创建 `EventBus`，然后用这个 `EventBus` 实例来创建 `ResourceContainer`。接着，这个唯一的 `ResourceContainer` 实例将被传递给 `GraphExecutionStrategy`（用于资源扫描）和 `Engine`（用于内部资源注册）。这将保证任何通过 `engine.register()` 添加的资源对执行策略都是可见的，从而解决 `NameError`。
+我们将采用与前几轮修复完全相同的策略：
+-   在测试函数签名中声明 `engine` fixture，以获得一个预先配置好的 `Engine` 实例。
+-   对于需要自定义或多个 `Engine` 实例的复杂测试（如 `test_resource_override`），我们将使用 `engine_factory` fixture。
+-   移除所有本地的、手动的 `Engine` 实例化代码及其不再需要的导入（`NativeSolver`, `LocalExecutor`, `EventBus` 等）。
+-   将 `test_resource.py` 中的同步测试改造为 `async` 测试，这是处理异步代码的更标准、更简洁的方式。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/critical #comp/runtime #scope/core #dx #ai/instruct #task/domain/runtime #task/object/dependency-injection #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/core #dx #ai/instruct #task/domain/testing #task/object/test-fixtures #task/action/refactor #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 Engine 以接收 ResourceContainer
-
-我将修改 `instance.py`，使 `Engine` 依赖于外部提供的 `ResourceContainer`。
+#### Acts 1: 修复 `cascade-provider-ipfs` 测试
 
 ~~~~~act
 patch_file
-packages/cascade-runtime/src/cascade/runtime/host/instance.py
+packages/cascade-provider-ipfs/tests/integration/test_ipfs.py
 ~~~~~
 ~~~~~python.old
-from ..services.resources.container import ResourceContainer
-
-
-class Engine:
-    def __init__(
-        self,
-        solver: Solver,
-        executor: Executor,
-        bus: EventBus,
-        strategy: ExecutionStrategy,
-        constraint_manager: ConstraintManager,
-        wakeup_event: asyncio.Event,
-        state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
-        system_resources: Optional[Dict[str, Any]] = None,
-        connector: Optional[Connector] = None,
-        cache_backend: Optional[Any] = None,
-        resource_manager: Optional[ResourceManager] = None,
-        object_store: Optional[ObjectStore] = None,
-    ):
-        self.solver = solver
-        self.executor = executor
-        self.bus = bus
-        self.strategy = strategy
-        self.constraint_manager = constraint_manager
-        self._wakeup_event = wakeup_event
-        self.connector = connector
-        # Default to InMemory factory if none provided
-        self.state_backend_factory = state_backend_factory or (
-            lambda run_id: InMemoryStateBackend(run_id)
-        )
-        self.cache_backend = cache_backend
-        self.object_store = object_store or InMemoryObjectStore()
-
-        if resource_manager:
-            self.resource_manager = resource_manager
-            # If system_resources is also provided, we update the injected manager
-            if system_resources:
-                self.resource_manager.set_capacity(system_resources)
-        else:
-            self.resource_manager = ResourceManager(capacity=system_resources)
-
-        self.resource_container = ResourceContainer(self.bus)
-        self._managed_subscribers = []
+import pytest
+import cascade.sdk as cs
+from aiohttp import web
+from cascade.runtime.host.instance import Engine
+from cascade.runtime import EventBus
+from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
 ~~~~~
 ~~~~~python.new
-from ..services.resources.container import ResourceContainer
-
-
-class Engine:
-    def __init__(
-        self,
-        solver: Solver,
-        executor: Executor,
-        bus: EventBus,
-        strategy: ExecutionStrategy,
-        constraint_manager: ConstraintManager,
-        resource_container: ResourceContainer,
-        wakeup_event: asyncio.Event,
-        state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
-        system_resources: Optional[Dict[str, Any]] = None,
-        connector: Optional[Connector] = None,
-        cache_backend: Optional[Any] = None,
-        resource_manager: Optional[ResourceManager] = None,
-        object_store: Optional[ObjectStore] = None,
-    ):
-        self.solver = solver
-        self.executor = executor
-        self.bus = bus
-        self.strategy = strategy
-        self.constraint_manager = constraint_manager
-        self.resource_container = resource_container
-        self._wakeup_event = wakeup_event
-        self.connector = connector
-        # Default to InMemory factory if none provided
-        self.state_backend_factory = state_backend_factory or (
-            lambda run_id: InMemoryStateBackend(run_id)
-        )
-        self.cache_backend = cache_backend
-        self.object_store = object_store or InMemoryObjectStore()
-
-        if resource_manager:
-            self.resource_manager = resource_manager
-            # If system_resources is also provided, we update the injected manager
-            if system_resources:
-                self.resource_manager.set_capacity(system_resources)
-        else:
-            self.resource_manager = ResourceManager(capacity=system_resources)
-
-        self._managed_subscribers = []
+import pytest
+import cascade.sdk as cs
+from aiohttp import web
 ~~~~~
-
-#### Acts 2: 更新 `create_engine` 工厂以管理 `ResourceContainer`
-
-现在，我将更新中央工厂函数，让它创建并注入 `ResourceContainer`。
 
 ~~~~~act
 patch_file
-packages/cascade-runtime/src/cascade/runtime/host/factory.py
+packages/cascade-provider-ipfs/tests/integration/test_ipfs.py
 ~~~~~
 ~~~~~python.old
-    if strategy is None:
-        backend_choice = "vm" if use_vm else os.getenv("CASCADE_BACKEND", "graph").lower()
+@pytest.mark.asyncio
+async def test_ipfs_cat_provider(mock_ipfs_server):
+    # Define the Cascade workflow, passing the mock URL explicitly
+    workflow = cs.ipfs.cat(cid=TEST_CID, api_base_url=mock_ipfs_server)
 
-        if backend_choice == "vm":
-            from cascade.runtime.strategies.vm import VMExecutionStrategy
-            strategy = VMExecutionStrategy(executor=_executor, bus=_bus)
-        else:  # Default to 'graph'
-            from cascade.execution.graph.logic.processor import NodeProcessor
-            from cascade.execution.graph.strategy import GraphExecutionStrategy
+    # Run the workflow
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
+    result = await engine.run(workflow)
 
-            resource_container = ResourceContainer(_bus)
-            node_processor = NodeProcessor(
-                executor=_executor,
-                bus=_bus,
-                resource_manager=_resource_manager,
-                constraint_manager=_constraint_manager,
-                solver=_solver,
-            )
-            strategy = GraphExecutionStrategy(
-                solver=_solver,
-                node_processor=node_processor,
-                resource_container=resource_container,
-                constraint_manager=_constraint_manager,
-                bus=_bus,
-                wakeup_event=_wakeup_event,
-            )
-
-    # 4. Construct Engine with all assembled components
-    return Engine(
-        solver=_solver,
-        executor=_executor,
-        bus=_bus,
-        strategy=strategy,
-        resource_manager=_resource_manager,
-        constraint_manager=_constraint_manager,
-        wakeup_event=_wakeup_event,
-        **kwargs,
-    )
+    # Assert the result
+    assert result == FAKE_CONTENT
 ~~~~~
 ~~~~~python.new
-    _resource_container = ResourceContainer(_bus)
+@pytest.mark.asyncio
+async def test_ipfs_cat_provider(engine, mock_ipfs_server):
+    # Define the Cascade workflow, passing the mock URL explicitly
+    workflow = cs.ipfs.cat(cid=TEST_CID, api_base_url=mock_ipfs_server)
 
-    # 3. Create strategy if not provided
-    if strategy is None:
-        backend_choice = "vm" if use_vm else os.getenv("CASCADE_BACKEND", "graph").lower()
+    # Run the workflow
+    result = await engine.run(workflow)
 
-        if backend_choice == "vm":
-            from cascade.runtime.strategies.vm import VMExecutionStrategy
-            strategy = VMExecutionStrategy(executor=_executor, bus=_bus)
-        else:  # Default to 'graph'
-            from cascade.execution.graph.logic.processor import NodeProcessor
-            from cascade.execution.graph.strategy import GraphExecutionStrategy
-
-            node_processor = NodeProcessor(
-                executor=_executor,
-                bus=_bus,
-                resource_manager=_resource_manager,
-                constraint_manager=_constraint_manager,
-                solver=_solver,
-            )
-            strategy = GraphExecutionStrategy(
-                solver=_solver,
-                node_processor=node_processor,
-                resource_container=_resource_container,
-                constraint_manager=_constraint_manager,
-                bus=_bus,
-                wakeup_event=_wakeup_event,
-            )
-
-    # 4. Construct Engine with all assembled components
-    return Engine(
-        solver=_solver,
-        executor=_executor,
-        bus=_bus,
-        strategy=strategy,
-        resource_manager=_resource_manager,
-        constraint_manager=_constraint_manager,
-        resource_container=_resource_container,
-        wakeup_event=_wakeup_event,
-        **kwargs,
-    )
+    # Assert the result
+    assert result == FAKE_CONTENT
 ~~~~~
 
-#### Acts 3: 更新 `CascadeApp` 以适应新的工厂签名
+~~~~~act
+patch_file
+packages/cascade-provider-ipfs/tests/integration/test_ipfs.py
+~~~~~
+~~~~~python.old
+@pytest.mark.asyncio
+async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
+    # Create a temporary file to upload
+    test_file = tmp_path / "test.txt"
+    test_file.write_bytes(FAKE_CONTENT)
 
-`CascadeApp` 不需要显式传递 `resource_container`，因为它被 `create_engine` 内部管理。但是，为了保持一致性，我需要检查 `create_engine` 的调用签名。我的上一个修复中，`CascadeApp` 调用 `create_engine` 时，并未传入 `constraint_manager` 和 `wakeup_event`，因为它们在工厂内部创建。新工厂仍然如此，所以 `CascadeApp` 的代码无需更改。太好了。
+    # Define workflow, passing the mock URL explicitly
+    workflow = cs.ipfs.add(path=str(test_file), api_base_url=mock_ipfs_server)
 
-同样，`conftest.py` 中的 `engine_factory` 也不需要更改，因为它只是 `create_engine` 的一个薄封装。
+    # Run
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
+    result = await engine.run(workflow)
+
+    # Assert we got the hash from the JSON response
+    assert result == "QmHash"
+~~~~~
+~~~~~python.new
+@pytest.mark.asyncio
+async def test_ipfs_add_provider(engine, mock_ipfs_server, tmp_path):
+    # Create a temporary file to upload
+    test_file = tmp_path / "test.txt"
+    test_file.write_bytes(FAKE_CONTENT)
+
+    # Define workflow, passing the mock URL explicitly
+    workflow = cs.ipfs.add(path=str(test_file), api_base_url=mock_ipfs_server)
+
+    # Run
+    result = await engine.run(workflow)
+
+    # Assert we got the hash from the JSON response
+    assert result == "QmHash"
+~~~~~
+
+#### Acts 2: 修复 `cascade-sdk` 测试
+
+~~~~~act
+patch_file
+packages/cascade-sdk/tests/integration/test_llm_pattern.py
+~~~~~
+~~~~~python.old
+import pytest
+import cascade.sdk as cs
+from unittest.mock import MagicMock
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.providers.http import HttpResponse
+~~~~~
+~~~~~python.new
+import pytest
+import cascade.sdk as cs
+from unittest.mock import MagicMock
+from cascade.providers.http import HttpResponse
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-sdk/tests/integration/test_llm_pattern.py
+~~~~~
+~~~~~python.old
+    # Run the workflow
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
+    )
+    result = await engine.run(summary)
+~~~~~
+~~~~~python.new
+    # Run the workflow
+    result = await engine.run(summary)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-sdk/tests/integration/test_llm_pattern.py
+~~~~~
+~~~~~python.old
+@pytest.mark.asyncio
+async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):
+~~~~~
+~~~~~python.new
+@pytest.mark.asyncio
+async def test_llm_pattern_via_subflow(engine, mock_http_post, monkeypatch):
+~~~~~
+
+#### Acts 3: 重构并修复 `cascade-spec` 测试
+
+~~~~~act
+write_file
+packages/cascade-spec/tests/integration/test_resource.py
+~~~~~
+~~~~~python
+import pytest
+from unittest.mock import MagicMock
+import cascade.sdk as cs
+from cascade.bus.events import (
+    ResourceAcquired,
+    ResourceReleased,
+    Event,
+)
+
+# --- Test Resources ---
+
+
+@cs.resource
+def config():
+    print("SETUP: config")
+    yield {"db_url": "production_url"}
+    print("TEARDOWN: config")
+
+
+@cs.resource
+def db_connection(config: dict = cs.inject("config")):
+    print(f"SETUP: db_connection using {config['db_url']}")
+    connection = MagicMock()
+    connection.url = config["db_url"]
+    yield connection
+    print("TEARDOWN: db_connection")
+    connection.close()
+
+
+# --- Test Tasks ---
+
+
+@cs.task
+def task_using_resource(conn=cs.inject("db_connection")):
+    assert isinstance(conn, MagicMock)
+    return conn.url
+
+
+# --- Test Cases ---
+
+
+@pytest.mark.asyncio
+async def test_di_end_to_end(engine_factory):
+    engine = engine_factory()
+    engine.register(config)
+    engine.register(db_connection)
+
+    result = await engine.run(task_using_resource())
+
+    assert result == "production_url"
+
+
+@pytest.mark.asyncio
+async def test_resource_events(engine_factory, bus_and_spy):
+    bus, spy = bus_and_spy
+
+    engine = engine_factory(bus=bus)
+    engine.register(config)
+    engine.register(db_connection)
+
+    await engine.run(task_using_resource())
+
+    # Check for ResourceAcquired events
+    acquired_names = [e.resource_name for e in spy.events if isinstance(e, ResourceAcquired)]
+    # 'config' must be acquired before 'db_connection' because db_connection depends on config
+    assert "config" in acquired_names
+    assert "db_connection" in acquired_names
+    assert acquired_names.index("config") < acquired_names.index("db_connection")
+
+    # Check for ResourceReleased events
+    released_names = [e.resource_name for e in spy.events if isinstance(e, ResourceReleased)]
+    # Teardown is in reverse order (LIFO via ExitStack)
+    assert "db_connection" in released_names
+    assert "config" in released_names
+    assert released_names.index("db_connection") < released_names.index("config")
+
+
+@pytest.mark.asyncio
+async def test_resource_override(engine_factory):
+    @cs.resource
+    def mock_db_connection():
+        print("SETUP: mock_db_connection")
+        m = MagicMock()
+        m.url = "mock_db_url"
+        yield m
+        print("TEARDOWN: mock_db_connection")
+
+    engine = engine_factory()
+    engine.register(config)
+    engine.register(db_connection)  # Register the original
+
+    # Override the db_connection resource using the container's robust method
+    with engine.resource_container.override("db_connection", mock_db_connection):
+        result = await engine.run(task_using_resource())
+
+    assert result == "mock_db_url"
+
+    # After exiting the context, the original should be restored.
+    # We create a NEW engine to ensure a clean state and avoid cache pollution from the previous run.
+    engine_after = engine_factory()
+    engine_after.register(config)
+    engine_after.register(db_connection)
+
+    result_after = await engine_after.run(task_using_resource())
+    assert result_after == "production_url"
+
+
+def test_resource_must_be_generator():
+    with pytest.raises(TypeError, match="must be a generator"):
+
+        @cs.resource
+        def not_a_generator():
+            return "foo"
+
+
+@pytest.mark.asyncio
+async def test_unregistered_resource_raises_error(engine):
+    # Note: We do NOT register any resources.
+
+    @cs.task
+    def task_needs_unregistered(conn=cs.inject("non_existent_db")):
+        pass
+
+    with pytest.raises(
+        NameError, match="Resource 'non_existent_db' is required but not registered"
+    ):
+        await engine.run(task_needs_unregistered())
+
+
+def test_resource_scan_finds_inject_in_dict():
+    from cascade.runtime.services.resources.container import ResourceContainer
+    from cascade.execution.graph.model.build import build_graph
+
+    @cs.resource
+    def my_res():
+        yield "foo"
+
+    @cs.task
+    def task_with_dict_inject(config: dict):
+        pass
+
+    # The Inject object is nested inside a dict
+    flow = task_with_dict_inject(config={"db": cs.inject("my_res")})
+    graph, _, executable_registry = build_graph(flow)
+
+    container = ResourceContainer(bus=cs.EventBus())
+    required = container.scan(graph, executable_registry)
+
+    assert "my_res" in required
+~~~~~
 
 ### 下一步建议
 
-现在，我们已经将 `ResourceContainer` 的创建和注入逻辑集中到了 `create_engine` 工厂中，彻底解决了 `Engine` 和 `Strategy` 之间的状态分裂问题。所有依赖此工厂的消费者（包括 `CascadeApp` 和所有测试）都将自动获得正确的、共享的服务实例。
-
-我将再次运行完整的测试套件。我非常有信心，这次所有与资源注册相关的 `NameError` 和连锁导致的 `AssertionError` 都将得到解决。
+我们已经完成了所有已知 `TypeError` 的修复，并将整个测试套件统一到了新的 fixture 架构下。现在，我将运行完整的测试。如果所有测试都通过，这个重构任务就圆满完成了，我们可以自信地提交这些变更。

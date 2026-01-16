@@ -16,8 +16,8 @@ def mock_connector():
 
 
 @pytest.fixture
-def engine(mock_connector):
-    return Engine(
+def engine(engine_factory, mock_connector):
+    return engine_factory(
         solver=NativeSolver(),
         executor=TimedMockExecutor(delay=0.05),
         bus=EventBus(),

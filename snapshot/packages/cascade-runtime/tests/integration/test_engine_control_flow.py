@@ -10,7 +10,7 @@ from cascade.test_utils.helpers import SpySubscriber
 
 
 @pytest.mark.asyncio
-async def test_run_if_true():
+async def test_run_if_true(engine_factory):
     @cs.task
     def condition():
         return True
@@ -23,7 +23,7 @@ async def test_run_if_true():
 
     bus = EventBus()
     spy = SpySubscriber(bus)
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     result = await engine.run(flow)
     assert result == "executed"
@@ -33,7 +33,7 @@ async def test_run_if_true():
 
 
 @pytest.mark.asyncio
-async def test_run_if_false():
+async def test_run_if_false(engine_factory):
     @cs.task
     def condition():
         return False
@@ -60,7 +60,7 @@ async def test_run_if_false():
 
 
 @pytest.mark.asyncio
-async def test_cascade_skip():
+async def test_cascade_skip(engine_factory):
     @cs.task
     def condition():
         return False

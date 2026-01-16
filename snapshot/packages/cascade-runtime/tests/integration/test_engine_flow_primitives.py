@@ -25,7 +25,7 @@ async def test_sequence_executes_in_order(bus_and_spy):
 
     workflow = cs.sequence([task_a(), task_b(), task_c()])
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     await engine.run(workflow)
 
     assert execution_order == ["A", "B", "C"]
@@ -44,7 +44,7 @@ async def test_sequence_forwards_last_result(bus_and_spy):
         return "last"
 
     workflow = cs.sequence([first(), last()])
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     result = await engine.run(workflow)
 
     assert result == "last"
@@ -69,7 +69,7 @@ async def test_sequence_aborts_on_failure(bus_and_spy):
         execution_order.append("never")
 
     workflow = cs.sequence([task_ok(), task_fail(), task_never()])
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     with pytest.raises(ValueError, match="This task fails"):
         await engine.run(workflow)
@@ -97,7 +97,7 @@ async def test_sequence_aborts_on_skipped_node(bus_and_spy):
     # task_b will be skipped, which should cause task_c to be skipped too.
     workflow = cs.sequence([task_a(), task_b(1).run_if(false_condition), task_c(2)])
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     await engine.run(workflow)
 
     skipped_events = spy.events_of_type(TaskSkipped)
@@ -143,7 +143,7 @@ async def test_pipeline_with_lazy_initial_input(bus_and_spy):
         return x + 1
 
     workflow = cs.pipeline(get_initial(), [add_one])
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     result = await engine.run(workflow)
 
     assert result == 11
@@ -175,7 +175,7 @@ async def test_pipeline_with_run_if_data_penetration(bus_and_spy):
         ],
     )
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     result = await engine.run(workflow)
 
     # Expected: 10 -> add_one -> 11

@@ -21,8 +21,8 @@ def mock_connector():
 
 
 @pytest.fixture
-def engine_with_connector(mock_connector):
-    return Engine(
+def engine_with_connector(engine_factory, mock_connector):
+    return engine_factory(
         solver=NativeSolver(),
         executor=TimedMockExecutor(delay=0.05),
         bus=EventBus(),
@@ -170,12 +170,12 @@ async def test_engine_handles_malformed_constraint_payload(
 
 
 @pytest.mark.asyncio
-async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
+async def test_engine_pauses_on_global_pause_constraint(engine_factory, mock_connector, bus_and_spy):
     from cascade.spec.dsl.task import task
     from cascade.bus.events import TaskExecutionStarted
 
     bus, spy = bus_and_spy
-    engine = Engine(
+    engine = engine_factory(
         solver=NativeSolver(),
         executor=MockExecutor(delay=0.05),
         bus=bus,
@@ -237,7 +237,7 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
 
 
 @pytest.mark.asyncio
-async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):
+async def test_engine_pauses_and_resumes_specific_task(engine_factory, mock_connector, bus_and_spy):
     from cascade.spec.dsl.task import task
     from cascade.bus.events import (
         TaskExecutionStarted,
@@ -245,7 +245,7 @@ async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_s
     )
 
     bus, spy = bus_and_spy
-    engine = Engine(
+    engine = engine_factory(
         solver=NativeSolver(),
         executor=MockExecutor(delay=0.05),
         bus=bus,

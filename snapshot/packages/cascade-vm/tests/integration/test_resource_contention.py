@@ -99,12 +99,12 @@ async def test_resource_scarcity_topology_and_execution():
 
     inspector.get_data_node(d_gnt_id)  # Should be a data node
 
-    # Verify D_gnt -> Bleacher
-    bleacher_id = PhysicalIdGenerator.bleach_node(
+    # Verify D_gnt -> Launcher
+    launcher_id = PhysicalIdGenerator.launcher_node(
         sample_node_ir.current_node_instance_hash
     )
     inspector.assert_connection(
-        d_gnt_id, bleacher_id, target_port=f"res_{RESOURCE_NAME}"
+        d_gnt_id, launcher_id, target_port=f"res_{RESOURCE_NAME}"
     )
 
     # --- PART B: EXECUTION ASSERTION ---
@@ -220,10 +220,10 @@ async def test_mixed_resource_wiring():
     # Let's assume index 0 is gpu, 1 is cpu (list order preserved)
     gpu_node_id = node_ids[0]
 
-    # Find channels entering GPU Task Bleacher
-    gpu_bleacher_id = PhysicalIdGenerator.bleach_node(gpu_node_id)
+    # Find channels entering GPU Task Launcher
+    gpu_launcher_id = PhysicalIdGenerator.launcher_node(gpu_node_id)
     in_channels = [
-        c for c in physical_graph.channels if c.target_node_id == gpu_bleacher_id
+        c for c in physical_graph.channels if c.target_node_id == gpu_launcher_id
     ]
 
     # Check sources. One should be from GPU grant chain. None from CPU.

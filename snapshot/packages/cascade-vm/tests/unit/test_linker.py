@@ -2,10 +2,10 @@ import pytest
 
 from cascade.spec.physical.assembly import Assembly, SymbolTable
 from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.triad import WorkerNode
+from cascade.spec.physical.dyad import LauncherNode
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.linker import Linker, LinkerError
-from cascade.std.triad.dispatcher import standard_dispatcher
+from cascade.std.dyad.launcher import standard_launcher
 
 
 def dummy_task_a():
@@ -27,16 +27,16 @@ def code_registry() -> CodeRegistry:
 @pytest.fixture
 def assembly() -> Assembly:
     graph = BipartiteGraph()
-    # We only need worker nodes for this test, as only they populate the symbol table
-    graph.nodes["worker1.worker"] = WorkerNode(
-        id="worker1.worker", name="Worker1", canonical_code_structure_hash="hash_a"
+    # In Dyad, Launcher nodes populate the symbol table and map to standard_launcher
+    graph.nodes["node1.launch"] = LauncherNode(
+        id="node1.launch", name="Launch1", canonical_code_structure_hash="hash_a"
     )
-    graph.nodes["worker2.worker"] = WorkerNode(
-        id="worker2.worker", name="Worker2", canonical_code_structure_hash="hash_b"
+    graph.nodes["node2.launch"] = LauncherNode(
+        id="node2.launch", name="Launch2", canonical_code_structure_hash="hash_b"
     )
     symbol_table: SymbolTable = {
-        "worker1.worker": "hash_a",
-        "worker2.worker": "hash_b",
+        "node1.launch": "hash_a",
+        "node2.launch": "hash_b",
     }
     return Assembly(graph=graph, symbol_table=symbol_table)
 
@@ -45,17 +45,17 @@ def test_linker_success_with_all_code_present(assembly, code_registry):
     linker = Linker()
     function_map = linker.link(assembly, code_registry)
 
-    # All workers should be mapped to the standard_dispatcher
+    # All launchers should be mapped to the standard_launcher
     assert len(function_map) == 2
-    assert function_map["worker1.worker"] is standard_dispatcher
-    assert function_map["worker2.worker"] is standard_dispatcher
+    assert function_map["node1.launch"] is standard_launcher
+    assert function_map["node2.launch"] is standard_launcher
 
 
 def test_linker_raises_on_missing_code(assembly, code_registry):
     linker = Linker()
 
     # Tamper with the assembly to require a hash that doesn't exist
-    assembly.symbol_table["worker3.worker"] = "hash_c_missing"
+    assembly.symbol_table["node3.launch"] = "hash_c_missing"
 
     with pytest.raises(LinkerError) as exc_info:
         linker.link(assembly, code_registry)
@@ -71,8 +71,8 @@ def test_linker_raises_on_multiple_missing_codes():
     assembly = Assembly(
         graph=BipartiteGraph(),
         symbol_table={
-            "w1.worker": "hash_1",
-            "w2.worker": "hash_2",
+            "n1.launch": "hash_1",
+            "n2.launch": "hash_2",
         },
     )
 

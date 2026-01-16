@@ -30,8 +30,8 @@ async def test_source_node_is_triggered_by_pulse():
 
     # 2. Setup Code Registry for the Compute Service
     code_registry = CodeRegistry()
-    worker_node_id = f"{node_ir.current_node_instance_hash}.worker"
-    canonical_hash = assembly.symbol_table[worker_node_id]
+    launcher_id = f"{node_ir.current_node_instance_hash}.launch"
+    canonical_hash = assembly.symbol_table[launcher_id]
     code_registry.register(canonical_hash, source_task.func)
 
     # 3. Setup and run the VM using the new Harness

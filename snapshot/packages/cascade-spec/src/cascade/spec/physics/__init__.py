@@ -1,5 +1,6 @@
 from .core import Port, PortRole, PortType, PortDef, PortDirection
 from .spec import PhysicsSpec
+from .binding import implements, IOWrapper, DynamicOutputMap
 
 __all__ = [
     "Port",
@@ -8,4 +9,7 @@ __all__ = [
     "PortDef",
     "PortDirection",
     "PhysicsSpec",
+    "implements",
+    "IOWrapper",
+    "DynamicOutputMap",
 ]

@@ -12,6 +12,7 @@ from .interfaces import (
 from .storage import ObjectStore
 from .compute import ComputeDelegate
 from .strategies import ExecutionContext, ExecutionStrategy
+from .contracts import ComputeRequest, DelayRequest
 
 __all__ = [
     "Solver",
@@ -27,4 +28,6 @@ __all__ = [
     "ComputeDelegate",
     "ExecutionContext",
     "ExecutionStrategy",
+    "ComputeRequest",
+    "DelayRequest",
 ]

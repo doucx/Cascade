@@ -1,10 +1,10 @@
 from cascade.spec.ir.graph import NodeIR, ArgumentKind
 from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
+from cascade.spec.physical.dyad import LauncherNode, LanderNode
 from cascade.spec.physical.topology import Channel
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.compiler.model import SubGraph
-from cascade.spec.components import BleacherSpec
+from cascade.spec.specs.dyad import LauncherSpec, LanderSpec
 from cascade.reflection import PhysicalIdGenerator
 
 
@@ -13,191 +13,115 @@ class Expander:
         subgraph = SubGraph()
 
         # 1. Generate IDs for all physical entities
-        # We use the logical node ID as a prefix to ensure uniqueness.
         base_id = node_ir.current_node_instance_hash
 
-        f_pre_id = PhysicalIdGenerator.bleach_node(base_id)
-        d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
-        f_worker_id = PhysicalIdGenerator.worker_node(base_id)
-        d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
-        d_trace_id = PhysicalIdGenerator.trace_data(base_id)
-        f_post_id = PhysicalIdGenerator.stain_node(base_id)
+        f_launch_id = PhysicalIdGenerator.launcher_node(base_id)
+        d_result_id = PhysicalIdGenerator.result_data(base_id)
+        f_land_id = PhysicalIdGenerator.lander_node(base_id)
 
-        # 2. Create Nodes
-
-        # F_pre: The Bleacher
-        # Inputs = Task Args + Resource Constraints
-        bleacher_inputs = {}
+        # 2. Create Launcher Node
+        # Inputs = Task Args + Resource Constraints + Signals
+        launcher_inputs = {}
+        
+        # 2.1 Static Args from Task Def
         for arg in node_ir.task.args:
-            # For *args, the name 'args' is a placeholder. The actual inputs are
-            # positional ('0', '1', ...), which are handled by the dynamic port
-            # creation logic below. We must skip creating a port named 'args'.
             if arg.kind == ArgumentKind.VAR_POSITIONAL:
                 continue
-            bleacher_inputs[arg.name] = PortDef(arg.name, PortRole.DATA, "Any")
+            launcher_inputs[arg.name] = PortDef(arg.name, PortRole.DATA, "Any")
 
-        # [HFEA Fix]: Variadic Args Support
-        # Check for inputs in NodeIR that don't have a corresponding port definition.
-        # This handles *args (which manifest as '0', '1', etc. in inputs) and other dynamic bindings.
+        # 2.2 Dynamic Args from Inputs
         for input_key in node_ir.inputs.keys():
-            if input_key not in bleacher_inputs:
-                # Create a dynamic port definition for this input
-                bleacher_inputs[input_key] = PortDef(input_key, PortRole.DATA, "Any")
+            if input_key not in launcher_inputs:
+                launcher_inputs[input_key] = PortDef(input_key, PortRole.DATA, "Any")
 
-        # Add ports for resources
+        # 2.3 Resource Grants (RESOURCE_REQUEST role)
+        # Note: The Launcher receives the grant token as DATA/RESOURCE to hold it.
+        # In StdLib, we use PortRole.RESOURCE to identify held resources.
         for res_name in node_ir.constraints.keys():
             port_name = f"res_{res_name}"
-            bleacher_inputs[port_name] = PortDef(
+            launcher_inputs[port_name] = PortDef(
                 port_name, PortRole.RESOURCE, "ResourceSlot"
             )
 
-        # Add ports for implicit dependencies (SIGNAL)
+        # 2.4 Dependency Signals
         for dep_id in node_ir.dependencies:
-            # We use a naming convention for dependency ports
             port_name = f"wait_for_{dep_id}"
-            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Token")
+            launcher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Token")
 
-        # Add port for condition (SIGNAL/DATA)
+        # 2.5 Condition
         if node_ir.condition:
             port_name = "condition"
-            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
+            launcher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
 
-        # If after all that, there are no inputs, it's a source node that needs a pulse.
-        if not bleacher_inputs:
-            bleacher_inputs[BleacherSpec.pulse.name] = PortDef(
-                BleacherSpec.pulse.name, PortRole.SIGNAL
+        # 2.6 Pulse (if pure source)
+        if not launcher_inputs:
+            pulse_name = LauncherSpec.pulse.name
+            launcher_inputs[pulse_name] = PortDef(
+                pulse_name, PortRole.SIGNAL
             )
 
-        f_pre = BleachNode(
-            id=f_pre_id,
-            name=f"Bleach({node_ir.name})",
-            input_ports=bleacher_inputs,
-            output_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict"),
-                "trace_output": PortDef("trace_output", PortRole.DATA, "TraceCtx"),
-                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
-            },
-        )
-
-        # D_worker_in: Holds the pure kwargs for the worker
-        d_worker_in = PhysicsDataNode(id=d_worker_in_id, name=f"In({node_ir.name})")
-
-        # F_worker: The actual execution logic
-        # It conceptually takes *args/**kwargs, but physically takes one 'worker_input' dict
         canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]
-        f_worker = WorkerNode(
-            id=f_worker_id,
-            name=f"Exec({node_ir.name})",
-            canonical_code_structure_hash=canonical_hash,
-            input_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict")
-            },
+        
+        f_launcher = LauncherNode(
+            id=f_launch_id,
+            name=f"Launch({node_ir.name})",
+            input_ports=launcher_inputs,
+            # Launcher only has observability output locally.
+            # Data output is evaporated to the Queue.
             output_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA, "Any")
+                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event")
             },
+            canonical_code_structure_hash=canonical_hash,
+            reply_to_nid=d_result_id
         )
 
-        # D_worker_out: Holds the raw result
-        d_worker_out = PhysicsDataNode(id=d_worker_out_id, name=f"Out({node_ir.name})")
+        # 3. Create Result Data Node (The Landing Pad)
+        d_result = PhysicsDataNode(id=d_result_id, name=f"Result({node_ir.name})")
 
-        # D_trace: The wormhole for metadata (start_ts, trace_id)
-        d_trace = PhysicsDataNode(id=d_trace_id, name=f"Trace({node_ir.name})")
-
-        # F_post: The Stainer
-        # Outputs = Result + Resource Returns
-        # Sovereign Ports: Explicitly define default and error paths
-        stainer_outputs = {
+        # 4. Create Lander Node
+        # Outputs = Default + Error + Resource Returns + Obs
+        lander_outputs = {
             "output_default": PortDef("output_default", PortRole.DATA, "Token"),
             "output_error": PortDef("output_error", PortRole.DATA, "Token"),
             "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
         }
+        
+        # 4.1 Resource Returns
         for res_name in node_ir.constraints.keys():
             port_name = f"res_{res_name}"
-            stainer_outputs[port_name] = PortDef(
+            # Role RESOURCE indicates this is a return path
+            lander_outputs[port_name] = PortDef(
                 port_name, PortRole.RESOURCE, "ResourceSlot"
             )
 
-        f_post = StainNode(
-            id=f_post_id,
-            name=f"Stain({node_ir.name})",
+        f_lander = LanderNode(
+            id=f_land_id,
+            name=f"Land({node_ir.name})",
             input_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA, "Any"),
-                "trace_input": PortDef("trace_input", PortRole.DATA, "TraceCtx"),
+                # Lander receives the raw result token
+                LanderSpec.result_token.name: PortDef(LanderSpec.result_token.name, PortRole.DATA, "Any")
             },
-            output_ports=stainer_outputs,
+            output_ports=lander_outputs,
         )
 
-        # Register nodes
+        # 5. Register Nodes
         subgraph.nodes = {
-            n.id: n
-            for n in [f_pre, d_worker_in, f_worker, d_worker_out, d_trace, f_post]
+            f_launch_id: f_launcher,
+            d_result_id: d_result,
+            f_land_id: f_lander
         }
-        subgraph.bleacher = f_pre
-        subgraph.worker = f_worker
-        subgraph.stainer = f_post
+        subgraph.launcher = f_launcher
+        subgraph.lander = f_lander
 
-        # 3. Create Internal Wiring (Channels)
-
-        channels = []
-
-        # Path 1: Execution Flow
-        # F_pre -> D_worker_in
-        channels.append(
+        # 6. Internal Wiring
+        # Only one physical connection inside the Dyad: D_result -> Lander
+        subgraph.channels = [
             Channel(
-                source_node_id=f_pre_id,
-                source_port="worker_input",
-                target_node_id=d_worker_in_id,
-                target_port="in",
-            )
-        )
-        # D_worker_in -> F_worker
-        channels.append(
-            Channel(
-                source_node_id=d_worker_in_id,
+                source_node_id=d_result_id,
                 source_port="out",
-                target_node_id=f_worker_id,
-                target_port="worker_input",
+                target_node_id=f_land_id,
+                target_port=LanderSpec.result_token.name,
             )
-        )
-        # F_worker -> D_worker_out
-        channels.append(
-            Channel(
-                source_node_id=f_worker_id,
-                source_port="worker_result",
-                target_node_id=d_worker_out_id,
-                target_port="in",
-            )
-        )
-        # D_worker_out -> F_post
-        channels.append(
-            Channel(
-                source_node_id=d_worker_out_id,
-                source_port="out",
-                target_node_id=f_post_id,
-                target_port="worker_result",
-            )
-        )
-
-        # Path 2: Trace Bypass
-        # F_pre -> D_trace
-        channels.append(
-            Channel(
-                source_node_id=f_pre_id,
-                source_port="trace_output",
-                target_node_id=d_trace_id,
-                target_port="in",
-            )
-        )
-        # D_trace -> F_post
-        channels.append(
-            Channel(
-                source_node_id=d_trace_id,
-                source_port="out",
-                target_node_id=f_post_id,
-                target_port="trace_input",
-            )
-        )
-
-        subgraph.channels = channels
+        ]
 
         return subgraph

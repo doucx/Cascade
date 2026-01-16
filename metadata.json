@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 定义 Dyad 架构所需的物理常量与命名规则", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768553147.0653138, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实施 Dyad 架构的编译器模型重构与扩展逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768553258.017044, "duration_ms": 0}}

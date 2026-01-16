@@ -31,7 +31,7 @@ def create_cli(target: "LazyResult[Any]") -> Callable[[], None]:
     }
 
     def main(**kwargs):
-        from ..sdk import run as cascade_run
+        from cascade.app import run as cascade_run
 
         # Extract log_level explicitly since it's injected by Typer via the dynamic signature
         log_level = kwargs.pop("log_level", "INFO")

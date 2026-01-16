@@ -37,6 +37,10 @@ _IMPORT_MAP = {
     "override_resource": ("cascade.test_utils.helpers", "override_resource"),
     "ControllerTestApp": ("cascade.test_utils.helpers", "ControllerTestApp"),
     "create_cli": ("cascade.tools.cli", "create_cli"),
+    # App-level entry points
+    "run": ("cascade.app", "run"),
+    "visualize": ("cascade.app", "visualize"),
+    "dry_run": ("cascade.app", "dry_run"),
 }
 
 # --- Type Checking Imports ---
@@ -94,46 +98,6 @@ def Env(name: str, default: Any = None, description: str = "") -> "LazyResult":
     spec = EnvSpec(name=name, default=default, description=description)
     get_current_context().register(spec)
     return _get_env_var(name=name)
-
-
-# --- Global Functions ---
-
-
-def run(
-    target: Union["LazyResult", List[Any], tuple[Any, ...]],
-    params: Optional[Dict[str, Any]] = None,
-    system_resources: Optional[Dict[str, Any]] = None,
-    log_level: str = "INFO",
-    log_format: str = "human",
-    connector: Optional["Connector"] = None,
-    state_backend: Union[str, Callable[[str], "StateBackend"], None] = None,
-) -> Any:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(
-        target=target,
-        params=params,
-        system_resources=system_resources,
-        log_level=log_level,
-        log_format=log_format,
-        connector=connector,
-        state_backend=state_backend,
-    )
-    return app.run()
-
-
-def visualize(target: Any) -> str:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(target=target)
-    return app.visualize()
-
-
-def dry_run(target: Any) -> None:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(target=target)
-    app.dry_run()
 
 
 # --- Dynamic Import & Provider Loading ---

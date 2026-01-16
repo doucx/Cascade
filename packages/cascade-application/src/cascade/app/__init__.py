@@ -3,12 +3,12 @@ from typing import Any, Dict, List, Tuple, Union, Optional, Callable
 
 from cascade.spec.dsl.fluent import LazyResult
 from cascade.spec.dsl.task import task
-from cascade.spec.runtime.interfaces import Connector, StateBackend
+from cascade.spec.runtime import Connector, StateBackend
 
 from cascade.execution.graph.model.build import build_graph
 from cascade.execution.graph.model.model import Node, EdgeType
 
-from cascade.runtime.host.instance import Engine
+from cascade.runtime.host import create_engine
 from cascade.runtime import EventBus
 from cascade.bus.events import (
     PlanAnalysisStarted,
@@ -19,9 +19,6 @@ from cascade.runtime.services.observability.subscribers import (
     HumanReadableLogSubscriber,
     TelemetrySubscriber,
 )
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
-
 from cascade.bus.feedback import bus
 from cascade.common.renderers import CliRenderer, JsonRenderer
 
@@ -104,10 +101,10 @@ class CascadeApp:
         log_format: str = "human",
         connector: Optional[Connector] = None,
         state_backend: Union[str, Callable[[str], StateBackend], None] = None,
+        use_vm: bool = False,
     ):
         self.raw_target = target
         self.params = params
-        self.system_resources = system_resources
         self.connector = connector
 
         # 1. Handle Auto-Gathering
@@ -130,26 +127,19 @@ class CascadeApp:
         # 3. Setup Event System
         self.event_bus = EventBus()
         self.log_subscriber = HumanReadableLogSubscriber(self.event_bus)
-
         self.telemetry_subscriber = None
         if self.connector:
             self.telemetry_subscriber = TelemetrySubscriber(
                 self.event_bus, self.connector
             )
 
-        # 4. Setup Engine Components
-        self.solver = NativeSolver()
-        self.executor = LocalExecutor()
-        self.sb_factory = _create_state_backend_factory(state_backend)
-
-        # 5. Create Engine
-        self.engine = Engine(
-            solver=self.solver,
-            executor=self.executor,
+        # 4. Create Engine using the central factory
+        self.engine = create_engine(
+            use_vm=use_vm,
             bus=self.event_bus,
-            system_resources=self.system_resources,
+            system_resources=system_resources,
             connector=self.connector,
-            state_backend_factory=self.sb_factory,
+            state_backend_factory=_create_state_backend_factory(state_backend),
         )
 
         if self.telemetry_subscriber:
@@ -227,8 +217,12 @@ class CascadeApp:
         # 1. Build Graph
         graph, _, _ = build_graph(self.workflow_target)
 
+        from cascade.execution.graph.solvers.native import NativeSolver
+
+        solver = NativeSolver()
+
         # 2. Resolve Plan using the app's solver
-        plan = self.solver.resolve(graph)
+        plan = solver.resolve(graph)
         total_steps = sum(len(stage) for stage in plan)
 
         run_id = self.workflow_target._uuid
@@ -263,6 +257,7 @@ def run(
     log_format: str = "human",
     connector: Optional["Connector"] = None,
     state_backend: Union[str, Callable[[str], "StateBackend"], None] = None,
+    use_vm: bool = False,
 ) -> Any:
     app = CascadeApp(
         target=target,
@@ -272,6 +267,7 @@ def run(
         log_format=log_format,
         connector=connector,
         state_backend=state_backend,
+        use_vm=use_vm,
     )
     return app.run()
 

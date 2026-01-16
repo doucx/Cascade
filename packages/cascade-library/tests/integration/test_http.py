@@ -1,8 +1,6 @@
 import pytest
 import cascade.sdk as cs
 import aiohttp
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 # Mark all tests in this module to be skipped if dependencies are not installed
 pytest.importorskip("aiohttp")  # For the mock server fixture (aiohttp_client)
@@ -10,7 +8,7 @@ pytest.importorskip("httpx")  # For the code under test (cascade-library)
 
 
 @pytest.mark.asyncio
-async def test_http_get_success(aiohttp_client):
+async def test_http_get_success(engine, aiohttp_client):
     async def handler(request):
         from aiohttp import web
 
@@ -32,15 +30,12 @@ async def test_http_get_success(aiohttp_client):
 
     final_result = process_user(api_response)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(final_result)
     assert result == "cascade"
 
 
 @pytest.mark.asyncio
-async def test_http_post_success(aiohttp_client):
+async def test_http_post_success(engine, aiohttp_client):
     async def handler(request):
         from aiohttp import web
 
@@ -67,16 +62,13 @@ async def test_http_post_success(aiohttp_client):
 
     final_result = check_response(api_response)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(final_result)
     assert result["received"] == 42
     assert result["status"] == "created"
 
 
 @pytest.mark.asyncio
-async def test_http_with_template(aiohttp_client):
+async def test_http_with_template(engine, aiohttp_client):
     async def user_handler(request):
         from aiohttp import web
 
@@ -102,8 +94,5 @@ async def test_http_with_template(aiohttp_client):
 
     final_status = get_status(api_response)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(final_status, params={"username": "dynamic_user"})
     assert result == "ok"

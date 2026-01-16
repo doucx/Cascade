@@ -1,8 +1,6 @@
 import asyncio
 import pytest
 import cascade.sdk as cs
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.host.instance import Engine
 from cascade.bus.events import TaskExecutionFinished
 from cascade.test_utils.helpers import MockExecutor
 
@@ -94,7 +92,9 @@ def controller_runner(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
+async def test_cli_idempotency_unblocks_engine(
+    engine_factory, controller_runner, bus_and_spy
+):
     """
     This test is EXPECTED TO FAIL with a timeout on the pre-fix codebase.
     It verifies that a non-idempotent CLI controller creates conflicting
@@ -109,8 +109,7 @@ async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
 
     workflow = fast_task.map(i=range(10))
 
-    engine = Engine(
-        solver=NativeSolver(),
+    engine = engine_factory(
         executor=MockExecutor(),
         bus=bus,
         connector=controller_runner.connector,

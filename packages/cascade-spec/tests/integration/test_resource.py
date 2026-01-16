@@ -4,10 +4,7 @@ import cascade.sdk as cs
 from cascade.bus.events import (
     ResourceAcquired,
     ResourceReleased,
-    Event,
 )
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 # --- Test Resources ---
 
@@ -41,36 +38,30 @@ def task_using_resource(conn=cs.inject("db_connection")):
 # --- Test Cases ---
 
 
-def test_di_end_to_end():
-    import asyncio
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
+@pytest.mark.asyncio
+async def test_di_end_to_end(engine_factory):
+    engine = engine_factory()
     engine.register(config)
     engine.register(db_connection)
 
-    result = asyncio.run(engine.run(task_using_resource()))
+    result = await engine.run(task_using_resource())
 
     assert result == "production_url"
 
 
-def test_resource_events():
-    import asyncio
+@pytest.mark.asyncio
+async def test_resource_events(engine_factory, bus_and_spy):
+    bus, spy = bus_and_spy
 
-    events = []
-    bus = cs.EventBus()
-    bus.subscribe(Event, events.append)
-
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
     engine.register(config)
     engine.register(db_connection)
 
-    asyncio.run(engine.run(task_using_resource()))
+    await engine.run(task_using_resource())
 
     # Check for ResourceAcquired events
     acquired_names = [
-        e.resource_name for e in events if isinstance(e, ResourceAcquired)
+        e.resource_name for e in spy.events if isinstance(e, ResourceAcquired)
     ]
     # 'config' must be acquired before 'db_connection' because db_connection depends on config
     assert "config" in acquired_names
@@ -79,7 +70,7 @@ def test_resource_events():
 
     # Check for ResourceReleased events
     released_names = [
-        e.resource_name for e in events if isinstance(e, ResourceReleased)
+        e.resource_name for e in spy.events if isinstance(e, ResourceReleased)
     ]
     # Teardown is in reverse order (LIFO via ExitStack)
     assert "db_connection" in released_names
@@ -87,7 +78,8 @@ def test_resource_events():
     assert released_names.index("db_connection") < released_names.index("config")
 
 
-def test_resource_override():
+@pytest.mark.asyncio
+async def test_resource_override(engine_factory):
     @cs.resource
     def mock_db_connection():
         print("SETUP: mock_db_connection")
@@ -96,30 +88,23 @@ def test_resource_override():
         yield m
         print("TEARDOWN: mock_db_connection")
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
+    engine = engine_factory()
     engine.register(config)
     engine.register(db_connection)  # Register the original
 
-    import asyncio
-
     # Override the db_connection resource using the container's robust method
     with engine.resource_container.override("db_connection", mock_db_connection):
-        result = asyncio.run(engine.run(task_using_resource()))
+        result = await engine.run(task_using_resource())
 
     assert result == "mock_db_url"
 
     # After exiting the context, the original should be restored.
     # We create a NEW engine to ensure a clean state and avoid cache pollution from the previous run.
-    # This is the most robust way to test restoration.
-    engine_after = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
+    engine_after = engine_factory()
     engine_after.register(config)
     engine_after.register(db_connection)
 
-    result_after = asyncio.run(engine_after.run(task_using_resource()))
+    result_after = await engine_after.run(task_using_resource())
     assert result_after == "production_url"
 
 
@@ -131,10 +116,8 @@ def test_resource_must_be_generator():
             return "foo"
 
 
-def test_unregistered_resource_raises_error():
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
+@pytest.mark.asyncio
+async def test_unregistered_resource_raises_error(engine):
     # Note: We do NOT register any resources.
 
     @cs.task
@@ -144,9 +127,7 @@ def test_unregistered_resource_raises_error():
     with pytest.raises(
         NameError, match="Resource 'non_existent_db' is required but not registered"
     ):
-        import asyncio
-
-        asyncio.run(engine.run(task_needs_unregistered()))
+        await engine.run(task_needs_unregistered())
 
 
 def test_resource_scan_finds_inject_in_dict():

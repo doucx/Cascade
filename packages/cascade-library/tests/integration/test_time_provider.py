@@ -2,19 +2,6 @@ import time
 import pytest
 import cascade.sdk as cs
 
-from cascade.runtime import Engine, EventBus
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
-
-
-@pytest.fixture
-def engine():
-    return Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=EventBus(),
-    )
-
 
 @pytest.mark.asyncio
 async def test_wait_is_non_blocking(engine):

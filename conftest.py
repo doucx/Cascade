@@ -7,6 +7,9 @@ from cascade.spec.vm.interfaces import ReactorProtocol
 from cascade.runtime import EventBus
 from cascade.test_utils.helpers import SpySubscriber
 
+from typing import Callable
+from cascade.runtime.host.instance import Engine
+
 # Attempt to import LocalBusConnector for global cleanup
 try:
     from cascade.connectors.local.bus import LocalBusConnector
@@ -50,8 +53,7 @@ def reactor_backend_factory(
     #     return Reactor
     else:
         pytest.fail(
-            f"Invalid reactor backend specified: '{backend}'. "
-            "Choose from 'python'."
+            f"Invalid reactor backend specified: '{backend}'. Choose from 'python'."
         )
 
 
@@ -75,3 +77,29 @@ def bus_and_spy():
     bus = EventBus()
     spy = SpySubscriber(bus)
     return bus, spy
+
+
+# --- Engine Fixtures for Decoupled Testing ---
+
+
+@pytest.fixture
+def engine_factory() -> Callable[..., Engine]:
+    """
+    Provides a factory function to create a Cascade Engine instance for tests.
+    This is a thin wrapper around the production `create_engine` factory,
+    allowing tests to easily override components.
+    """
+    from cascade.runtime.host import create_engine
+
+    def _factory(**kwargs) -> Engine:
+        # The create_engine function already handles default component creation.
+        # This fixture simply acts as a convenient entry point for pytest.
+        return create_engine(**kwargs)
+
+    return _factory
+
+
+@pytest.fixture
+def engine(engine_factory: Callable[..., Engine]) -> Engine:
+    """Provides a default-configured Cascade Engine instance for simple tests."""
+    return engine_factory()

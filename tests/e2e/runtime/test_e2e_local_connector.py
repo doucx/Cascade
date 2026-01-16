@@ -3,8 +3,6 @@ import sys
 import time
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.host.instance import Engine
-from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.bus.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
@@ -31,7 +29,7 @@ def controller_connector(unique_paths):
 
 
 @pytest.fixture
-def engine(unique_paths, bus_and_spy):
+def engine(engine_factory, unique_paths, bus_and_spy):
     """Provides a fully configured Engine using the LocalConnector."""
     from cascade.test_utils.helpers import TimedMockExecutor
 
@@ -39,8 +37,7 @@ def engine(unique_paths, bus_and_spy):
     bus, _ = bus_and_spy
     connector = LocalConnector(db_path=db_path, uds_path=uds_path)
 
-    return Engine(
-        solver=NativeSolver(),
+    return engine_factory(
         executor=TimedMockExecutor(delay=0.05),
         bus=bus,
         connector=connector,

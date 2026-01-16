@@ -1,7 +1,5 @@
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 # Skip if dependencies are missing
 pytest.importorskip("aiobotocore")
@@ -47,7 +45,7 @@ def s3_mock(aws_credentials, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_s3_write_read_text(s3_mock):
+async def test_s3_write_read_text(engine, s3_mock):
     import aiobotocore.session
 
     bucket_name = "test-cascade-bucket"
@@ -65,10 +63,6 @@ async def test_s3_write_read_text(s3_mock):
     write_op = cs.io.s3.write_text(bucket=bucket_name, key=key, content=content)
     read_op = cs.io.s3.read_text(bucket=bucket_name, key=key)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-
     # 3. Execute Write
     await engine.run(write_op)
 
@@ -79,7 +73,7 @@ async def test_s3_write_read_text(s3_mock):
 
 
 @pytest.mark.asyncio
-async def test_s3_write_read_bytes(s3_mock):
+async def test_s3_write_read_bytes(engine, s3_mock):
     import aiobotocore.session
 
     bucket_name = "test-cascade-bucket"
@@ -94,10 +88,6 @@ async def test_s3_write_read_bytes(s3_mock):
 
     write_op = cs.io.s3.write_bytes(bucket=bucket_name, key=key, content=content)
     read_op = cs.io.s3.read_bytes(bucket=bucket_name, key=key)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
 
     # 2. Execute Write
     await engine.run(write_op)

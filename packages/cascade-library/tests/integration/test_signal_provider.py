@@ -3,9 +3,6 @@ import time
 import pytest
 import cascade.sdk as cs
 
-from cascade.runtime import Engine, EventBus
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.connectors.local import LocalBusConnector
 
 
@@ -15,11 +12,8 @@ def local_connector():
 
 
 @pytest.fixture
-def engine(local_connector):
-    return Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=EventBus(),
+def engine(engine_factory, local_connector):
+    return engine_factory(
         connector=local_connector,
     )
 

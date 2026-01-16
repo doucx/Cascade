@@ -1,7 +1,5 @@
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 
 @pytest.fixture
@@ -10,41 +8,31 @@ def test_file(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_read_text_provider(test_file):
+async def test_read_text_provider(engine, test_file):
     test_file.write_text("hello cascade")
 
     # cs.read.text matches "read.text" provider
     lazy = cs.read.text(str(test_file))
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(lazy)
     assert result == "hello cascade"
 
 
 @pytest.mark.asyncio
-async def test_write_text_provider(test_file):
+async def test_write_text_provider(engine, test_file):
     # cs.write.text matches "write.text" provider
     lazy = cs.write.text(str(test_file), "written by cascade")
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     await engine.run(lazy)
 
     assert test_file.read_text() == "written by cascade"
 
 
 @pytest.mark.asyncio
-async def test_fs_exists_provider(test_file):
+async def test_fs_exists_provider(engine, test_file):
     # cs.fs.exists matches "fs.exists" provider
     lazy_true = cs.fs.exists(str(test_file))
     lazy_false = cs.fs.exists(str(test_file) + ".missing")
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
 
     test_file.touch()
     assert await engine.run(lazy_true) is True

@@ -4,10 +4,7 @@ from typing import Any, Dict, Optional
 
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import LazyFactory, Provider
-from cascade.runtime.host.instance import Engine
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime import EventBus
+from cascade.runtime.host import create_engine
 
 
 class SubflowProvider(Provider):
@@ -44,19 +41,10 @@ async def _subflow_task(
     if target_obj is None:
         raise ValueError(f"Target '{target}' not found in {file_path}")
 
-    # 3. Create Isolated Engine
+    # 3. Create Isolated Engine using the central factory
     # Note: The subflow runs in isolation. It does not share the parent's
-    # resource manager or event bus.
-    # For now, subflow logs are not forwarded to the parent bus to keep things clean.
-    # Errors will propagate as exceptions.
-    sub_bus = EventBus()
-    sub_engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=sub_bus,
-        # TODO: Consider passing system_resources from parent?
-        # For now, use default (unlimited) or let OS handle resource contention.
-    )
+    # resource manager or event bus. Errors will propagate as exceptions.
+    sub_engine = create_engine()
 
     # 4. Execute
     return await sub_engine.run(target_obj, params=params)

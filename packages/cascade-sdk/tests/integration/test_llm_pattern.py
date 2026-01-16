@@ -1,8 +1,6 @@
 import pytest
 import cascade.sdk as cs
 from unittest.mock import MagicMock
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.providers.http import HttpResponse
 
 # 模拟一个成功的 OpenAI API 响应
@@ -33,7 +31,7 @@ def mock_http_post(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):
+async def test_llm_pattern_via_subflow(engine, mock_http_post, monkeypatch):
     # Mock the environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "fake-key")
 
@@ -51,9 +49,6 @@ async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):
     )
 
     # Run the workflow
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(summary)
 
     # Assert the final result

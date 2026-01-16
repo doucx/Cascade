@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 import asyncio
@@ -17,20 +16,20 @@ from cascade.bus.events import (
     ConnectorConnected,
     ConnectorDisconnected,
 )
-from cascade.spec.runtime.interfaces import Solver, Executor, StateBackend, Connector
-from cascade.spec.runtime.storage import ObjectStore
+from cascade.spec.runtime import (
+    Solver,
+    Executor,
+    StateBackend,
+    Connector,
+    ExecutionStrategy,
+    ExecutionContext,
+    ObjectStore,
+)
 from ..storage import InMemoryObjectStore
 from ..services.resources.manager import ResourceManager
 from ..services.constraints import ConstraintManager
-from ..services.constraints.handlers import (
-    PauseConstraintHandler,
-    ConcurrencyConstraintHandler,
-    RateLimitConstraintHandler,
-)
 from ..io.state import InMemoryStateBackend
 from ..services.resources.container import ResourceContainer
-from cascade.spec.runtime import ExecutionContext
-from cascade.spec.runtime import ExecutionStrategy
 
 
 class Engine:
@@ -39,17 +38,24 @@ class Engine:
         solver: Solver,
         executor: Executor,
         bus: EventBus,
+        strategy: ExecutionStrategy,
+        constraint_manager: ConstraintManager,
+        resource_container: ResourceContainer,
+        wakeup_event: asyncio.Event,
         state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
         system_resources: Optional[Dict[str, Any]] = None,
         connector: Optional[Connector] = None,
         cache_backend: Optional[Any] = None,
         resource_manager: Optional[ResourceManager] = None,
-        strategy: Optional[ExecutionStrategy] = None,
         object_store: Optional[ObjectStore] = None,
     ):
         self.solver = solver
         self.executor = executor
         self.bus = bus
+        self.strategy = strategy
+        self.constraint_manager = constraint_manager
+        self.resource_container = resource_container
+        self._wakeup_event = wakeup_event
         self.connector = connector
         # Default to InMemory factory if none provided
         self.state_backend_factory = state_backend_factory or (
@@ -66,64 +72,7 @@ class Engine:
         else:
             self.resource_manager = ResourceManager(capacity=system_resources)
 
-        # Setup constraint manager with default handlers
-        self.constraint_manager = ConstraintManager(self.resource_manager)
-        self.constraint_manager.register_handler(PauseConstraintHandler())
-        self.constraint_manager.register_handler(ConcurrencyConstraintHandler())
-        self.constraint_manager.register_handler(RateLimitConstraintHandler())
-
-        self._wakeup_event = asyncio.Event()
-        self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
-
-        self.resource_container = ResourceContainer(self.bus)
-
-        if strategy:
-            self.strategy = strategy
-        else:
-            self.strategy = self._resolve_default_strategy()
-
         self._managed_subscribers = []
-
-    def _resolve_default_strategy(self) -> ExecutionStrategy:
-        backend_choice = os.getenv("CASCADE_BACKEND", "graph").lower()
-        if backend_choice == "vm":
-            return self._load_vm_strategy()
-        else:
-            return self._load_graph_strategy()
-
-    def _load_vm_strategy(self) -> ExecutionStrategy:
-        from cascade.runtime.strategies.vm import VMExecutionStrategy
-
-        return VMExecutionStrategy(executor=self.executor, bus=self.bus)
-
-    def _load_graph_strategy(self) -> ExecutionStrategy:
-        try:
-            # Dynamic imports to break hard dependency
-            from cascade.execution.graph.logic.processor import NodeProcessor
-            from cascade.execution.graph.strategy import GraphExecutionStrategy
-
-            # Reconstruct the legacy stack
-            node_processor = NodeProcessor(
-                executor=self.executor,
-                bus=self.bus,
-                resource_manager=self.resource_manager,
-                constraint_manager=self.constraint_manager,
-                solver=self.solver,
-            )
-
-            return GraphExecutionStrategy(
-                solver=self.solver,
-                node_processor=node_processor,
-                resource_container=self.resource_container,
-                constraint_manager=self.constraint_manager,
-                bus=self.bus,
-                wakeup_event=self._wakeup_event,
-            )
-        except ImportError:
-            raise RuntimeError(
-                "No execution strategy provided and 'cascade-execution-graph' package not found. "
-                "Please install 'cascade-execution-graph' or provide a custom strategy."
-            )
 
     def add_subscriber(self, subscriber: Any):
         self._managed_subscribers.append(subscriber)
@@ -166,7 +115,6 @@ class Engine:
     async def run(
         self,
         target: Any,
-        use_vm: bool = False,
         params: Optional[Dict[str, Any]] = None,
     ) -> Any:
         # Handle Auto-Gathering

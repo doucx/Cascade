@@ -17,7 +17,7 @@ def mock_messaging_bus(monkeypatch):
     return mock_bus
 
 
-def test_e2e_linear_workflow(mock_messaging_bus):
+def test_e2e_linear_workflow(engine_factory, mock_messaging_bus):
     @cs.task
     def get_name():
         return "Cascade"
@@ -32,9 +32,7 @@ def test_e2e_linear_workflow(mock_messaging_bus):
     # The subscriber will translate these to calls on the mocked messaging_bus.
     event_bus = cs.EventBus()
     HumanReadableLogSubscriber(event_bus)
-    engine = cs.Engine(
-        solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=event_bus
-    )
+    engine = engine_factory(bus=event_bus)
 
     result = asyncio.run(engine.run(final_greeting))
 
@@ -59,16 +57,14 @@ def test_e2e_linear_workflow(mock_messaging_bus):
     mock_messaging_bus.error.assert_not_called()
 
 
-def test_e2e_failure_propagation(mock_messaging_bus):
+def test_e2e_failure_propagation(engine_factory, mock_messaging_bus):
     @cs.task
     def failing_task():
         raise ValueError("Something went wrong")
 
     event_bus = cs.EventBus()
     HumanReadableLogSubscriber(event_bus)
-    engine = cs.Engine(
-        solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=event_bus
-    )
+    engine = engine_factory(bus=event_bus)
 
     with pytest.raises(ValueError, match="Something went wrong"):
         asyncio.run(engine.run(failing_task()))

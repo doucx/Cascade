@@ -24,7 +24,7 @@ async def non_blocking_async_task(duration: float) -> float:
 
 
 @pytest.mark.asyncio
-async def test_sync_task_offloading_prevents_blocking():
+async def test_sync_task_offloading_prevents_blocking(engine_factory):
     """
     Verifies that synchronous blocking tasks are offloaded to a separate thread,
     allowing other async tasks to execute concurrently.
@@ -41,16 +41,7 @@ async def test_sync_task_offloading_prevents_blocking():
         finish first.
         Result: async_task finishes BEFORE sync_task.
     """
-    from cascade.runtime.host.instance import Engine
-    from cascade.runtime import EventBus
-    from cascade.execution.graph.solvers.native import NativeSolver
-    from cascade.runtime.io.executors.local import LocalExecutor
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=EventBus(),  # Silent bus
-    )
+    engine = engine_factory()
 
     # 1. Sync task takes 0.2s
     sync_result_lr = blocking_sync_task(0.2)

@@ -1,16 +1,13 @@
 import asyncio
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.host.instance import Engine
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.bus.events import TaskExecutionStarted
 
 from .harness import InProcessConnector, ControllerTestApp
 
 
 @pytest.mark.asyncio
-async def test_startup_pause_and_resume_e2e(bus_and_spy):
+async def test_startup_pause_and_resume_e2e(engine_factory, bus_and_spy):
     """
     Definitive regression test for the startup race condition.
     Ensures a pre-existing 'pause' constraint is respected upon engine start,
@@ -34,12 +31,7 @@ async def test_startup_pause_and_resume_e2e(bus_and_spy):
     # 3. ACT: Start the engine.
     # It should connect, subscribe, immediately receive the retained pause message,
     # and block before executing any tasks.
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus,
-        connector=connector,
-    )
+    engine = engine_factory(bus=bus, connector=connector)
     engine_run_task = asyncio.create_task(engine.run(workflow))
 
     # 4. ASSERT: The engine is paused.
@@ -65,7 +57,7 @@ async def test_startup_pause_and_resume_e2e(bus_and_spy):
 
 
 @pytest.mark.asyncio
-async def test_startup_pause_is_respected(bus_and_spy):
+async def test_startup_pause_is_respected(engine_factory, bus_and_spy):
     """
     A more precise regression test for the startup race condition.
     Verifies ONLY that a pre-existing 'pause' is respected.
@@ -85,12 +77,7 @@ async def test_startup_pause_is_respected(bus_and_spy):
     workflow = my_task()
 
     # ACT: Create and start the engine.
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus,
-        connector=connector,
-    )
+    engine = engine_factory(bus=bus, connector=connector)
     engine_run_task = asyncio.create_task(engine.run(workflow))
 
     # ASSERT: After giving the engine a moment to process initial messages,
@@ -109,7 +96,7 @@ async def test_startup_pause_is_respected(bus_and_spy):
 
 
 @pytest.mark.asyncio
-async def test_runtime_pause_interrupts_stage(bus_and_spy):
+async def test_runtime_pause_interrupts_stage(engine_factory, bus_and_spy):
     """
     Verifies that a pause command issued *during* a workflow execution
     effectively prevents subsequent tasks from starting.
@@ -135,12 +122,7 @@ async def test_runtime_pause_interrupts_stage(bus_and_spy):
 
     workflow = task_b(slow_task_a())
 
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus,
-        connector=connector,
-    )
+    engine = engine_factory(bus=bus, connector=connector)
 
     # 2. ACT
     run_task = asyncio.create_task(engine.run(workflow))

@@ -1,6 +1,5 @@
 import pytest
 import asyncio
-from cascade.runtime.host.instance import Engine
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.strategies.vm import VMExecutionStrategy
 from cascade.bus.core import EventBus
@@ -47,11 +46,11 @@ def strategy(executor, bus):
 
 
 @pytest.fixture
-def engine(executor, bus, strategy):
+def engine(engine_factory, executor, bus, strategy):
     # Solver is not used by VMStrategy but required by Engine interface
     solver = MockSolver(plan=[])
 
-    return Engine(
+    return engine_factory(
         solver=solver,
         executor=executor,
         bus=bus,

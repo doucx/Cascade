@@ -33,6 +33,10 @@
     },
     "py://packages/cascade-sdk/src/cascade/sdk.py#_IMPORT_MAP": {},
     "py://packages/cascade-sdk/src/cascade/sdk.py#__all__": {},
+    "py://packages/cascade-sdk/src/cascade/sdk.py#__dir__": {
+      "baseline_code_signature_text": "def __dir__():",
+      "baseline_code_structure_hash": "a5f3ba33704c1f392f4d2fe11f63ccdc537ba2fc62f0058fd44b28e91ef0d8a1"
+    },
     "py://packages/cascade-sdk/src/cascade/sdk.py#__getattr__": {
       "baseline_code_signature_text": "def __getattr__(name: str) -> Any:",
       "baseline_code_structure_hash": "e4c6375eacd59d709311f755b6d45a5256cf3f5517bc10b7eaf8e38228d9701f"
@@ -161,8 +165,8 @@
     },
     "py://packages/cascade-sdk/tests/integration/test_llm_pattern.py#mock_openai_response": {},
     "py://packages/cascade-sdk/tests/integration/test_llm_pattern.py#test_llm_pattern_via_subflow": {
-      "baseline_code_signature_text": "async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):",
-      "baseline_code_structure_hash": "798af51c8dfc4ff1e9d0ea9f98152faf31fb297d5a60d0dfe7fe6935dd28a916",
+      "baseline_code_signature_text": "async def test_llm_pattern_via_subflow(engine, mock_http_post, monkeypatch):",
+      "baseline_code_structure_hash": "3d29c05ed6f4d71ad57fb81ce33c3b5e76b86b3644c6d533b8e1463034aac1a2",
       "baseline_yaml_content_hash": "33f0ffd2b04ddbcf44b7927bb157d27bbe62c2ed4e41fb5d39af353188e7e42a"
     },
     "py://packages/cascade-sdk/tests/integration/test_public_api_imports.py#test_accessing_non_existent_attribute_raises_attribute_error": {

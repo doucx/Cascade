@@ -1,8 +1,6 @@
 import asyncio
 import pytest
 import cascade.sdk as cs
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.host.instance import Engine
 from cascade.bus.events import TaskExecutionFinished
 from cascade.spec.dsl.constraint import GlobalConstraint
 from dataclasses import asdict
@@ -30,7 +28,7 @@ async def set_rate_limit(
 
 
 @pytest.mark.asyncio
-async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
+async def test_updating_rate_limit_unblocks_engine(engine_factory, bus_and_spy):
     """
     Regression test for the rate-limit update deadlock.
     Verifies that updating a slow rate limit to a fast one wakes up a sleeping
@@ -47,8 +45,7 @@ async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
     # A workflow with enough tasks to clearly see the rate limit effect
     workflow = fast_task.map(i=range(5))
 
-    engine = Engine(
-        solver=NativeSolver(),
+    engine = engine_factory(
         executor=MockExecutor(),
         bus=bus,
         connector=connector,

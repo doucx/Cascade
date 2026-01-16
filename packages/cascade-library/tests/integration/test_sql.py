@@ -3,9 +3,6 @@ import cascade.sdk as cs
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
-
 # Skip if sqlalchemy missing
 pytest.importorskip("sqlalchemy")
 
@@ -36,10 +33,7 @@ def sqlite_db():
 
 
 @pytest.fixture
-def db_engine():
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
+def db_engine(engine):
     engine.register(sqlite_db)
     return engine
 
@@ -71,12 +65,9 @@ async def test_sql_with_params(db_engine):
 
 
 @pytest.mark.asyncio
-async def test_sql_missing_resource():
+async def test_sql_missing_resource(engine):
     target = cs.sql("SELECT 1", conn=cs.inject("non_existent_db"))
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     # We don't register anything
 
     # With the new scanning logic, it should fail at setup time!

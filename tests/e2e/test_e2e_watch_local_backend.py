@@ -3,9 +3,6 @@ import json
 import sys
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.host.instance import Engine
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime import EventBus
 from cascade.connectors.local import LocalConnector
 from cascade.runtime.services.observability.subscribers import TelemetrySubscriber
@@ -15,7 +12,7 @@ from cascade.runtime.services.observability.subscribers import TelemetrySubscrib
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UDS is not supported on Windows")
 @pytest.mark.asyncio
-async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
+async def test_watch_local_uds_e2e(engine_factory, tmp_path, monkeypatch):
     """
     End-to-end test for the local UDS telemetry loop.
     Engine -> LocalConnector -> UDS Server -> UDS Client -> on_message
@@ -41,12 +38,7 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
     event_bus = EventBus()
     connector = LocalConnector(db_path=str(db_path), telemetry_uds_path=uds_path)
 
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=event_bus,
-        connector=connector,
-    )
+    engine = engine_factory(bus=event_bus, connector=connector)
 
     # We must attach and REGISTER the TelemetrySubscriber so the engine manages its lifecycle
     subscriber = TelemetrySubscriber(event_bus, connector)

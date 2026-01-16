@@ -1,8 +1,6 @@
 import time
 import pytest
 import cascade.sdk as cs
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.host.instance import Engine
 from cascade.bus.events import TaskExecutionFinished
 from cascade.test_utils.helpers import MockExecutor
 
@@ -10,7 +8,7 @@ from .harness import InProcessConnector
 
 
 @pytest.mark.asyncio
-async def test_e2e_rate_limit_control(bus_and_spy):
+async def test_e2e_rate_limit_control(engine_factory, bus_and_spy):
     """
     Full end-to-end test for rate limiting.
     1. Controller publishes a rate limit constraint (Retained).
@@ -54,8 +52,7 @@ async def test_e2e_rate_limit_control(bus_and_spy):
     workflow = fast_task.map(x=[1, 2, 3, 4])
 
     # 5. Setup the Engine
-    engine = Engine(
-        solver=NativeSolver(),
+    engine = engine_factory(
         executor=MockExecutor(delay=0.01),  # Short work time
         bus=bus,
         connector=connector,

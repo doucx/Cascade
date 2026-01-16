@@ -7,8 +7,8 @@
       "baseline_yaml_content_hash": "f01e897c78c069fad47b5835157b6d6f1b91296df196900885d151ab457e7cf9"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.__init__": {
-      "baseline_code_signature_text": "def __init__(self, target: Union[LazyResult, List[Any], Tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None):",
-      "baseline_code_structure_hash": "71469f926459e79318e4ebb6b09d7b22e7d15767595ca2bd41b1e9e042059110"
+      "baseline_code_signature_text": "def __init__(self, target: Union[LazyResult, List[Any], Tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None, use_vm: bool = False):",
+      "baseline_code_structure_hash": "77ced9edf7612ecf40e7fe0c299cc791c243cde366743d7b66af32e00ee2520e"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.connector": {},
     "py://packages/cascade-application/src/cascade/app/__init__.py#CascadeApp.dry_run": {
@@ -78,8 +78,8 @@
       "baseline_code_structure_hash": "f05cb4c328e2beecb116cca35297d758c405c65c8d9af4f9c02fd123f68b698b"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#run": {
-      "baseline_code_signature_text": "def run(target: Union[LazyResult, List[Any], tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None) -> Any:",
-      "baseline_code_structure_hash": "5508c31bb9996ac7f840897b1e6f4e485e46b7262facda3ef4f515a93c5cd0d9"
+      "baseline_code_signature_text": "def run(target: Union[LazyResult, List[Any], tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None, use_vm: bool = False) -> Any:",
+      "baseline_code_structure_hash": "8b9f18dc24d5f14c0ba892790d26c0a68309df27dedf748422708040b486f53d"
     },
     "py://packages/cascade-application/src/cascade/app/__init__.py#visualize": {
       "baseline_code_signature_text": "def visualize(target: Any) -> str:",

@@ -38,7 +38,7 @@ class LanderSpec(PhysicsSpec):
     )
     output_error = Port.Output("output_error", role=PortRole.DATA, type=PortType.Token)
     obs_output = Port.Output("obs_output", role=PortRole.OBSERVABILITY, type="Event")
-    
+
     # Resource returns are dynamic
     resource_returns = Port.MapOutput(role=PortRole.RESOURCE, type=PortType.Token)
 

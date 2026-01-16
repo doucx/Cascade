@@ -40,12 +40,12 @@ def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -
 
     # 2. Capture Metadata
     start_ts = time.time()  # Wall clock for IR
-    mono_ts = time.monotonic() # Monotonic for internal duration
+    mono_ts = time.monotonic()  # Monotonic for internal duration
 
     # Extract logical ID and Task Name
     # Convention: logical_id is the prefix of the physical ID
     logical_id = node.id.split(".")[0]
-    
+
     task_name = "unknown"
     if node.name.startswith("Launch(") and node.name.endswith(")"):
         task_name = node.name[7:-1]
@@ -94,7 +94,7 @@ def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -
         code_hash=node.canonical_code_structure_hash,
         input_refs=input_refs,
         reply_to_nid=node.reply_to_nid,
-        trace=trace_payload  # Trace Tunneling happens here
+        trace=trace_payload,  # Trace Tunneling happens here
     )
 
     try:

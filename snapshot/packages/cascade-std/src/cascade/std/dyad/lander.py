@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 import time
 
 from cascade.spec import EventIR, EventType, EventState, EventContext
@@ -31,7 +31,7 @@ def standard_lander(io: LanderSpec.IO, node: LanderNode, resources: Any) -> None
 
     # 3. Construct EventIR (FINISHED)
     logical_id = node.id.split(".")[0]
-    
+
     task_name = "unknown"
     if node.name.startswith("Land(") and node.name.endswith(")"):
         task_name = node.name[5:-1]
@@ -55,9 +55,9 @@ def standard_lander(io: LanderSpec.IO, node: LanderNode, resources: Any) -> None
         # For simplicity in stdlib, we just str() it if not explicit Ref check
         # Ideally we check against cascade.spec.physical.object.Ref
         if hasattr(result_payload, "uri") and hasattr(result_payload, "meta"):
-             preview = result_payload
+            preview = result_payload
         else:
-             preview = str(result_payload)[:100]
+            preview = str(result_payload)[:100]
 
     ir: EventIR = {
         "v": "1.0",
@@ -88,7 +88,7 @@ def standard_lander(io: LanderSpec.IO, node: LanderNode, resources: Any) -> None
     # We iterate over the dynamic resource return ports defined on the Node
     # and match them against what we claimed in the trace.
     resource_amounts = trace_payload.get("resource_amounts", {})
-    
+
     # We can't iterate io.resource_returns directly as it's an output map.
     # We must look at the Node's output ports definition.
     for port_name in node.output_ports:
@@ -96,7 +96,7 @@ def standard_lander(io: LanderSpec.IO, node: LanderNode, resources: Any) -> None
         # We need a way to identify which ports are resource returns.
         # The Spec defines them with role=RESOURCE.
         port_def = node.output_ports[port_name]
-        if port_def.role == "RESOURCE": # String match or import PortRole
+        if port_def.role == "RESOURCE":  # String match or import PortRole
             # Found a resource return port
-            amount = resource_amounts.get(port_name, 1) # Default to 1 if not tracked
+            amount = resource_amounts.get(port_name, 1)  # Default to 1 if not tracked
             io.resource_returns[port_name] = Token(payload=amount)

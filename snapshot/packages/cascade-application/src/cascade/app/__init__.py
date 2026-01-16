@@ -154,8 +154,6 @@ class CascadeApp:
         if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
             return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
 
-        from cascade.execution.graph.solvers.native import NativeSolver
-
         graph, _, _ = build_graph(self.workflow_target)
 
         dot_parts = [

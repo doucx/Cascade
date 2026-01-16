@@ -630,6 +630,54 @@
     },
     "py://packages/cascade-spec/src/cascade/spec/physical/triad.py#WorkerNode.canonical_code_structure_hash": {},
     "py://packages/cascade-spec/src/cascade/spec/physics/__init__.py#__all__": {},
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#DynamicOutputMap": {
+      "baseline_code_signature_text": "class DynamicOutputMap(MutableMapping):",
+      "baseline_code_structure_hash": "0c97ca6bc316f51cf663556b80907139723af9b52ea50d5a79f0c598d8ff4dcb"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#DynamicOutputMap.__delitem__": {
+      "baseline_code_signature_text": "def __delitem__(self, key: str) -> None:",
+      "baseline_code_structure_hash": "b29972343906b3bc9c8cfaae7885b352bc6e067e2046199b7baf400ddc72e745"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#DynamicOutputMap.__getitem__": {
+      "baseline_code_signature_text": "def __getitem__(self, key: str) -> Token:",
+      "baseline_code_structure_hash": "ec53b700593365f056a2cf62ea79502585777dc8dc9f3f618f961e5d2c58f955"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#DynamicOutputMap.__init__": {
+      "baseline_code_signature_text": "def __init__(self, target_dict: Dict[str, Token], prefix: str):",
+      "baseline_code_structure_hash": "9fefe314062800deadfbf4aaf274b43ad0f991670592fab57b37b584d56ca086"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#DynamicOutputMap.__iter__": {
+      "baseline_code_signature_text": "def __iter__(self):",
+      "baseline_code_structure_hash": "ef0b2a8d16df5b326bbce14d9e611fbb031f6083186fd6f888620af153154781"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#DynamicOutputMap.__len__": {
+      "baseline_code_signature_text": "def __len__(self):",
+      "baseline_code_structure_hash": "4eef2625b3a5543becf464944490e0f5ffc0c2354e022fbf4dff00d931e1a463"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#DynamicOutputMap.__setitem__": {
+      "baseline_code_signature_text": "def __setitem__(self, key: str, value: Token) -> None:",
+      "baseline_code_structure_hash": "fce35810e357ad6044c7f19ae39c7f7a87ebf08af587e9db411bb8a4523f3c94"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#IOWrapper": {
+      "baseline_code_signature_text": "class IOWrapper:",
+      "baseline_code_structure_hash": "4c8a1618805889a538ca7d6d279ec1d91c65ec51eb798a9474bb52762cd85059"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#IOWrapper.__getattr__": {
+      "baseline_code_signature_text": "def __getattr__(self, name: str) -> Any:",
+      "baseline_code_structure_hash": "cfaa0d20b1f7ec834a295b0cfbdbbc55353e201952fcc10a53a830612bc56408"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#IOWrapper.__init__": {
+      "baseline_code_signature_text": "def __init__(self, inputs: Dict[str, Token], outputs: Dict[str, Token], spec: Type[PhysicsSpec]):",
+      "baseline_code_structure_hash": "3e1d2983e343416527ed57a9cc33207e906d7a7f767e209feba91f2b0cde0dc2"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#IOWrapper.__setattr__": {
+      "baseline_code_signature_text": "def __setattr__(self, name: str, value: Any) -> None:",
+      "baseline_code_structure_hash": "841953fff36ddb05f1d31038625e2ff76ca89f2135f5baedca68d7dad5ab864f"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physics/binding.py#implements": {
+      "baseline_code_signature_text": "def implements(spec: Type[PhysicsSpec]):",
+      "baseline_code_structure_hash": "28e174bec3cc33ea3a5b64c052f72b13808463754c8c59e2363660299d9e0eb7"
+    },
     "py://packages/cascade-spec/src/cascade/spec/physics/core.py#Port": {
       "baseline_code_signature_text": "class Port:",
       "baseline_code_structure_hash": "1d6a23786df6c9c0dd7d466de48c955d4a9eabbc3ad2954d828c9ed38b8ce168",
@@ -719,6 +767,16 @@
       "baseline_code_signature_text": "def submit(self, code_hash: str, input_refs: Dict[str, Ref], config: Dict[str, Any]) -> Awaitable[Ref]:",
       "baseline_code_structure_hash": "b44b8894e70f0c5aab9e73b565b386fb06b29a44235f3278919881be31cf3538",
       "baseline_yaml_content_hash": "3e506df111eddf37f147ea9f596155dfb22a85e6bbb8e645aca1e70688ed568e"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/runtime/contracts.py#ComputeRequest": {
+      "baseline_code_signature_text": "class ComputeRequest:",
+      "baseline_code_structure_hash": "cb63aaabc78f6e475dd1b83b32c39a5a7feca980f6eef52fd47958218fab54ea",
+      "baseline_yaml_content_hash": "6a9e9a00621c149b157766a4b439fe10a5fb510ef5a2058b44f7f93bd3845bf8"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/runtime/contracts.py#DelayRequest": {
+      "baseline_code_signature_text": "class DelayRequest:",
+      "baseline_code_structure_hash": "bd4b40d75fc1e409daf79d907140852fef2dafda54ce99b14a603fe92270f377",
+      "baseline_yaml_content_hash": "21036d4ada574c57eca9138653e1f994a2844046756f9230471f9d39c73fb7fb"
     },
     "py://packages/cascade-spec/src/cascade/spec/runtime/interfaces.py#CacheBackend": {
       "baseline_code_signature_text": "class CacheBackend(Protocol):",

@@ -54,6 +54,9 @@ def create_engine(
     _constraint_manager.set_wakeup_callback(_wakeup_event.set)
 
     # 3. Create strategy if not provided
+    _resource_container = ResourceContainer(_bus)
+
+    # 3. Create strategy if not provided
     if strategy is None:
         backend_choice = "vm" if use_vm else os.getenv("CASCADE_BACKEND", "graph").lower()
 
@@ -64,7 +67,6 @@ def create_engine(
             from cascade.execution.graph.logic.processor import NodeProcessor
             from cascade.execution.graph.strategy import GraphExecutionStrategy
 
-            resource_container = ResourceContainer(_bus)
             node_processor = NodeProcessor(
                 executor=_executor,
                 bus=_bus,
@@ -75,7 +77,7 @@ def create_engine(
             strategy = GraphExecutionStrategy(
                 solver=_solver,
                 node_processor=node_processor,
-                resource_container=resource_container,
+                resource_container=_resource_container,
                 constraint_manager=_constraint_manager,
                 bus=_bus,
                 wakeup_event=_wakeup_event,
@@ -89,6 +91,7 @@ def create_engine(
         strategy=strategy,
         resource_manager=_resource_manager,
         constraint_manager=_constraint_manager,
+        resource_container=_resource_container,
         wakeup_event=_wakeup_event,
         **kwargs,
     )

@@ -41,6 +41,7 @@ class Engine:
         bus: EventBus,
         strategy: ExecutionStrategy,
         constraint_manager: ConstraintManager,
+        resource_container: ResourceContainer,
         wakeup_event: asyncio.Event,
         state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
         system_resources: Optional[Dict[str, Any]] = None,
@@ -54,6 +55,7 @@ class Engine:
         self.bus = bus
         self.strategy = strategy
         self.constraint_manager = constraint_manager
+        self.resource_container = resource_container
         self._wakeup_event = wakeup_event
         self.connector = connector
         # Default to InMemory factory if none provided
@@ -71,7 +73,6 @@ class Engine:
         else:
             self.resource_manager = ResourceManager(capacity=system_resources)
 
-        self.resource_container = ResourceContainer(self.bus)
         self._managed_subscribers = []
 
     def add_subscriber(self, subscriber: Any):

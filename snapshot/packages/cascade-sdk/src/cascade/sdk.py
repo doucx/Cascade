@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, Callable
+from typing import TYPE_CHECKING, Any
 
 # --- Lazy Import Mapping ---
 # Maps exported names to (module_path, object_name)
@@ -61,9 +61,10 @@ if TYPE_CHECKING:
     from cascade.execution.graph.errors import DependencyMissingError
     from cascade.flow import sequence, pipeline
 
+    from cascade.app import run, visualize, dry_run
+
     from cascade.execution.graph.solvers.native import NativeSolver
     from cascade.runtime.io.executors.local import LocalExecutor
-    from cascade.spec.runtime.interfaces import Connector, StateBackend
 
     from cascade.execution.graph.model.serialize import to_json, from_json
     from cascade.test_utils.helpers import override_resource, ControllerTestApp

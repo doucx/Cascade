@@ -73,6 +73,18 @@
       "baseline_code_structure_hash": "ece9f6e336b8a654bdd08585147b22f87ab7960d29a36fc76b83357304833a44",
       "baseline_yaml_content_hash": "ab8b0d5f61a0c85d81b8cd328a1bd0050ed42d155bf98284bd3ad8088f7ee02b"
     },
+    "py://packages/cascade-application/src/cascade/app/__init__.py#dry_run": {
+      "baseline_code_signature_text": "def dry_run(target: Any) -> None:",
+      "baseline_code_structure_hash": "f05cb4c328e2beecb116cca35297d758c405c65c8d9af4f9c02fd123f68b698b"
+    },
+    "py://packages/cascade-application/src/cascade/app/__init__.py#run": {
+      "baseline_code_signature_text": "def run(target: Union[LazyResult, List[Any], tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None) -> Any:",
+      "baseline_code_structure_hash": "5508c31bb9996ac7f840897b1e6f4e485e46b7262facda3ef4f515a93c5cd0d9"
+    },
+    "py://packages/cascade-application/src/cascade/app/__init__.py#visualize": {
+      "baseline_code_signature_text": "def visualize(target: Any) -> str:",
+      "baseline_code_structure_hash": "cbdf7900f72c964721532288de54bba433ba71290f3fce1f7c467a77f8a6e689"
+    },
     "py://packages/cascade-application/tests/integration/test_app_tools.py#test_app_dry_run_diamond_workflow": {
       "baseline_code_signature_text": "def test_app_dry_run_diamond_workflow(capsys):",
       "baseline_code_structure_hash": "ab7569b4f78f0855ce306a006cca8260b7ec60ffd545b03acad468cc1e202273",

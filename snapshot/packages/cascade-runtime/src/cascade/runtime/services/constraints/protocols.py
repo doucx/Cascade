@@ -8,11 +8,6 @@ if TYPE_CHECKING:
 
 
 class HandlerContext(Protocol):
-    """
-    Defines the services a ConstraintHandler can request from its manager.
-    This acts as an inversion of control mechanism to break circular dependencies.
-    """
-
     def request_wakeup(self, delay: float) -> None: ...
     def get_resource_manager(self) -> "ResourceManager": ...
 

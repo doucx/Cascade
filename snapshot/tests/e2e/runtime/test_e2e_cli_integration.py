@@ -92,7 +92,9 @@ def controller_runner(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cli_idempotency_unblocks_engine(engine_factory, controller_runner, bus_and_spy):
+async def test_cli_idempotency_unblocks_engine(
+    engine_factory, controller_runner, bus_and_spy
+):
     """
     This test is EXPECTED TO FAIL with a timeout on the pre-fix codebase.
     It verifies that a non-idempotent CLI controller creates conflicting

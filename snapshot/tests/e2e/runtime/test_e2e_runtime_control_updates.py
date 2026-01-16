@@ -1,8 +1,6 @@
 import asyncio
 import pytest
 import cascade.sdk as cs
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.host.instance import Engine
 from cascade.bus.events import TaskExecutionFinished
 from cascade.spec.dsl.constraint import GlobalConstraint
 from dataclasses import asdict

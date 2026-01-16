@@ -3,8 +3,6 @@ import sys
 import time
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.host.instance import Engine
-from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.bus.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,

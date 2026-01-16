@@ -7,6 +7,9 @@ from cascade.spec.vm.interfaces import ReactorProtocol
 from cascade.runtime import EventBus
 from cascade.test_utils.helpers import SpySubscriber
 
+from typing import Callable
+from cascade.runtime.host.instance import Engine
+
 # Attempt to import LocalBusConnector for global cleanup
 try:
     from cascade.connectors.local.bus import LocalBusConnector
@@ -50,8 +53,7 @@ def reactor_backend_factory(
     #     return Reactor
     else:
         pytest.fail(
-            f"Invalid reactor backend specified: '{backend}'. "
-            "Choose from 'python'."
+            f"Invalid reactor backend specified: '{backend}'. Choose from 'python'."
         )
 
 
@@ -78,31 +80,6 @@ def bus_and_spy():
 
 
 # --- Engine Fixtures for Decoupled Testing ---
-
-import os
-import asyncio
-from typing import Callable, Any, Dict, Optional
-
-# Core Engine & Interfaces
-from cascade.runtime.host.instance import Engine
-from cascade.spec.runtime import ExecutionStrategy, Solver, Executor
-from cascade.runtime import ResourceManager
-
-# Default Components for Graph Strategy
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.logic.processor import NodeProcessor
-from cascade.execution.graph.strategy import GraphExecutionStrategy
-from cascade.runtime.services.constraints.manager import ConstraintManager
-from cascade.runtime.services.resources.container import ResourceContainer
-from cascade.runtime.services.constraints.handlers import (
-    PauseConstraintHandler,
-    ConcurrencyConstraintHandler,
-    RateLimitConstraintHandler,
-)
-
-# Default Components for VM Strategy
-from cascade.runtime.strategies.vm import VMExecutionStrategy
 
 
 @pytest.fixture

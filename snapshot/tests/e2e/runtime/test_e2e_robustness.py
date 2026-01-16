@@ -3,9 +3,6 @@ import pytest
 from unittest.mock import MagicMock, ANY
 
 import cascade.sdk as cs
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.host.instance import Engine
 from cascade.bus.events import TaskExecutionStarted
 from cascade.spec.dsl.constraint import GlobalConstraint
 from dataclasses import asdict
@@ -23,7 +20,9 @@ def mock_ui_bus(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_engine_recovers_from_malformed_rate_limit(engine_factory, bus_and_spy, mock_ui_bus):
+async def test_engine_recovers_from_malformed_rate_limit(
+    engine_factory, bus_and_spy, mock_ui_bus
+):
     """
     Verifies that the Engine:
     1. Does not deadlock when receiving a malformed rate_limit constraint.

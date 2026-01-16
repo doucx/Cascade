@@ -1,8 +1,6 @@
 import pytest
 import cascade.sdk as cs
 import json
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 
 # --- Fixtures ---

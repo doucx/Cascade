@@ -1,7 +1,5 @@
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 # Skip if dependencies are missing
 pytest.importorskip("aiobotocore")

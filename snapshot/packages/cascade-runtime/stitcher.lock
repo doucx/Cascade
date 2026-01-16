@@ -13,8 +13,8 @@
       "baseline_yaml_content_hash": "f282742c13a160c140121ad272f1207261a5cae22ea8d012cd58af522cdacf3a"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/host/instance.py#Engine.__init__": {
-      "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: EventBus, strategy: ExecutionStrategy, constraint_manager: ConstraintManager, wakeup_event: asyncio.Event, state_backend_factory: Optional[Callable[[str], StateBackend]] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None, object_store: Optional[ObjectStore] = None):",
-      "baseline_code_structure_hash": "54c0c874d7410ea1d4b345c730e2abe6b6a3198cc6bd609ee0ad6424a1972367"
+      "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: EventBus, strategy: ExecutionStrategy, constraint_manager: ConstraintManager, resource_container: ResourceContainer, wakeup_event: asyncio.Event, state_backend_factory: Optional[Callable[[str], StateBackend]] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None, object_store: Optional[ObjectStore] = None):",
+      "baseline_code_structure_hash": "efc003966be0d683b218d18caaf5a3cc9e4c5c50ab91bf96357c69da2edc6071"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/host/instance.py#Engine._is_simple_task": {
       "baseline_code_signature_text": "def _is_simple_task(self, lr: Any) -> bool:",

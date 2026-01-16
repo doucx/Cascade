@@ -1045,13 +1045,13 @@
       "baseline_yaml_content_hash": "3a623441ef6e3aa53dc25e745fb9e5f031febe3d511e6e34a5275bfcc04de10c"
     },
     "py://packages/cascade-spec/tests/integration/test_resource.py#test_di_end_to_end": {
-      "baseline_code_signature_text": "def test_di_end_to_end():",
-      "baseline_code_structure_hash": "9c26cd4a8284e4615f8dff8b7e9b8dda5af4b11a8837a1a9e3149b89d2e11466",
+      "baseline_code_signature_text": "async def test_di_end_to_end(engine_factory):",
+      "baseline_code_structure_hash": "2e0f41b97c362c5324e6594fc4c8e939863472f46279c9c0ea209452070d18ea",
       "baseline_yaml_content_hash": "1fad4414415ddf327357838c849cdd97f0cfde64b7bd23a2aa36b841262e95a3"
     },
     "py://packages/cascade-spec/tests/integration/test_resource.py#test_resource_events": {
-      "baseline_code_signature_text": "def test_resource_events():",
-      "baseline_code_structure_hash": "660c37ee9f91227013527f1353d7701abae22e7a49f5d6cc4e79e37a5b983d98",
+      "baseline_code_signature_text": "async def test_resource_events(engine_factory, bus_and_spy):",
+      "baseline_code_structure_hash": "aa38bbae4635783cc6477829728c887633cf523bbbc6f79a4d7011eedfb49d34",
       "baseline_yaml_content_hash": "9ad68bf0225eb4f804442de4f99b88d7b7c1327aa663c7f8f206d05060b47bf4"
     },
     "py://packages/cascade-spec/tests/integration/test_resource.py#test_resource_must_be_generator": {
@@ -1060,8 +1060,8 @@
       "baseline_yaml_content_hash": "62bda32969b5a07fcc37618dc98ecbfd08b9d1b6b5e3589ec19aa2dbc3533055"
     },
     "py://packages/cascade-spec/tests/integration/test_resource.py#test_resource_override": {
-      "baseline_code_signature_text": "def test_resource_override():",
-      "baseline_code_structure_hash": "99f85e79ca2f2a2dd67ac27da2616c96b0c0ddc45f493942260182bb7d2d84af",
+      "baseline_code_signature_text": "async def test_resource_override(engine_factory):",
+      "baseline_code_structure_hash": "7305dd6276d5ca08c9c4ae08dc21370893013d8f60cc67ec4ed1cc6acea88620",
       "baseline_yaml_content_hash": "8788319e365d46714db10612dbf3ab18046a5a3e10bb65daabee99f2ef7ec615"
     },
     "py://packages/cascade-spec/tests/integration/test_resource.py#test_resource_scan_finds_inject_in_dict": {
@@ -1070,8 +1070,8 @@
       "baseline_yaml_content_hash": "e1f1623634e06d440f874f6068e0ba6cde1d6ea184d9fc88e06858fcf9050da1"
     },
     "py://packages/cascade-spec/tests/integration/test_resource.py#test_unregistered_resource_raises_error": {
-      "baseline_code_signature_text": "def test_unregistered_resource_raises_error():",
-      "baseline_code_structure_hash": "2255875fc6d4ce154c19d4d2a2f327c4fe2772ee06ec54a6cd3fde427e00de0f",
+      "baseline_code_signature_text": "async def test_unregistered_resource_raises_error(engine):",
+      "baseline_code_structure_hash": "13268e43936bc99fb7d8c5333abd1451a541d83baf34f7442bd7b79935cac82e",
       "baseline_yaml_content_hash": "609d3c6de9449b06737210cc74afed74b586665134844d4d96dbe9a620f86710"
     },
     "py://packages/cascade-spec/tests/integration/test_routing.py#test_router_invalid_selection": {

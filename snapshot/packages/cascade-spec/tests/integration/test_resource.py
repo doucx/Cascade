@@ -4,7 +4,6 @@ import cascade.sdk as cs
 from cascade.bus.events import (
     ResourceAcquired,
     ResourceReleased,
-    Event,
 )
 
 # --- Test Resources ---
@@ -61,14 +60,18 @@ async def test_resource_events(engine_factory, bus_and_spy):
     await engine.run(task_using_resource())
 
     # Check for ResourceAcquired events
-    acquired_names = [e.resource_name for e in spy.events if isinstance(e, ResourceAcquired)]
+    acquired_names = [
+        e.resource_name for e in spy.events if isinstance(e, ResourceAcquired)
+    ]
     # 'config' must be acquired before 'db_connection' because db_connection depends on config
     assert "config" in acquired_names
     assert "db_connection" in acquired_names
     assert acquired_names.index("config") < acquired_names.index("db_connection")
 
     # Check for ResourceReleased events
-    released_names = [e.resource_name for e in spy.events if isinstance(e, ResourceReleased)]
+    released_names = [
+        e.resource_name for e in spy.events if isinstance(e, ResourceReleased)
+    ]
     # Teardown is in reverse order (LIFO via ExitStack)
     assert "db_connection" in released_names
     assert "config" in released_names

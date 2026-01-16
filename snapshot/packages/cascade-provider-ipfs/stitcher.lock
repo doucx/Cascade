@@ -72,13 +72,13 @@
       "baseline_yaml_content_hash": "77f2f376c06ba22625b685eaf224ca5f56765f004c3eda6b3b6e1e914cca1f6a"
     },
     "py://packages/cascade-provider-ipfs/tests/integration/test_ipfs.py#test_ipfs_add_provider": {
-      "baseline_code_signature_text": "async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):",
-      "baseline_code_structure_hash": "ee96cab7c1bcd2954c5d079c235c90e3ea4b6a5f75132c5cf39d9f444e1fece6",
+      "baseline_code_signature_text": "async def test_ipfs_add_provider(engine, mock_ipfs_server, tmp_path):",
+      "baseline_code_structure_hash": "61e25335d4ae16e1f1c5bbf2344a776bbb32324ae6d8c14968f46284dd5467d6",
       "baseline_yaml_content_hash": "c9eae2faa61d3333f1ebdad6421f814c6d66a78ebfade98511cf759a338ef70e"
     },
     "py://packages/cascade-provider-ipfs/tests/integration/test_ipfs.py#test_ipfs_cat_provider": {
-      "baseline_code_signature_text": "async def test_ipfs_cat_provider(mock_ipfs_server):",
-      "baseline_code_structure_hash": "3cc95ee0a39b71f36713fc871e33fad8d530ddd96612f530aceb91643f046547",
+      "baseline_code_signature_text": "async def test_ipfs_cat_provider(engine, mock_ipfs_server):",
+      "baseline_code_structure_hash": "8b0a8563f4d7a5135d00d559b09a3024ddd4094b0c7f73d899a669ea0969766d",
       "baseline_yaml_content_hash": "f8898cb26e0aac4cce35500da2bb16c9a5f1ef4eeb4dce6f17c27b355cc39ff7"
     }
   },

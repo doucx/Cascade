@@ -625,8 +625,8 @@
       "baseline_yaml_content_hash": "a91d217d4cf643b361691eab7b249aee83e5c1a28aebc424085a71dbdea7621d"
     },
     "py://packages/cascade-library/tests/integration/test_signal_provider.py#engine": {
-      "baseline_code_signature_text": "def engine(local_connector):",
-      "baseline_code_structure_hash": "e02f742f763f9d0a2d50b19386585a278d28be603dbf0399de80d721ff498984",
+      "baseline_code_signature_text": "def engine(engine_factory, local_connector):",
+      "baseline_code_structure_hash": "9da388dc5b47b4e77132074ccd8d80516b9cec73a2212b6075fab3cadcac1bb9",
       "baseline_yaml_content_hash": "767c8b864a13502b6b85912d9570ee88849d0525f56c8dd1d063bd5e8e800426"
     },
     "py://packages/cascade-library/tests/integration/test_signal_provider.py#local_connector": {
@@ -645,8 +645,8 @@
       "baseline_yaml_content_hash": "646dfa49b787622ef959587b996ecb696e0d85edb14c25024fc739365a4a2f1a"
     },
     "py://packages/cascade-library/tests/integration/test_sql.py#db_engine": {
-      "baseline_code_signature_text": "def db_engine():",
-      "baseline_code_structure_hash": "1436fd363ff298f50f58a231d057a617275f75af6bef185c6f03f0ac723e3192",
+      "baseline_code_signature_text": "def db_engine(engine):",
+      "baseline_code_structure_hash": "c21f75e64c48322f41f9e8550ac9e094d06edc588e72b9b73967f677760afa43",
       "baseline_yaml_content_hash": "0101ad8510569f0e5f7740de649568781424299c184121b20a3556f47c24aac9"
     },
     "py://packages/cascade-library/tests/integration/test_sql.py#sqlite_db": {

@@ -1,9 +1,9 @@
 import os
 import asyncio
-from typing import Callable, Any, Dict, Optional
+from typing import Optional
 
 from .instance import Engine
-from cascade.spec.runtime import ExecutionStrategy, Solver, Executor, Connector
+from cascade.spec.runtime import ExecutionStrategy, Solver, Executor
 from cascade.bus.core import EventBus
 from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints.manager import ConstraintManager
@@ -30,9 +30,6 @@ def create_engine(
     constraint_manager: Optional[ConstraintManager] = None,
     **kwargs,  # Pass-through for other Engine args like connector, system_resources etc.
 ) -> Engine:
-    """
-    Central factory for creating and assembling a Cascade Engine instance.
-    """
     # 1. Provide sane defaults for core components
     _solver = solver or NativeSolver()
     _executor = executor or LocalExecutor()
@@ -58,10 +55,13 @@ def create_engine(
 
     # 3. Create strategy if not provided
     if strategy is None:
-        backend_choice = "vm" if use_vm else os.getenv("CASCADE_BACKEND", "graph").lower()
+        backend_choice = (
+            "vm" if use_vm else os.getenv("CASCADE_BACKEND", "graph").lower()
+        )
 
         if backend_choice == "vm":
             from cascade.runtime.strategies.vm import VMExecutionStrategy
+
             strategy = VMExecutionStrategy(executor=_executor, bus=_bus)
         else:  # Default to 'graph'
             from cascade.execution.graph.logic.processor import NodeProcessor

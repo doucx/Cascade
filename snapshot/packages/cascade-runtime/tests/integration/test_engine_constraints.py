@@ -3,7 +3,6 @@ import asyncio
 import pytest
 
 from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
 from cascade.spec.dsl.constraint import GlobalConstraint
 from cascade.test_utils.helpers import MockConnector, MockExecutor, TimedMockExecutor
@@ -170,7 +169,9 @@ async def test_engine_handles_malformed_constraint_payload(
 
 
 @pytest.mark.asyncio
-async def test_engine_pauses_on_global_pause_constraint(engine_factory, mock_connector, bus_and_spy):
+async def test_engine_pauses_on_global_pause_constraint(
+    engine_factory, mock_connector, bus_and_spy
+):
     from cascade.spec.dsl.task import task
     from cascade.bus.events import TaskExecutionStarted
 
@@ -237,7 +238,9 @@ async def test_engine_pauses_on_global_pause_constraint(engine_factory, mock_con
 
 
 @pytest.mark.asyncio
-async def test_engine_pauses_and_resumes_specific_task(engine_factory, mock_connector, bus_and_spy):
+async def test_engine_pauses_and_resumes_specific_task(
+    engine_factory, mock_connector, bus_and_spy
+):
     from cascade.spec.dsl.task import task
     from cascade.bus.events import (
         TaskExecutionStarted,

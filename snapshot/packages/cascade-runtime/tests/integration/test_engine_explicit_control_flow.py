@@ -1,6 +1,5 @@
 import pytest
 import cascade.sdk as cs
-from cascade.runtime import EventBus
 
 
 @pytest.mark.asyncio

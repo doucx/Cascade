@@ -1,6 +1,5 @@
 import pytest
 import asyncio
-from cascade.runtime.host.instance import Engine
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.strategies.vm import VMExecutionStrategy
 from cascade.bus.core import EventBus

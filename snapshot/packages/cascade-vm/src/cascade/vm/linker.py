@@ -11,7 +11,7 @@ from cascade.std.dyad.launcher import standard_launcher
 from cascade.std.dyad.lander import standard_lander
 
 # Common Standard Library
-from cascade.std.triad.observer import standard_observer
+from cascade.std.system.observer import standard_observer
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.system.egress import standard_egress

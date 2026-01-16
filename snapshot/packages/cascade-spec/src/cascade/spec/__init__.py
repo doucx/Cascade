@@ -6,10 +6,7 @@ from .physical.nodes import (
     PhysicsDataNode,
     PhysicsFuncNode,
 )
-from .physical.triad import (
-    BleachNode,
-    WorkerNode,
-    StainNode,
+from .physical.triad_legacy import (
     ObservabilityNode,
     RetryNode,
 )
@@ -34,9 +31,6 @@ __all__ = [
     "PhysicsNode",
     "PhysicsDataNode",
     "PhysicsFuncNode",
-    "BleachNode",
-    "WorkerNode",
-    "StainNode",
     "ObservabilityNode",
     "RetryNode",
     "Channel",

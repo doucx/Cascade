@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(vm): 修复 Cascade VM 测试以适配 Dyad 架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768554118.2798135, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] chore: 移除废弃的 Triad (Bleacher/Worker/Stainer) 架构代码", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768554309.8682907, "duration_ms": 0}}

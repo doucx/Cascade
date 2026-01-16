@@ -15,18 +15,6 @@ class PhysicalIdGenerator:
         return f"{logical_node_id}.{NodePrefix.RESULT}"
 
     @staticmethod
-    def bleach_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.{NodePrefix.BLEACH}"
-
-    @staticmethod
-    def worker_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.{NodePrefix.WORKER}"
-
-    @staticmethod
-    def stain_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.{NodePrefix.STAIN}"
-
-    @staticmethod
     def sleep_node(logical_node_id: str) -> str:
         return f"{logical_node_id}.{NodePrefix.SLEEP}"
 
@@ -34,17 +22,7 @@ class PhysicalIdGenerator:
     def wakeup_data(logical_node_id: str) -> str:
         return f"{logical_node_id}.{NodePrefix.WAKEUP}"
 
-    @staticmethod
-    def worker_in_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.in"
-
-    @staticmethod
-    def worker_out_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.out"
-
-    @staticmethod
-    def trace_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.trace"
+    # Deprecated Triad helpers, removed.
 
     @staticmethod
     def context_data(logical_node_id: str) -> str:

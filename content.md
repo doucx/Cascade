@@ -1,312 +1,355 @@
-生成 Quipu 计划以执行 Phase 4.2：修复 Cascade VM 的测试。
+好的，既然所有测试都已通过，Dyad 架构已经稳定，现在是进行最后一步清理工作的时候了。
 
-## [WIP] fix(vm): 修复 Cascade VM 测试以适配 Dyad 架构
+我将生成一个 `[COMMIT]` 计划，彻底移除所有与旧 Triad 架构相关的废弃代码。
+
+## [WIP] chore: 移除废弃的 Triad (Bleacher/Worker/Stainer) 架构代码
 
 ### 用户需求
-修复 `cascade-vm` 包下的单元测试和集成测试。由于 Dyad 架构重构，物理层拓扑发生了变化（`.worker` -> `.launch`, `.bleach` -> `.launch`），导致现有的测试代码因为引用了废弃的节点 ID 后缀而失败。
+在 Dyad 架构重构完成并通过所有测试后，清理并删除代码库中所有与旧 Triad 架构相关的废弃文件、类、常量和方法。
 
 ### 评论
-这些测试失败是预期的，因为测试代码硬编码了对旧架构（Triad）物理实现的假设。通过更新这些测试，我们验证了 Dyad 架构在端到端执行流程中的正确性，包括 ID 映射、资源连线和可执行代码的链接。
+这是 Dyad 重构任务的最后一步，也是至关重要的一步。通过移除这些技术债务，我们确保了代码库的整洁和一致性，防止了未来开发者误用或混淆新旧架构，并正式将 Dyad 模型确立为系统唯一的执行拓扑。
 
 ### 目标
-1.  **修复 `test_linker.py`**: 更新测试数据，使用 `LauncherNode` (`.launch`) 和 `LanderNode` (`.land`) 替代 `WorkerNode`，并验证其正确链接到标准库实现。
-2.  **修复 `test_ref_architecture.py`**: 更新用户代码注册逻辑，从 `.launch` 节点获取哈希。
-3.  **修复 `test_source_node_execution.py`**: 同上，更新节点 ID 引用。
-4.  **修复 `test_resource_contention.py`**: 更新资源连线断言，验证资源 GNT 连向 `Launcher` 而非 `Bleacher`。
+1.  **重构标准库**: 将 `standard_observer` 从 `triad` 目录移至 `system` 目录，然后删除整个 `triad` 目录。
+2.  **清理 Spec 定义**: 删除定义 `BleachNode`, `StainNode`, `WorkerNode` 及其 Spec 的 `triad.py` 文件。
+3.  **清理常量与命名**: 从 `NodePrefix` 和 `PhysicalIdGenerator` 中移除已废弃的 Triad 相关条目。
+4.  **更新导出**: 调整所有 `__init__.py` 文件，移除对已删除模块的引用。
+5.  **提交变更**: 将所有清理工作作为一个原子提交。
 
 ### 基本原理
-Dyad 架构中，`Launcher` 取代了 `Worker` 和 `Bleacher` 的角色。
-*   `SymbolTable` 现在映射 `.launch` 节点 ID 到代码哈希。
-*   Linker 现在基于 ID 后缀（`.launch`, `.land`）进行链接。
-*   资源连线现在连接到 `.launch` 节点。
+旧的 Triad (Bleacher/Worker/Stainer) 代码现在已成为死代码。保留它们会增加维护成本和认知负担。此计划通过一系列精确的删除和移动操作，系统性地将这些废弃代码从项目中移除，完成整个重构任务的闭环。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #task/domain/vm #task/object/tests #task/action/fix #task/state/end
+#intent/refine #flow/ready #priority/medium #comp/compiler #comp/spec #comp/runtime #comp/std #task/domain/compiler #task/object/dyad-infrastructure #task/action/cleanup #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 Linker 单元测试
+#### Acts 1: 重构 Observer 并更新 Linker
 
-更新测试数据以反映 Dyad 架构。
+首先，我们将 `standard_observer` 从即将被删除的 `triad` 目录中解救出来，放到更通用的 `system` 目录中，并更新 `Linker` 的引用。
 
 ~~~~~act
-patch_file
-packages/cascade-vm/tests/unit/test_linker.py
-~~~~~
-~~~~~python.old
-from cascade.spec.physical.triad import WorkerNode
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.linker import Linker, LinkerError
-from cascade.std.triad.dispatcher import standard_dispatcher
-
-
-def dummy_task_a():
-    pass
-
-
-def dummy_task_b():
-    pass
-
-
-@pytest.fixture
-def code_registry() -> CodeRegistry:
-    registry = CodeRegistry()
-    registry.register("hash_a", dummy_task_a)
-    registry.register("hash_b", dummy_task_b)
-    return registry
-
-
-@pytest.fixture
-def assembly() -> Assembly:
-    graph = BipartiteGraph()
-    # We only need worker nodes for this test, as only they populate the symbol table
-    graph.nodes["worker1.worker"] = WorkerNode(
-        id="worker1.worker", name="Worker1", canonical_code_structure_hash="hash_a"
-    )
-    graph.nodes["worker2.worker"] = WorkerNode(
-        id="worker2.worker", name="Worker2", canonical_code_structure_hash="hash_b"
-    )
-    symbol_table: SymbolTable = {
-        "worker1.worker": "hash_a",
-        "worker2.worker": "hash_b",
-    }
-    return Assembly(graph=graph, symbol_table=symbol_table)
-
-
-def test_linker_success_with_all_code_present(assembly, code_registry):
-    linker = Linker()
-    function_map = linker.link(assembly, code_registry)
-
-    # All workers should be mapped to the standard_dispatcher
-    assert len(function_map) == 2
-    assert function_map["worker1.worker"] is standard_dispatcher
-    assert function_map["worker2.worker"] is standard_dispatcher
-~~~~~
-~~~~~python.new
-from cascade.spec.physical.dyad import LauncherNode
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.linker import Linker, LinkerError
-from cascade.std.dyad.launcher import standard_launcher
-
-
-def dummy_task_a():
-    pass
-
-
-def dummy_task_b():
-    pass
-
-
-@pytest.fixture
-def code_registry() -> CodeRegistry:
-    registry = CodeRegistry()
-    registry.register("hash_a", dummy_task_a)
-    registry.register("hash_b", dummy_task_b)
-    return registry
-
-
-@pytest.fixture
-def assembly() -> Assembly:
-    graph = BipartiteGraph()
-    # In Dyad, Launcher nodes populate the symbol table and map to standard_launcher
-    graph.nodes["node1.launch"] = LauncherNode(
-        id="node1.launch", name="Launch1", canonical_code_structure_hash="hash_a"
-    )
-    graph.nodes["node2.launch"] = LauncherNode(
-        id="node2.launch", name="Launch2", canonical_code_structure_hash="hash_b"
-    )
-    symbol_table: SymbolTable = {
-        "node1.launch": "hash_a",
-        "node2.launch": "hash_b",
-    }
-    return Assembly(graph=graph, symbol_table=symbol_table)
-
-
-def test_linker_success_with_all_code_present(assembly, code_registry):
-    linker = Linker()
-    function_map = linker.link(assembly, code_registry)
-
-    # All launchers should be mapped to the standard_launcher
-    assert len(function_map) == 2
-    assert function_map["node1.launch"] is standard_launcher
-    assert function_map["node2.launch"] is standard_launcher
+move_file
+packages/cascade-std/src/cascade/std/triad/observer.py
+packages/cascade-std/src/cascade/std/system/observer.py
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/unit/test_linker.py
+packages/cascade-vm/src/cascade/vm/linker.py
 ~~~~~
 ~~~~~python.old
-def test_linker_raises_on_missing_code(assembly, code_registry):
-    linker = Linker()
-
-    # Tamper with the assembly to require a hash that doesn't exist
-    assembly.symbol_table["worker3.worker"] = "hash_c_missing"
-
-    with pytest.raises(LinkerError) as exc_info:
-        linker.link(assembly, code_registry)
+# Common Standard Library
+from cascade.std.triad.observer import standard_observer
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 ~~~~~
 ~~~~~python.new
-def test_linker_raises_on_missing_code(assembly, code_registry):
-    linker = Linker()
+# Common Standard Library
+from cascade.std.system.observer import standard_observer
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
+~~~~~
 
-    # Tamper with the assembly to require a hash that doesn't exist
-    assembly.symbol_table["node3.launch"] = "hash_c_missing"
+#### Acts 2: 删除标准库中废弃的 Triad 实现
 
-    with pytest.raises(LinkerError) as exc_info:
-        linker.link(assembly, code_registry)
+现在 `observer.py` 已经移走，`triad` 目录下的所有文件都是可删除的。
+
+~~~~~act
+delete_file
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-std/src/cascade/std/triad/dispatcher.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-std/src/cascade/std/triad/stainer.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-std/src/cascade/std/triad/__init__.py
+~~~~~
+
+#### Acts 3: 更新标准库的导出
+
+从 `__init__.py` 中移除对旧 Triad ICs 的导出。
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/__init__.py
+~~~~~
+~~~~~python.old
+# Legacy Triad (Keep for backward compatibility until full migration)
+from .triad.dispatcher import standard_dispatcher
+from .triad.bleacher import standard_bleacher
+from .triad.stainer import standard_stainer
+from .triad.observer import standard_observer
+
+# System
+from .system.gate import gate_passthrough
+~~~~~
+~~~~~python.new
+# Legacy Triad (Keep for backward compatibility until full migration)
+from .system.observer import standard_observer
+
+# System
+from .system.gate import gate_passthrough
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/unit/test_linker.py
+packages/cascade-std/src/cascade/std/__init__.py
 ~~~~~
 ~~~~~python.old
-def test_linker_raises_on_multiple_missing_codes():
-    linker = Linker()
-    registry = CodeRegistry()  # Empty registry
-    assembly = Assembly(
-        graph=BipartiteGraph(),
-        symbol_table={
-            "w1.worker": "hash_1",
-            "w2.worker": "hash_2",
-        },
-    )
-
-    with pytest.raises(LinkerError) as exc_info:
-        linker.link(assembly, registry)
+__all__ = [
+    "standard_launcher",
+    "standard_lander",
+    "standard_dispatcher",
+    "standard_bleacher",
+    "standard_stainer",
+    "standard_observer",
+    "gate_passthrough",
+    "standard_retry_logic",
 ~~~~~
 ~~~~~python.new
-def test_linker_raises_on_multiple_missing_codes():
-    linker = Linker()
-    registry = CodeRegistry()  # Empty registry
-    assembly = Assembly(
-        graph=BipartiteGraph(),
-        symbol_table={
-            "n1.launch": "hash_1",
-            "n2.launch": "hash_2",
-        },
-    )
-
-    with pytest.raises(LinkerError) as exc_info:
-        linker.link(assembly, registry)
+__all__ = [
+    "standard_launcher",
+    "standard_lander",
+    "standard_observer",
+    "gate_passthrough",
+    "standard_retry_logic",
 ~~~~~
 
-#### Acts 2: 修复 test_ref_architecture.py
+#### Acts 4: 删除 Spec 中废弃的 Triad 定义
+
+删除 `cascade-spec` 中与 Triad 相关的物理节点定义和组件 Spec 定义。
+
+~~~~~act
+delete_file
+packages/cascade-spec/src/cascade/spec/physical/triad.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-spec/src/cascade/spec/components/triad.py
+~~~~~
+
+#### Acts 5: 更新 Spec 包的导出
+
+清理 `__init__.py` 文件，移除对已删除 Triad 模块的引用。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/integration/test_ref_architecture.py
+packages/cascade-spec/src/cascade/spec/components/__init__.py
 ~~~~~
 ~~~~~python.old
-    def register_task(task_name, func):
-        # Find the NodeIR
-        node_ir = next(n for n in graph_ir.nodes if n.name == task_name)
-        # Construct the physical worker ID (Convention from PhysicalIdGenerator)
-        worker_id = f"{node_ir.current_node_instance_hash}.worker"
-        # Lookup canonical hash
-        canonical_hash = assembly.symbol_table[worker_id]
-        code_registry.register(canonical_hash, func)
+    DiscreteReclaimerSpec,
+    ResourceRequestorSpec,
+    ContinuousAllocatorSpec,
+    ContinuousReclaimerSpec,
+)
+from .triad import BleacherSpec, WorkerSpec, StainerSpec, ObservabilitySpec
+from .system import (
+    EgressSpec,
+    GateSpec,
 ~~~~~
 ~~~~~python.new
-    def register_task(task_name, func):
-        # Find the NodeIR
-        node_ir = next(n for n in graph_ir.nodes if n.name == task_name)
-        # Construct the physical launcher ID (Convention from PhysicalIdGenerator)
-        launcher_id = f"{node_ir.current_node_instance_hash}.launch"
-        # Lookup canonical hash
-        canonical_hash = assembly.symbol_table[launcher_id]
-        code_registry.register(canonical_hash, func)
+    DiscreteReclaimerSpec,
+    ResourceRequestorSpec,
+    ContinuousAllocatorSpec,
+    ContinuousReclaimerSpec,
+)
+from .system import (
+    EgressSpec,
+    GateSpec,
 ~~~~~
-
-#### Acts 3: 修复 test_source_node_execution.py
-
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/integration/test_source_node_execution.py
+packages/cascade-spec/src/cascade/spec/components/__init__.py
 ~~~~~
 ~~~~~python.old
-    # 2. Setup Code Registry for the Compute Service
-    code_registry = CodeRegistry()
-    worker_node_id = f"{node_ir.current_node_instance_hash}.worker"
-    canonical_hash = assembly.symbol_table[worker_node_id]
-    code_registry.register(canonical_hash, source_task.func)
+__all__ = [
+    "DiscreteAllocatorSpec",
+    "DiscreteReclaimerSpec",
+    "BleacherSpec",
+    "ObservabilitySpec",
+    "WorkerSpec",
+    "StainerSpec",
+    "EgressSpec",
+    "GateSpec",
 ~~~~~
 ~~~~~python.new
-    # 2. Setup Code Registry for the Compute Service
-    code_registry = CodeRegistry()
-    launcher_id = f"{node_ir.current_node_instance_hash}.launch"
-    canonical_hash = assembly.symbol_table[launcher_id]
-    code_registry.register(canonical_hash, source_task.func)
-~~~~~
+from .triad_legacy import ObservabilitySpec
 
-#### Acts 4: 修复 test_resource_contention.py
 
-更新资源连线断言，使用 `.launch` 替代 `.bleach`。
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_resource_contention.py
-~~~~~
-~~~~~python.old
-    inspector.get_data_node(d_gnt_id)  # Should be a data node
-
-    # Verify D_gnt -> Bleacher
-    bleacher_id = PhysicalIdGenerator.bleach_node(
-        sample_node_ir.current_node_instance_hash
-    )
-    inspector.assert_connection(
-        d_gnt_id, bleacher_id, target_port=f"res_{RESOURCE_NAME}"
-    )
-
-    # --- PART B: EXECUTION ASSERTION ---
-~~~~~
-~~~~~python.new
-    inspector.get_data_node(d_gnt_id)  # Should be a data node
-
-    # Verify D_gnt -> Launcher
-    launcher_id = PhysicalIdGenerator.launcher_node(
-        sample_node_ir.current_node_instance_hash
-    )
-    inspector.assert_connection(
-        d_gnt_id, launcher_id, target_port=f"res_{RESOURCE_NAME}"
-    )
-
-    # --- PART B: EXECUTION ASSERTION ---
+__all__ = [
+    "DiscreteAllocatorSpec",
+    "DiscreteReclaimerSpec",
+    "ObservabilitySpec",
+    "EgressSpec",
+    "GateSpec",
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/integration/test_resource_contention.py
+packages/cascade-spec/src/cascade/spec/__init__.py
 ~~~~~
 ~~~~~python.old
-    # Let's assume index 0 is gpu, 1 is cpu (list order preserved)
-    gpu_node_id = node_ids[0]
-
-    # Find channels entering GPU Task Bleacher
-    gpu_bleacher_id = PhysicalIdGenerator.bleach_node(gpu_node_id)
-    in_channels = [
-        c for c in physical_graph.channels if c.target_node_id == gpu_bleacher_id
-    ]
-
-    # Check sources. One should be from GPU grant chain. None from CPU.
-    connected_sources = [c.source_node_id for c in in_channels]
+from .physical.nodes import (
+    Token,
+    PhysicsNode,
+    PhysicsDataNode,
+    PhysicsFuncNode,
+)
+from .physical.triad import (
+    BleachNode,
+    WorkerNode,
+    StainNode,
+    ObservabilityNode,
+    RetryNode,
+)
+from .physical.topology import Channel, BipartiteGraph
+from .physical.resources import ResourceSlot
 ~~~~~
 ~~~~~python.new
-    # Let's assume index 0 is gpu, 1 is cpu (list order preserved)
-    gpu_node_id = node_ids[0]
+from .physical.nodes import (
+    Token,
+    PhysicsNode,
+    PhysicsDataNode,
+    PhysicsFuncNode,
+)
+from .physical.triad_legacy import (
+    ObservabilityNode,
+    RetryNode,
+)
+from .physical.topology import Channel, BipartiteGraph
+from .physical.resources import ResourceSlot
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/__init__.py
+~~~~~
+~~~~~python.old
+__all__ = [
+    "Fingerprint",
+    "InvalidFingerprintKeyError",
+    "Ref",
+    "Token",
+    "PhysicsNode",
+    "PhysicsDataNode",
+    "PhysicsFuncNode",
+    "BleachNode",
+    "WorkerNode",
+    "StainNode",
+    "ObservabilityNode",
+    "RetryNode",
+    "Channel",
+    "BipartiteGraph",
+~~~~~
+~~~~~python.new
+__all__ = [
+    "Fingerprint",
+    "InvalidFingerprintKeyError",
+    "Ref",
+    "Token",
+    "PhysicsNode",
+    "PhysicsDataNode",
+    "PhysicsFuncNode",
+    "ObservabilityNode",
+    "RetryNode",
+    "Channel",
+    "BipartiteGraph",
+~~~~~
 
-    # Find channels entering GPU Task Launcher
-    gpu_launcher_id = PhysicalIdGenerator.launcher_node(gpu_node_id)
-    in_channels = [
-        c for c in physical_graph.channels if c.target_node_id == gpu_launcher_id
-    ]
+#### Acts 6: 清理废弃的常量和命名规则
 
-    # Check sources. One should be from GPU grant chain. None from CPU.
-    connected_sources = [c.source_node_id for c in in_channels]
+最后，从 `NodePrefix` 和 `PhysicalIdGenerator` 中移除 Triad 的痕迹。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/physical/constants.py
+~~~~~
+~~~~~python.old
+    # Function Nodes (Transitions)
+    LAUNCH = "launch"  # Dyad: Launcher (Prepare & Dispatch)
+    LAND = "land"  # Dyad: Lander (Receive & Finalize)
+    BLEACH = "bleach"  # Triad: Pre-process (Deprecated)
+    WORKER = "worker"  # Triad: Execution (Deprecated)
+    STAIN = "stain"  # Triad: Post-process (Deprecated)
+    REQ = "req"  # Resource Requestor
+    GATE = "gate"  # Control Gate
+~~~~~
+~~~~~python.new
+    # Function Nodes (Transitions)
+    LAUNCH = "launch"  # Dyad: Launcher (Prepare & Dispatch)
+    LAND = "land"  # Dyad: Lander (Receive & Finalize)
+    REQ = "req"  # Resource Requestor
+    GATE = "gate"  # Control Gate
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-reflection/src/cascade/reflection/naming.py
+~~~~~
+~~~~~python.old
+    def result_data(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.RESULT}"
+
+    @staticmethod
+    def bleach_node(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.BLEACH}"
+
+    @staticmethod
+    def worker_node(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.WORKER}"
+
+    @staticmethod
+    def stain_node(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.STAIN}"
+
+    @staticmethod
+    def sleep_node(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.SLEEP}"
+~~~~~
+~~~~~python.new
+    def result_data(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.RESULT}"
+
+    @staticmethod
+    def sleep_node(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.SLEEP}"
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-reflection/src/cascade/reflection/naming.py
+~~~~~
+~~~~~python.old
+    @staticmethod
+    def worker_in_data(logical_node_id: str) -> str:
+        return f"{logical_node_id}.data.in"
+
+    @staticmethod
+    def worker_out_data(logical_node_id: str) -> str:
+        return f"{logical_node_id}.data.out"
+
+    @staticmethod
+    def trace_data(logical_node_id: str) -> str:
+        return f"{logical_node_id}.data.trace"
+~~~~~
+~~~~~python.new
+    # Deprecated Triad helpers, removed.
 ~~~~~
 
 ### 下一步建议
-测试修复完成后，建议运行全量测试以确保 Dyad 重构没有引入回归。至此，Dyad 架构重构的主要实施阶段已经结束。后续工作可以关注删除旧代码（如 `cascade.std.triad`）和优化文档。
+**Dyad 架构重构任务已圆满完成。**
+
+代码库现在更加健壮、简洁且易于维护。建议团队可以开始规划以下方向：
+*   **新功能开发**: 基于新的稳定架构，开始实施新的业务功能。
+*   **性能优化**: 分析新的执行路径，寻找潜在的性能瓶颈并进行优化。
+*   **文档更新**: 更新开发者文档，反映新的架构设计和拓扑结构。

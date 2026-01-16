@@ -4,10 +4,7 @@ from .dyad.launcher import standard_launcher
 from .dyad.lander import standard_lander
 
 # Legacy Triad (Keep for backward compatibility until full migration)
-from .triad.dispatcher import standard_dispatcher
-from .triad.bleacher import standard_bleacher
-from .triad.stainer import standard_stainer
-from .triad.observer import standard_observer
+from .system.observer import standard_observer
 
 # System
 from .system.gate import gate_passthrough
@@ -25,9 +22,6 @@ from .resource.continuous import continuous_allocator, continuous_reclaimer
 __all__ = [
     "standard_launcher",
     "standard_lander",
-    "standard_dispatcher",
-    "standard_bleacher",
-    "standard_stainer",
     "standard_observer",
     "gate_passthrough",
     "standard_retry_logic",

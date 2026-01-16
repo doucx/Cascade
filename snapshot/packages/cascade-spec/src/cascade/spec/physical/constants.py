@@ -16,9 +16,6 @@ class NodePrefix(StrEnum):
     # Function Nodes (Transitions)
     LAUNCH = "launch"  # Dyad: Launcher (Prepare & Dispatch)
     LAND = "land"  # Dyad: Lander (Receive & Finalize)
-    BLEACH = "bleach"  # Triad: Pre-process (Deprecated)
-    WORKER = "worker"  # Triad: Execution (Deprecated)
-    STAIN = "stain"  # Triad: Post-process (Deprecated)
     REQ = "req"  # Resource Requestor
     GATE = "gate"  # Control Gate
     PROBE = "probe"  # Introspection Probe

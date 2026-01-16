@@ -11,11 +11,14 @@ class NodePrefix(StrEnum):
     SIGNAL = "signal"  # Signaling channel
     EGRESS = "egress"  # Exit point
     INGRESS = "ingress"  # Entry point (reserved)
+    RESULT = "result"  # Async result holder (DataNode)
 
     # Function Nodes (Transitions)
-    BLEACH = "bleach"  # Triad: Pre-process
-    WORKER = "worker"  # Triad: Execution
-    STAIN = "stain"  # Triad: Post-process
+    LAUNCH = "launch"  # Dyad: Launcher (Prepare & Dispatch)
+    LAND = "land"  # Dyad: Lander (Receive & Finalize)
+    BLEACH = "bleach"  # Triad: Pre-process (Deprecated)
+    WORKER = "worker"  # Triad: Execution (Deprecated)
+    STAIN = "stain"  # Triad: Post-process (Deprecated)
     REQ = "req"  # Resource Requestor
     GATE = "gate"  # Control Gate
     PROBE = "probe"  # Introspection Probe

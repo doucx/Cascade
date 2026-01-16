@@ -3,6 +3,18 @@ from cascade.spec.physical.constants import NodePrefix
 
 class PhysicalIdGenerator:
     @staticmethod
+    def launcher_node(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.LAUNCH}"
+
+    @staticmethod
+    def lander_node(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.LAND}"
+
+    @staticmethod
+    def result_data(logical_node_id: str) -> str:
+        return f"{logical_node_id}.{NodePrefix.RESULT}"
+
+    @staticmethod
     def bleach_node(logical_node_id: str) -> str:
         return f"{logical_node_id}.{NodePrefix.BLEACH}"
 

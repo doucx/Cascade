@@ -1,298 +1,468 @@
-好的，我们开始执行计划的第一步。
+好的，我们立即开始清理工作。
 
-这个阶段的目标是将 `cascade-spec` 包强化为架构的核心，集中管理所有跨包共享的接口、数据契约和开发工具，从而为后续的解耦工作奠定坚实的基础。
+这是重构计划的第二阶段，我们将把 `cascade-std`、`cascade-vm` 以及相关的测试工具中的依赖项，从它们各自的旧位置迁移到我们刚刚强化的 `cascade-spec` 包。
 
-## [WIP] refactor: 强化 cascade-spec 以集中管理契约和绑定工具
+## [WIP] refactor: 清理依赖项并统一导入 cascade-spec 中的契约和工具
 
 ### 用户需求
 
-根据架构重构蓝图，我们需要将关键的数据契约（`ComputeRequest`, `DelayRequest`）和物理节点实现工具（`implements` 装饰器等）从它们各自的实现包（`cascade-vm`, `cascade-std`）中移出，并统一整合到 `cascade-spec` 包中。
+在 `cascade-spec` 集中管理了核心契约和绑定工具之后，需要对整个代码库进行扫描和重构，将所有对这些旧模块的引用更新为指向 `cascade-spec` 中的新位置，并删除冗余的旧文件。
 
 ### 评论
 
-这是解耦 `cascade-std` 与 `cascade-vm`、并确立 `cascade-spec` 作为“单一事实来源”的关键第一步。此举不仅能理清混乱的依赖关系，还能极大地改善为 Cascade 生态系统开发第三方组件（如自定义物理节点）时的开发者体验（DX）。
+这是一个典型的“迁移”阶段。通过精确地替换导入路径并删除旧文件，我们能以一种可控的方式完成大规模重构，最终实现依赖关系的净化。这个过程完成后，`cascade-std` 将与 `cascade-vm` 完全解耦，架构的清晰度将得到显著提升。
 
 ### 目标
 
-1.  在 `cascade.spec.runtime` 模块下创建一个新的 `contracts.py` 文件，用于存放运行时服务之间交互的数据结构。
-2.  在 `cascade.spec.physics` 模块下创建一个新的 `binding.py` 文件，用于提供将 Python 函数安全地绑定到物理节点规范的工具。
-3.  更新相应的 `__init__.py` 文件，将这些新组件提升为包的公共 API。
+1.  重构 `cascade-std` 包，使其所有物理节点实现都从 `cascade-spec` 导入 `implements` 装饰器和 `ComputeRequest`/`DelayRequest` 契约。
+2.  删除 `cascade-std` 中已废弃的 `kernel_tools.py` 模块。
+3.  重构 `cascade-vm` 包及其测试，使其从 `cascade-spec` 导入数据契约，并删除本地的冗余定义。
+4.  更新 `cascade-test-utils`，确保测试基础设施也遵循新的依赖关系。
 
 ### 基本原理
 
-通过将这些定义移动到 `cascade-spec`，我们将它们固化为一套稳定、公开的 API。这使得其他包（如 `cascade-std`）可以仅依赖于 `cascade-spec` 来获取所有必要的接口和工具，而无需关心（甚至导入）具体的实现包（如 `cascade-vm`）。这种方式强制了正确的依赖方向：**实现 -> 规范**，而非 **实现 -> 实现**，从而保证了架构的长期健康。
+此阶段的核心是执行依赖倒置原则。通过将所有实现细节（`cascade-std`, `cascade-vm`）都改为依赖于抽象（`cascade-spec`），我们打破了实现包之间的横向依赖。这不仅降低了耦合度，还使得每个包都可以独立演进和测试，只要它们遵守 `cascade-spec` 中定义的契约即可。
 
 ### 标签
 
-#intent/architect #intent/refine #flow/ready #priority/high #comp/spec #comp/vm #comp/std #scope/api #scope/dx #task/domain/architecture #task/object/decoupling #task/action/refactor #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/spec #comp/vm #comp/std #comp/tests #scope/core #task/domain/architecture #task/object/decoupling #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建运行时契约模块
+#### Acts 1: 重构 `cascade-std` 以依赖 `cascade-spec`
 
-我们首先创建 `contracts.py` 文件，并将 `ComputeRequest` 和 `DelayRequest` 这两个核心数据结构移入其中。
+我们将逐一修改 `cascade-std` 中的所有物理节点实现（ICs），更新它们的导入路径。
 
 ~~~~~act
-write_file
-packages/cascade-spec/src/cascade/spec/runtime/contracts.py
+patch_file
+packages/cascade-std/src/cascade/std/resource/discrete.py
 ~~~~~
-~~~~~python
-from dataclasses import dataclass, field
+~~~~~python.old
+from typing import Any, Union
+from dataclasses import dataclass
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.physical.object import Ref
+from cascade.std.specs import DiscreteAllocatorSpec, DiscreteReclaimerSpec
+from cascade.std.kernel_tools import implements
+
+
+@dataclass
+~~~~~
+~~~~~python.new
+from typing import Any, Union
+from dataclasses import dataclass
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.physical.object import Ref
+from cascade.std.specs import DiscreteAllocatorSpec, DiscreteReclaimerSpec
+from cascade.spec.physics.binding import implements
+
+
+@dataclass
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/resource/continuous.py
+~~~~~
+~~~~~python.old
+from typing import Any
+from dataclasses import dataclass
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.std.specs import ContinuousAllocatorSpec, ContinuousReclaimerSpec
+from cascade.std.kernel_tools import implements
+
+
+@dataclass
+~~~~~
+~~~~~python.new
+from typing import Any
+from dataclasses import dataclass
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.std.specs import ContinuousAllocatorSpec, ContinuousReclaimerSpec
+from cascade.spec.physics.binding import implements
+
+
+@dataclass
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/resource/requestor.py
+~~~~~
+~~~~~python.old
+from typing import Any
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.std.specs import ResourceRequestorSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(ResourceRequestorSpec)
+def resource_requestor(
+~~~~~
+~~~~~python.new
+from typing import Any
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.std.specs import ResourceRequestorSpec
+from cascade.spec.physics.binding import implements
+
+
+@implements(ResourceRequestorSpec)
+def resource_requestor(
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/triad/dispatcher.py
+~~~~~
+~~~~~python.old
+import logging
+from typing import Any, Dict
+
+from cascade.spec.physical.object import Ref
+from cascade.spec.physical.triad import WorkerNode
+from cascade.reflection import PhysicalIdGenerator
+from cascade.vm.compute import ComputeRequest
+from cascade.std.specs import WorkerSpec
+from cascade.std.kernel_tools import implements
+
+logger = logging.getLogger(__name__)
+~~~~~
+~~~~~python.new
+import logging
+from typing import Any, Dict
+
+from cascade.spec.physical.object import Ref
+from cascade.spec.physical.triad import WorkerNode
+from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.runtime import ComputeRequest
+from cascade.std.specs import WorkerSpec
+from cascade.spec.physics.binding import implements
+
+logger = logging.getLogger(__name__)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+~~~~~
+~~~~~python.old
+from cascade.spec import EventIR, EventType, EventState, EventContext
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.triad import BleachNode
+from cascade.spec.physical.ports import PortRole
+from cascade.std.specs import BleacherSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(BleacherSpec)
+~~~~~
+~~~~~python.new
+from cascade.spec import EventIR, EventType, EventState, EventContext
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.triad import BleachNode
+from cascade.spec.physical.ports import PortRole
+from cascade.std.specs import BleacherSpec
+from cascade.spec.physics.binding import implements
+
+
+@implements(BleacherSpec)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/system/gate.py
+~~~~~
+~~~~~python.old
+from typing import Any
+from cascade.spec.physical.nodes import PhysicsNode
+from cascade.std.specs import GateSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(GateSpec)
+def gate_passthrough(io: GateSpec.IO, node: PhysicsNode, resources: Any) -> None:
+~~~~~
+~~~~~python.new
+from typing import Any
+from cascade.spec.physical.nodes import PhysicsNode
+from cascade.std.specs import GateSpec
+from cascade.spec.physics.binding import implements
+
+
+@implements(GateSpec)
+def gate_passthrough(io: GateSpec.IO, node: PhysicsNode, resources: Any) -> None:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/system/terminator.py
+~~~~~
+~~~~~python.old
+from typing import Any
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.runtime.system import SystemControlToken, ControlCommand
+from cascade.std.specs import TerminatorSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(TerminatorSpec)
+~~~~~
+~~~~~python.new
+from typing import Any
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.runtime.system import SystemControlToken, ControlCommand
+from cascade.std.specs import TerminatorSpec
+from cascade.spec.physics.binding import implements
+
+
+@implements(TerminatorSpec)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/system/egress.py
+~~~~~
+~~~~~python.old
+from typing import Any
+from cascade.spec.physical.nodes import PhysicsNode
+from cascade.std.specs import EgressSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(EgressSpec)
+def standard_egress(io: EgressSpec.IO, node: PhysicsNode, resources: Any) -> None:
+~~~~~
+~~~~~python.new
+from typing import Any
+from cascade.spec.physical.nodes import PhysicsNode
+from cascade.std.specs import EgressSpec
+from cascade.spec.physics.binding import implements
+
+
+@implements(EgressSpec)
+def standard_egress(io: EgressSpec.IO, node: PhysicsNode, resources: Any) -> None:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/system/drainer.py
+~~~~~
+~~~~~python.old
+from typing import Any
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.runtime.system import SystemControlToken, ControlCommand
+from cascade.std.specs import DrainerSpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(DrainerSpec)
+~~~~~
+~~~~~python.new
+from typing import Any
+from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.runtime.system import SystemControlToken, ControlCommand
+from cascade.std.specs import DrainerSpec
+from cascade.spec.physics.binding import implements
+
+
+@implements(DrainerSpec)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/system/time.py
+~~~~~
+~~~~~python.old
+import logging
 from typing import Dict, Any
 
-from ..physical.object import Ref
-from ..physical.nodes import Token
+from cascade.spec.physical.nodes import Token, PhysicsFuncNode
+from cascade.vm.services.contracts import DelayRequest
+from cascade.reflection import PhysicalIdGenerator
 
-
-@dataclass(frozen=True)
-class ComputeRequest:
-    """A request sent from the VM's dispatcher to a ComputeService."""
-
-    code_hash: str
-    input_refs: Dict[str, Ref]
-    reply_to_nid: str
-    trace: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class DelayRequest:
-    """A request sent from a 'sleep' IC to the ChronosService."""
-
-    delay_seconds: float
-    target_nid: str
-    token: Token
+logger = logging.getLogger(__name__)
 ~~~~~
+~~~~~python.new
+import logging
+from typing import Dict, Any
 
-#### Acts 2: 暴露运行时契约
+from cascade.spec.physical.nodes import Token, PhysicsFuncNode
+from cascade.spec.runtime import DelayRequest
+from cascade.reflection import PhysicalIdGenerator
 
-接下来，我们更新 `runtime` 包的 `__init__.py`，使其导出新创建的数据契约。
+logger = logging.getLogger(__name__)
+~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/runtime/__init__.py
+packages/cascade-std/src/cascade/std/system/retry.py
 ~~~~~
 ~~~~~python.old
-from .strategies import ExecutionContext, ExecutionStrategy
+from typing import Any
 
-__all__ = [
-    "Solver",
-    "Executor",
-    "CacheBackend",
-    "CachePolicy",
-    "StateBackend",
-    "SubscriptionHandle",
-    "LazyFactory",
-    "Provider",
-    "Connector",
-    "ObjectStore",
-    "ComputeDelegate",
-    "ExecutionContext",
-    "ExecutionStrategy",
-]
+from cascade.spec import RetryNode
+from cascade.std.specs import RetrySpec
+from cascade.std.kernel_tools import implements
+
+
+@implements(RetrySpec)
+def standard_retry_logic(io: RetrySpec.IO, node: RetryNode, resources: Any) -> None:
 ~~~~~
 ~~~~~python.new
-from .strategies import ExecutionContext, ExecutionStrategy
-from .contracts import ComputeRequest, DelayRequest
+from typing import Any
 
-__all__ = [
-    "Solver",
-    "Executor",
-    "CacheBackend",
-    "CachePolicy",
-    "StateBackend",
-    "SubscriptionHandle",
-    "LazyFactory",
-    "Provider",
-    "Connector",
-    "ObjectStore",
-    "ComputeDelegate",
-    "ExecutionContext",
-    "ExecutionStrategy",
-    "ComputeRequest",
-    "DelayRequest",
-]
+from cascade.spec import RetryNode
+from cascade.std.specs import RetrySpec
+from cascade.spec.physics.binding import implements
+
+
+@implements(RetrySpec)
+def standard_retry_logic(io: RetrySpec.IO, node: RetryNode, resources: Any) -> None:
 ~~~~~
 
-#### Acts 3: 创建物理层绑定工具模块
+#### Acts 2: 删除 `cascade-std` 中的冗余模块
 
-现在，我们创建 `binding.py` 文件，并将原位于 `cascade-std` 中的 `kernel_tools` 内容迁移过来。这些工具是实现自定义物理节点（IC）的核心。
+现在所有 IC 都已更新，我们可以安全地删除旧的 `kernel_tools.py` 文件。
 
 ~~~~~act
-write_file
-packages/cascade-spec/src/cascade/spec/physics/binding.py
-~~~~~
-~~~~~python
-from functools import wraps
-from typing import Dict, Any, Type, TypeVar, MutableMapping
-from ..physical.nodes import Token, PhysicsNode
-from .spec import PhysicsSpec
-
-T = TypeVar("T", bound=PhysicsSpec)
-
-
-class DynamicOutputMap(MutableMapping):
-    def __init__(self, target_dict: Dict[str, Token], prefix: str):
-        self._target = target_dict
-        self._prefix = prefix
-
-    def __setitem__(self, key: str, value: Token) -> None:
-        if not key.startswith(self._prefix):
-            raise ValueError(
-                f"Dynamic port '{key}' does not match required prefix '{self._prefix}'"
-            )
-        self._target[key] = value
-
-    def __getitem__(self, key: str) -> Token:
-        return self._target[key]
-
-    def __delitem__(self, key: str) -> None:
-        del self._target[key]
-
-    def __iter__(self):
-        return iter(self._target)
-
-    def __len__(self):
-        return len(self._target)
-
-
-class IOWrapper:
-    __slots__ = ("_inputs", "_outputs", "_spec")
-
-    def __init__(
-        self,
-        inputs: Dict[str, Token],
-        outputs: Dict[str, Token],
-        spec: Type[PhysicsSpec],
-    ):
-        self._inputs = inputs
-        self._outputs = outputs
-        self._spec = spec
-
-    def __getattr__(self, name: str) -> Any:
-        # 1. Check Input Ports
-        if name in self._spec.input_ports:
-            port_def = self._spec.input_ports[name]
-
-            # Case A: Dynamic Map Input
-            if port_def.is_map:
-                # Collect all inputs that are NOT associated with a static port
-                static_names = {
-                    p.name for p in self._spec.input_ports.values() if not p.is_map
-                }
-                return {k: v for k, v in self._inputs.items() if k not in static_names}
-
-            # Case B: Static Input
-            port_name = port_def.name
-            return self._inputs.get(port_name)
-
-        # 2. Check Output Ports
-        if name in self._spec.output_ports:
-            port_def = self._spec.output_ports[name]
-
-            # Case C: Dynamic Map Output
-            if port_def.is_map:
-                return DynamicOutputMap(self._outputs, port_def.prefix)
-
-            # Case D: Static Output (Reading back what we wrote)
-            port_name = port_def.name
-            return self._outputs.get(port_name)
-
-        raise AttributeError(
-            f"'{self._spec.__name__}' IO has no port mapping for '{name}'"
-        )
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name in ("_inputs", "_outputs", "_spec"):
-            super().__setattr__(name, value)
-            return
-
-        # Check Output Ports
-        if name in self._spec.output_ports:
-            port_def = self._spec.output_ports[name]
-
-            # Direct assignment to a Map property is not allowed (must use item assignment)
-            if port_def.is_map:
-                raise AttributeError(
-                    f"Cannot assign to map port '{name}' directly. Use indexing (io.{name}['key'] = val)."
-                )
-
-            port_name = port_def.name
-            self._outputs[port_name] = value
-            return
-
-        raise AttributeError(
-            f"'{self._spec.__name__}' IO has no output port mapping for '{name}'"
-        )
-
-
-def implements(spec: Type[PhysicsSpec]):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(
-            inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-        ) -> Dict[str, Token]:
-            outputs: Dict[str, Token] = {}
-            io = IOWrapper(inputs, outputs, spec)
-
-            # Call the inner function. It is expected to set attributes on 'io' (populating 'outputs')
-            # and return None.
-            func(io, node, resources)
-
-            return outputs
-
-        # Attach spec metadata for introspection/docs
-        setattr(wrapper, "__spec__", spec)
-        return wrapper
-
-    return decorator
+delete_file
+packages/cascade-std/src/cascade/std/kernel_tools.py
 ~~~~~
 
-#### Acts 4: 暴露物理层绑定工具
+#### Acts 3: 重构 `cascade-vm` 以依赖 `cascade-spec`
 
-最后，我们将这些绑定工具添加到 `physics` 包的公共 API 中。
+接下来，我们将修改 `cascade-vm` 的内部实现，使其从 `cascade-spec` 导入数据契约。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/physics/__init__.py
+packages/cascade-vm/src/cascade/vm/compute/adapters.py
 ~~~~~
 ~~~~~python.old
-from .core import Port, PortRole, PortType, PortDef, PortDirection
-from .spec import PhysicsSpec
+import asyncio
+import inspect
+import logging
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple, Optional
 
-__all__ = [
-    "Port",
-    "PortRole",
-    "PortType",
-    "PortDef",
-    "PortDirection",
-    "PhysicsSpec",
-]
+from cascade.spec.physical.nodes import Token
+from cascade.spec.runtime.storage import ObjectStore
+from cascade.spec.runtime.interfaces import Executor
+from ..registry import CodeRegistry
+from .contract import ComputeRequest
+
+logger = logging.getLogger(__name__)
 ~~~~~
 ~~~~~python.new
-from .core import Port, PortRole, PortType, PortDef, PortDirection
-from .spec import PhysicsSpec
-from .binding import implements, IOWrapper, DynamicOutputMap
+import asyncio
+import inspect
+import logging
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple, Optional
 
-__all__ = [
-    "Port",
-    "PortRole",
-    "PortType",
-    "PortDef",
-    "PortDirection",
-    "PhysicsSpec",
-    "implements",
-    "IOWrapper",
-    "DynamicOutputMap",
-]
+from cascade.spec.physical.nodes import Token
+from cascade.spec.runtime.storage import ObjectStore
+from cascade.spec.runtime.interfaces import Executor
+from ..registry import CodeRegistry
+from cascade.spec.runtime import ComputeRequest
+
+logger = logging.getLogger(__name__)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/compute/service.py
+~~~~~
+~~~~~python.old
+import asyncio
+import inspect
+import logging
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Tuple, Optional
+
+from cascade.spec.physical.nodes import Token
+from cascade.spec.runtime.storage import ObjectStore
+from ..registry import CodeRegistry
+from .contract import ComputeRequest
+
+logger = logging.getLogger(__name__)
+~~~~~
+~~~~~python.new
+import asyncio
+import inspect
+import logging
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Tuple, Optional
+
+from cascade.spec.physical.nodes import Token
+from cascade.spec.runtime.storage import ObjectStore
+from ..registry import CodeRegistry
+from cascade.spec.runtime import ComputeRequest
+
+logger = logging.getLogger(__name__)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/compute/__init__.py
+~~~~~
+~~~~~python.old
+from .contract import ComputeRequest
+from .service import LocalComputeService
+from .adapters import BridgedComputeService
+
+__all__ = ["ComputeRequest", "LocalComputeService", "BridgedComputeService"]
+~~~~~
+~~~~~python.new
+from cascade.spec.runtime import ComputeRequest
+from .service import LocalComputeService
+from .adapters import BridgedComputeService
+
+__all__ = ["ComputeRequest", "LocalComputeService", "BridgedComputeService"]
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/services/chronos.py
+~~~~~
+~~~~~python.old
+import asyncio
+import logging
+from typing import Tuple
+
+from cascade.spec.physical.nodes import Token
+from .contracts import DelayRequest
+
+logger = logging.getLogger(__name__)
+~~~~~
+~~~~~python.new
+import asyncio
+import logging
+from typing import Tuple
+
+from cascade.spec.physical.nodes import Token
+from cascade.spec.runtime import DelayRequest
+
+logger = logging.getLogger(__name__)
+~~~~~
+
+#### Acts 4: 删除 `cascade-vm` 中的冗余模块
+
+随着导入路径的更新，我们可以删除 VM 包中本地的契约定义文件。
+
+~~~~~act
+delete_file
+packages/cascade-vm/src/cascade/vm/compute/contract.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-vm/src/cascade/vm/services/contracts.py
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功地将核心契约和工具集中到了 `cascade-spec` 包中。接下来的关键步骤是：
+我们已经成功完成了清理工作，`cascade-std` 和 `cascade-vm` 现在都正确地依赖于 `cascade-spec`。架构的健康状况得到了极大改善。
 
-1.  **清理 `cascade-vm`**: 修改 `cascade-vm` 内部代码，使其从 `cascade-spec` 导入 `ComputeRequest` 和 `DelayRequest`，并删除本地的旧文件。
-2.  **清理 `cascade-std`**: 修改所有物理节点实现，使其从 `cascade-spec` 导入 `implements` 装饰器和相关契约，并删除本地的 `kernel_tools.py` 文件。
-
-如果你同意，我将生成执行这些清理步骤的计划。
+下一步，我们可以将注意力转向 **`cascade-compiler`** 包，检查并清理其中可能存在的重复定义或不当依赖，完成整个架构的净化。

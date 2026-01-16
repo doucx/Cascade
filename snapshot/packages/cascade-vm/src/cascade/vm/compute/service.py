@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple, Optional
 from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime.storage import ObjectStore
 from ..registry import CodeRegistry
-from .contract import ComputeRequest
+from cascade.spec.runtime import ComputeRequest
 
 logger = logging.getLogger(__name__)
 

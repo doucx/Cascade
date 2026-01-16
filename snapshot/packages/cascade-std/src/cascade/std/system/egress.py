@@ -1,7 +1,7 @@
 from typing import Any
 from cascade.spec.physical.nodes import PhysicsNode
 from cascade.std.specs import EgressSpec
-from cascade.std.kernel_tools import implements
+from cascade.spec.physics.binding import implements
 
 
 @implements(EgressSpec)

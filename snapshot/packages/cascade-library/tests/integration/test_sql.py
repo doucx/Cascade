@@ -71,12 +71,9 @@ async def test_sql_with_params(db_engine):
 
 
 @pytest.mark.asyncio
-async def test_sql_missing_resource():
+async def test_sql_missing_resource(engine):
     target = cs.sql("SELECT 1", conn=cs.inject("non_existent_db"))
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     # We don't register anything
 
     # With the new scanning logic, it should fail at setup time!

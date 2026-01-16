@@ -25,7 +25,7 @@ result_node = process(10, multiplier)
 
 
 @pytest.mark.asyncio
-async def test_subflow_execution(subflow_file):
+async def test_subflow_execution(engine, subflow_file):
     # Define a parent workflow that calls the subflow
     # subflow is loaded via provider registry
     sub_result = cs.subflow(
@@ -38,10 +38,6 @@ async def test_subflow_execution(subflow_file):
 
     workflow = finalize(sub_result)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-
     # 10 * 5 = 50 -> "Final: 50"
     result = await engine.run(workflow)
 
@@ -49,24 +45,16 @@ async def test_subflow_execution(subflow_file):
 
 
 @pytest.mark.asyncio
-async def test_subflow_file_not_found():
+async def test_subflow_file_not_found(engine):
     workflow = cs.subflow(path="non_existent.py", target="foo")
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
 
     with pytest.raises(FileNotFoundError):
         await engine.run(workflow)
 
 
 @pytest.mark.asyncio
-async def test_subflow_target_not_found(subflow_file):
+async def test_subflow_target_not_found(engine, subflow_file):
     workflow = cs.subflow(path=subflow_file, target="missing_var")
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
 
     with pytest.raises(ValueError, match="Target 'missing_var' not found"):
         await engine.run(workflow)

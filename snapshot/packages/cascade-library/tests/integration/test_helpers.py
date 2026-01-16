@@ -7,35 +7,33 @@ from cascade.runtime.io.executors.local import LocalExecutor
 
 
 @pytest.mark.asyncio
-async def test_dict_provider():
+async def test_dict_provider(engine):
     @cs.task
     def get_val():
         return "dynamic_value"
 
     workflow = cs.dict(static_key="static", dynamic_key=get_val())
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     assert result == {"static_key": "static", "dynamic_key": "dynamic_value"}
 
 
 @pytest.mark.asyncio
-async def test_format_provider():
+async def test_format_provider(engine):
     @cs.task
     def get_name():
         return "World"
 
     workflow = cs.format("Hello, {name}!", name=get_name())
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     assert result == "Hello, World!"
 
 
 @pytest.mark.asyncio
-async def test_format_provider_with_positional_args():
+async def test_format_provider_with_positional_args(engine):
     @cs.task
     def get_first():
         return "first"
@@ -46,7 +44,6 @@ async def test_format_provider_with_positional_args():
 
     workflow = cs.format("Positional: {}, {}", get_first(), get_second())
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     assert result == "Positional: first, second"

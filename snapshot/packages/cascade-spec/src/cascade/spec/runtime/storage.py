@@ -1,5 +1,5 @@
 from typing import Protocol, Any, Dict, Optional
-from cascade.spec.physical.object import Ref
+from ..physical.object import Ref
 
 
 class ObjectStore(Protocol):

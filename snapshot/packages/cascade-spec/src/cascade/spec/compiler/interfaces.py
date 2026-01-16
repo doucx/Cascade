@@ -1,6 +1,6 @@
 from typing import Protocol, Any, TYPE_CHECKING
-from cascade.spec.ir.graph import NodeIR
-from cascade.spec.compiler.model import SubGraph
+from ..ir.graph import NodeIR
+from .model import SubGraph
 
 if TYPE_CHECKING:
     # Avoid circular dependency with implementation-heavy contexts

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List
-from cascade.spec.physical.nodes import PhysicsNode
+from .nodes import PhysicsNode
 
 
 @dataclass

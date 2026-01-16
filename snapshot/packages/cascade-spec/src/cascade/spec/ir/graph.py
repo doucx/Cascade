@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Dict, Any
 
-from cascade.spec.ir.fingerprint import Fingerprint
+from .fingerprint import Fingerprint
 
 
 class ArgumentKind(str, Enum):

@@ -1,8 +1,8 @@
 from typing import Protocol, Any, Dict
 from dataclasses import dataclass, field
 from contextlib import ExitStack
-from cascade.spec.runtime.interfaces import StateBackend
-from cascade.spec.runtime.storage import ObjectStore
+from .interfaces import StateBackend
+from .storage import ObjectStore
 
 
 @dataclass

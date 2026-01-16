@@ -3,7 +3,7 @@ from typing import Any
 
 # Import PortRole from the existing physical layer to maintain compatibility
 # and avoid semantic drift between the "Law" (physics) and the "Matter" (physical).
-from cascade.spec.physical.ports import PortRole
+from ..physical.ports import PortRole
 
 
 class PortType(str, Enum):

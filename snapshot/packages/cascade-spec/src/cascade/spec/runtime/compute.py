@@ -1,5 +1,5 @@
 from typing import Protocol, Dict, Awaitable, Any
-from cascade.spec.physical.object import Ref
+from ..physical.object import Ref
 
 
 class ComputeDelegate(Protocol):

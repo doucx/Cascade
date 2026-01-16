@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 解耦 cascade-compiler 包内的循环依赖，重构导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768534928.178399, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 消除 cascade-sdk 包内的循环依赖，优化内部导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768535023.8297946, "duration_ms": 0}}

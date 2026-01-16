@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from cascade.spec.dsl.constraint import with_constraints
     from cascade.common.context import get_current_context
 
-    from cascade.control_flow import select_jump, bind
+    from .control_flow import select_jump, bind
 
     from cascade.runtime.host.instance import Engine
     from cascade.bus.core import EventBus
@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 
     from cascade.execution.graph.model.serialize import to_json, from_json
     from cascade.test_utils.helpers import override_resource, ControllerTestApp
-    from cascade.tools.cli import create_cli
+    from .tools.cli import create_cli
 
     # Dynamic Providers Stubs (for static analysis)
     # These are populated at runtime via __getattr__ delegation to the registry

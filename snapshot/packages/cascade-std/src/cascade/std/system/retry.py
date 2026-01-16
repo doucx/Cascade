@@ -1,6 +1,6 @@
 from typing import Any
 
-from cascade.spec import RetryNode
+from cascade.spec.physical.system_nodes import RetryNode
 from cascade.spec.components import RetrySpec
 from cascade.spec.physics.binding import implements
 

@@ -1,7 +1,7 @@
 import sys
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.triad import ObservabilityNode
+from cascade.spec.physical.system_nodes import ObservabilityNode
 from cascade.spec.physical.ports import PortRole, PortDef
 from cascade.spec.components import ObservabilitySpec
 from cascade.spec.specs.dyad import LauncherSpec, LanderSpec

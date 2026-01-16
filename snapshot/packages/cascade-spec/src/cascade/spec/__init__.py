@@ -6,7 +6,7 @@ from .physical.nodes import (
     PhysicsDataNode,
     PhysicsFuncNode,
 )
-from .physical.triad_legacy import (
+from .physical.system_nodes import (
     ObservabilityNode,
     RetryNode,
 )

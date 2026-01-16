@@ -3,6 +3,13 @@ from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
 from cascade.spec.physical.nodes import Token
 
 
+class ObservabilitySpec(PhysicsSpec):
+    event_token = Port.Input("event_token", role=PortRole.OBSERVABILITY, type="Event")
+
+    class IO(Protocol):
+        event_token: Optional[Token]
+
+
 class EgressSpec(PhysicsSpec):
     # The physical port name is "in" (reserved keyword in Python).
     # We map it to the attribute 'input_token'.

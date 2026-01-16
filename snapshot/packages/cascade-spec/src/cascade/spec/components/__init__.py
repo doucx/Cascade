@@ -12,10 +12,8 @@ from .system import (
     RetrySpec,
     TerminatorSpec,
     DrainerSpec,
+    ObservabilitySpec,
 )
-
-from .triad_legacy import ObservabilitySpec
-
 
 __all__ = [
     "DiscreteAllocatorSpec",

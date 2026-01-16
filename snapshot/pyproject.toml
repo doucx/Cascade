@@ -44,7 +44,7 @@ cascade-compiler = { workspace = true }
 cascade-execution-graph = { workspace = true }
 cascade-std = { workspace = true }
 cascade = { workspace = true }
-cascade-vm-rs = { workspace = true }
+# cascade-vm-rs = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
@@ -57,11 +57,11 @@ packages = [
     "packages/cascade-vm",
     "packages/cascade-compiler",
     "packages/cascade-std",
-    "packages/cascade-vm-rs",
     "packages/cascade-bus",
     "packages/cascade-reflection",
     "packages/cascade-test-utils",
     "packages/cascade-execution-graph",
+    # "packages/cascade-vm-rs",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -103,12 +103,12 @@ dev = [
   "cascade-connector-local",
   "cascade-test-utils",
   "cascade-vm",
-  "cascade-vm-rs",
   "cascade-compiler",
   "cascade-execution-graph",
   "cascade-std",
   "cascade-bus",
   "ruff",
+  # "cascade-vm-rs",
 ]
 
 [tool.hatch.metadata]

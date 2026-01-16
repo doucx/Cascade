@@ -1,16 +1,15 @@
 import asyncio
-import os
 from typing import Any, Dict, List, Tuple, Union, Optional, Callable
 
 from cascade.spec.dsl.fluent import LazyResult
 from cascade.spec.dsl.task import task
-from cascade.spec.runtime import Connector, StateBackend, ExecutionStrategy
+from cascade.spec.runtime import Connector, StateBackend
 
 from cascade.execution.graph.model.build import build_graph
 from cascade.execution.graph.model.model import Node, EdgeType
 
-from cascade.runtime.host.instance import Engine
-from cascade.runtime import EventBus, ResourceManager
+from cascade.runtime.host import create_engine
+from cascade.runtime import EventBus
 from cascade.bus.events import (
     PlanAnalysisStarted,
     PlanNodeInspected,
@@ -20,18 +19,8 @@ from cascade.runtime.services.observability.subscribers import (
     HumanReadableLogSubscriber,
     TelemetrySubscriber,
 )
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
-
 from cascade.bus.feedback import bus
 from cascade.common.renderers import CliRenderer, JsonRenderer
-
-# Imports for Strategy construction
-from cascade.runtime.services.constraints.manager import ConstraintManager
-from cascade.runtime.services.resources.container import ResourceContainer
-from cascade.execution.graph.logic.processor import NodeProcessor
-from cascade.execution.graph.strategy import GraphExecutionStrategy
-from cascade.runtime.strategies.vm import VMExecutionStrategy
 
 
 # --- Internal Helpers ---
@@ -116,7 +105,6 @@ class CascadeApp:
     ):
         self.raw_target = target
         self.params = params
-        self.system_resources = system_resources
         self.connector = connector
 
         # 1. Handle Auto-Gathering
@@ -139,60 +127,19 @@ class CascadeApp:
         # 3. Setup Event System
         self.event_bus = EventBus()
         self.log_subscriber = HumanReadableLogSubscriber(self.event_bus)
-
         self.telemetry_subscriber = None
         if self.connector:
             self.telemetry_subscriber = TelemetrySubscriber(
                 self.event_bus, self.connector
             )
 
-        # 4. Setup Engine Components
-        self.solver = NativeSolver()
-        self.executor = LocalExecutor()
-        self.sb_factory = _create_state_backend_factory(state_backend)
-        self.resource_manager = ResourceManager(capacity=self.system_resources)
-
-        # 5. Create Execution Strategy based on user choice
-        strategy: ExecutionStrategy
-        backend_choice = (
-            "vm" if use_vm else os.getenv("CASCADE_BACKEND", "graph").lower()
-        )
-
-        if backend_choice == "vm":
-            strategy = VMExecutionStrategy(executor=self.executor, bus=self.event_bus)
-        else:  # Default to 'graph'
-            constraint_manager = ConstraintManager(self.resource_manager)
-            wakeup_event = asyncio.Event()
-            constraint_manager.set_wakeup_callback(wakeup_event.set)
-            resource_container = ResourceContainer(self.event_bus)
-            node_processor = NodeProcessor(
-                executor=self.executor,
-                bus=self.event_bus,
-                resource_manager=self.resource_manager,
-                constraint_manager=constraint_manager,
-                solver=self.solver,
-            )
-            strategy = GraphExecutionStrategy(
-                solver=self.solver,
-                node_processor=node_processor,
-                resource_container=resource_container,
-                constraint_manager=constraint_manager,
-                bus=self.event_bus,
-                wakeup_event=wakeup_event,
-            )
-
-        # 6. Create Engine
-        self.engine = Engine(
-            solver=self.solver,
-            executor=self.executor,
+        # 4. Create Engine using the central factory
+        self.engine = create_engine(
+            use_vm=use_vm,
             bus=self.event_bus,
-            strategy=strategy,
-            constraint_manager=constraint_manager,
-            wakeup_event=wakeup_event,
-            resource_manager=self.resource_manager,
-            system_resources=self.system_resources,
+            system_resources=system_resources,
             connector=self.connector,
-            state_backend_factory=self.sb_factory,
+            state_backend_factory=_create_state_backend_factory(state_backend),
         )
 
         if self.telemetry_subscriber:
@@ -206,6 +153,10 @@ class CascadeApp:
         # build_graph handles it but we might want a cleaner check.
         if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
             return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
+        
+        from cascade.execution.graph.solvers.native import NativeSolver
+        
+        solver = NativeSolver()
 
         graph, _, _ = build_graph(self.workflow_target)
 
@@ -269,9 +220,13 @@ class CascadeApp:
 
         # 1. Build Graph
         graph, _, _ = build_graph(self.workflow_target)
+        
+        from cascade.execution.graph.solvers.native import NativeSolver
+        
+        solver = NativeSolver()
 
         # 2. Resolve Plan using the app's solver
-        plan = self.solver.resolve(graph)
+        plan = solver.resolve(graph)
         total_steps = sum(len(stage) for stage in plan)
 
         run_id = self.workflow_target._uuid

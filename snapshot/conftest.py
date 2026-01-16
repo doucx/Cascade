@@ -108,77 +108,16 @@ from cascade.runtime.strategies.vm import VMExecutionStrategy
 @pytest.fixture
 def engine_factory() -> Callable[..., Engine]:
     """
-    Provides a factory function to create a Cascade Engine instance.
-
-    This factory encapsulates the logic for selecting a default execution strategy
-    and assembling all required services, decoupling the core Engine
-    from specific strategy implementations and service construction.
+    Provides a factory function to create a Cascade Engine instance for tests.
+    This is a thin wrapper around the production `create_engine` factory,
+    allowing tests to easily override components.
     """
+    from cascade.runtime.host import create_engine
 
-    def _factory(
-        *,  # Force keyword arguments for clarity
-        solver: Optional[Solver] = None,
-        executor: Optional[Executor] = None,
-        bus: Optional[EventBus] = None,
-        strategy: Optional[ExecutionStrategy] = None,
-        resource_manager: Optional[ResourceManager] = None,
-        constraint_manager: Optional[ConstraintManager] = None,
-        **kwargs,  # Pass-through for other Engine args like connector, system_resources etc.
-    ) -> Engine:
-        # 1. Provide sane defaults for core components
-        _solver = solver or NativeSolver()
-        _executor = executor or LocalExecutor()
-        _bus = bus or EventBus()
-
-        # 2. Create and configure shared services
-        _resource_manager = resource_manager or ResourceManager(
-            capacity=kwargs.get("system_resources")
-        )
-        _constraint_manager = constraint_manager or ConstraintManager(_resource_manager)
-        _wakeup_event = asyncio.Event()
-
-        # Register default handlers if the manager is newly created
-        if not constraint_manager:
-            _constraint_manager.register_handler(PauseConstraintHandler())
-            _constraint_manager.register_handler(ConcurrencyConstraintHandler())
-            _constraint_manager.register_handler(RateLimitConstraintHandler())
-
-        _constraint_manager.set_wakeup_callback(_wakeup_event.set)
-
-        # 3. Create strategy if not provided
-        if strategy is None:
-            backend_choice = os.getenv("CASCADE_BACKEND", "graph").lower()
-            if backend_choice == "vm":
-                strategy = VMExecutionStrategy(executor=_executor, bus=_bus)
-            else:  # Default to 'graph'
-                resource_container = ResourceContainer(_bus)
-                node_processor = NodeProcessor(
-                    executor=_executor,
-                    bus=_bus,
-                    resource_manager=_resource_manager,
-                    constraint_manager=_constraint_manager,
-                    solver=_solver,
-                )
-                strategy = GraphExecutionStrategy(
-                    solver=_solver,
-                    node_processor=node_processor,
-                    resource_container=resource_container,
-                    constraint_manager=_constraint_manager,
-                    bus=_bus,
-                    wakeup_event=_wakeup_event,
-                )
-
-        # 4. Construct Engine with all components
-        return Engine(
-            solver=_solver,
-            executor=_executor,
-            bus=_bus,
-            strategy=strategy,
-            resource_manager=_resource_manager,
-            constraint_manager=_constraint_manager,
-            wakeup_event=_wakeup_event,
-            **kwargs,
-        )
+    def _factory(**kwargs) -> Engine:
+        # The create_engine function already handles default component creation.
+        # This fixture simply acts as a convenient entry point for pytest.
+        return create_engine(**kwargs)
 
     return _factory
 

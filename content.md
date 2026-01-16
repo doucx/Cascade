@@ -1,845 +1,624 @@
-你指出的问题非常典型：在实施了严格的依赖注入（DI）之后，所有之前依赖 `Engine` 默认构造行为的代码都“现形”了。这包括了大量的集成测试，以及 `cascade-library` 中的生产代码（如 `subflow` 任务）。
+好的，你的分析非常敏锐，完全正确。我确实在 `CascadeApp` 和 `conftest.py` 中重复了 `Engine` 的组装逻辑，现在 `subflow.py` 将成为第三个重复点。这是一个明显的 **DRY (Don't Repeat Yourself)** 违规，是比 `TypeError` 更深层次的架构异味。
 
-这种“阵痛”是值得的，因为它清晰地勾勒出了系统中哪些地方在进行“非法的”重型组件组装。
+我们必须根除这种重复。解决方案是创建一个**单一、权威的 `Engine` 工厂函数**，它将封装所有复杂的组装逻辑，然后让 `CascadeApp`、`subflow` 和测试 fixture 都来调用这个工厂。
 
-我将按照以下计划进行全面修复：
+我将执行以下计划来系统性地解决这个问题。
 
-1.  **修复 `cascade-library` 生产代码**: 修复 `subflow.py`，确保它能够正确组装一个子引擎。
-2.  **更新所有受影响的集成测试**: 将 `cascade-library` 中所有手动实例化 `Engine` 的测试改为使用我们新定义的 `engine` 或 `engine_factory` fixture。
-
-## [WIP] fix: Align cascade-library and its tests with new Engine DI architecture
+## [WIP] refactor(runtime): Centralize Engine creation with a factory to resolve DRY violations
 
 ### 错误分析
 
-核心问题是 `Engine` 的构造函数现在是严格的 DI 模式，不再提供默认的执行策略和约束管理器。`cascade-library` 中的集成测试和 `subflow` 任务仍然沿用旧的调用方式 `cs.Engine(...)`，导致 `TypeError`。
+在之前的重构中，`Engine` 的实例化逻辑变得复杂，并且被复制到了多个地方（`cascade.app` 和根 `conftest.py`）。现在，`cascade.providers.subflow` 中也存在一个过时的、手动的 `Engine` 实例化调用，它缺少新的必需参数，从而导致 `TypeError`。这种代码重复是不可持续的，并且是当前错误的根本原因。
 
 ### 用户需求
 
-修复 `cascade-library` 包中所有的集成测试失败，并确保生产代码中的子引擎实例化也能正常工作。
+修复所有因 `Engine` 构造函数变更而导致的 `TypeError`，并通过创建一个中央工厂函数来消除 `Engine` 实例化逻辑的重复。
 
 ### 评论
 
-这是一个在大规模重构中常见的清理阶段。通过将测试中的手动组装替换为统一的 `engine` fixture，我们不仅修复了错误，还显著简化了测试代码，使其更易于维护。对于生产代码中的子引擎，我们将引入一套标准的组装逻辑，确保其功能完整。
+这是一个完美的“高保真工程”时刻。我们不应在 `subflow.py` 中简单地复制粘贴组装逻辑来“打补丁”，而应该退后一步，创建一个“本体论正确”的组件——一个专门负责 `Engine` 组装的工厂函数。这个工厂将成为单一事实来源（SSoT），确保任何地方创建的 `Engine` 都遵循相同的、正确的配置逻辑。
 
 ### 目标
 
-1.  定位并修改 `packages/cascade-library/src/cascade/providers/subflow.py`（如果存在），确保其子引擎实例化符合新协议。
-2.  批量更新 `packages/cascade-library/tests/integration/` 下的所有测试文件：
-    *   移除 `cs.Engine(...)` 的手动创建。
-    *   引入并使用 `engine` fixture。
-    *   移除不再需要的 `NativeSolver` 和 `LocalExecutor` 导入。
+1.  在 `cascade-runtime` 包中创建一个新的 `host/factory.py` 文件，并在其中定义一个 `create_engine` 工厂函数。
+2.  将 `conftest.py` 中 `engine_factory` 的核心组装逻辑迁移到这个新的 `create_engine` 函数中。
+3.  重构 `cascade.app.CascadeApp`，使其调用 `create_engine` 来实例化 `self.engine`。
+4.  重构 `cascade.providers.subflow._subflow_task`，使其调用 `create_engine` 来实例化 `sub_engine`。
+5.  重构根 `conftest.py` 中的 `engine_factory` fixture，使其成为 `create_engine` 的一个简单封装。
 
 ### 基本原理
 
-在测试环境中，我们将全面拥抱 Pytest fixture。由于 `engine` fixture 已经在根目录的 `conftest.py` 中定义，且 `cascade-library` 处于同一个 monorepo 中，这些 fixture 是全局可用的。通过在测试函数参数中声明 `engine`，Pytest 会自动注入一个预先配置好的、架构正确的引擎实例。
+我们将创建一个名为 `create_engine` 的中央工厂函数，并将其放置在 `cascade-runtime` 包中，因为它与 `Engine` 的生命周期管理紧密相关。这个工厂将接收所有可配置的组件（如 `solver`, `executor`）和设置（如 `use_vm`, `system_resources`），并负责创建和连接所有内部服务（`ResourceManager`, `ConstraintManager`, `ExecutionStrategy` 等），最终返回一个完全初始化的 `Engine` 实例。通过让所有消费者（应用、库、测试）都使用这个工厂，我们确保了 `Engine` 组装逻辑的**一致性**和**可维护性**。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/critical #comp/library #comp/tests #scope/core #dx #ai/instruct #task/domain/library #task/object/integration-tests #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/runtime #comp/application #comp/library #comp/tests #scope/core #dx #ai/instruct #task/domain/runtime #task/object/engine-factory #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 批量更新集成测试文件
+#### Acts 1: 创建中央 `create_engine` 工厂
 
-我将对你提供的所有失败测试文件进行修正。
+我将在 `cascade-runtime` 中创建新的 `factory.py` 文件，并把所有组装逻辑集中于此。
 
 ~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_config.py
+write_file
+packages/cascade-runtime/src/cascade/runtime/host/factory.py
 ~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_load_yaml_provider(dummy_config_file):
-    loaded_data = cs.load_yaml(dummy_config_file)
+~~~~~python
+import os
+import asyncio
+from typing import Callable, Any, Dict, Optional
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
+from .instance import Engine
+from cascade.spec.runtime import ExecutionStrategy, Solver, Executor, Connector
+from cascade.runtime import EventBus, ResourceManager
+from cascade.runtime.services.constraints.manager import ConstraintManager
+from cascade.runtime.services.resources.container import ResourceContainer
+from cascade.runtime.services.constraints.handlers import (
+    PauseConstraintHandler,
+    ConcurrencyConstraintHandler,
+    RateLimitConstraintHandler,
+)
+
+# Dynamic imports for strategies
+from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
+
+
+def create_engine(
+    *,
+    use_vm: bool = False,
+    solver: Optional[Solver] = None,
+    executor: Optional[Executor] = None,
+    bus: Optional[EventBus] = None,
+    strategy: Optional[ExecutionStrategy] = None,
+    resource_manager: Optional[ResourceManager] = None,
+    constraint_manager: Optional[ConstraintManager] = None,
+    **kwargs,  # Pass-through for other Engine args like connector, system_resources etc.
+) -> Engine:
+    """
+    Central factory for creating and assembling a Cascade Engine instance.
+    """
+    # 1. Provide sane defaults for core components
+    _solver = solver or NativeSolver()
+    _executor = executor or LocalExecutor()
+    _bus = bus or EventBus()
+
+    # 2. Create and configure shared services
+    _resource_manager = resource_manager or ResourceManager(
+        capacity=kwargs.get("system_resources")
     )
-    result = await engine.run(loaded_data)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_load_yaml_provider(engine, dummy_config_file):
-    loaded_data = cs.load_yaml(dummy_config_file)
+    _constraint_manager = constraint_manager or ConstraintManager(_resource_manager)
+    _wakeup_event = asyncio.Event()
 
-    result = await engine.run(loaded_data)
-~~~~~
+    # Register default handlers if the manager is newly created
+    if not constraint_manager:
+        _constraint_manager.register_handler(PauseConstraintHandler())
+        _constraint_manager.register_handler(ConcurrencyConstraintHandler())
+        _constraint_manager.register_handler(RateLimitConstraintHandler())
 
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_config.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_lookup_provider_basic(dummy_config_file):
-    # 1. Explicitly load the config
-    config_source = cs.load_yaml(dummy_config_file)
+    _constraint_manager.set_wakeup_callback(_wakeup_event.set)
 
-    # 2. Explicitly look up the value
-    version = cs.lookup(source=config_source, key="project.version")
+    # 3. Create strategy if not provided
+    if strategy is None:
+        backend_choice = "vm" if use_vm else os.getenv("CASCADE_BACKEND", "graph").lower()
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
+        if backend_choice == "vm":
+            from cascade.runtime.strategies.vm import VMExecutionStrategy
+            strategy = VMExecutionStrategy(executor=_executor, bus=_bus)
+        else:  # Default to 'graph'
+            from cascade.execution.graph.logic.processor import NodeProcessor
+            from cascade.execution.graph.strategy import GraphExecutionStrategy
+
+            resource_container = ResourceContainer(_bus)
+            node_processor = NodeProcessor(
+                executor=_executor,
+                bus=_bus,
+                resource_manager=_resource_manager,
+                constraint_manager=_constraint_manager,
+                solver=_solver,
+            )
+            strategy = GraphExecutionStrategy(
+                solver=_solver,
+                node_processor=node_processor,
+                resource_container=resource_container,
+                constraint_manager=_constraint_manager,
+                bus=_bus,
+                wakeup_event=_wakeup_event,
+            )
+
+    # 4. Construct Engine with all assembled components
+    return Engine(
+        solver=_solver,
+        executor=_executor,
+        bus=_bus,
+        strategy=strategy,
+        resource_manager=_resource_manager,
+        constraint_manager=_constraint_manager,
+        wakeup_event=_wakeup_event,
+        **kwargs,
     )
-    result = await engine.run(version)
 ~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_lookup_provider_basic(engine, dummy_config_file):
-    # 1. Explicitly load the config
-    config_source = cs.load_yaml(dummy_config_file)
 
-    # 2. Explicitly look up the value
-    version = cs.lookup(source=config_source, key="project.version")
+#### Acts 2: 导出 `create_engine`
 
-    result = await engine.run(version)
-~~~~~
+我将更新 `host` 包的 `__init__.py` 文件以导出新工厂。
 
 ~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_config.py
+write_file
+packages/cascade-runtime/src/cascade/runtime/host/__init__.py
 ~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_lookup_on_static_dict():
-    @cs.task
-    def provide_dict():
-        return {"a": {"b": 10}}
+~~~~~python
+from .instance import Engine
+from .factory import create_engine
 
-    source = provide_dict()
-    value = cs.lookup(source=source, key="a.b")
+__all__ = ["Engine", "create_engine"]
+~~~~~
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
+#### Acts 3: 重构 `CascadeApp` 以使用工厂
+
+现在，`CascadeApp` 将调用 `create_engine`，使其实现大大简化。
+
+~~~~~act
+write_file
+packages/cascade-application/src/cascade/app/__init__.py
+~~~~~
+~~~~~python
+import asyncio
+from typing import Any, Dict, List, Tuple, Union, Optional, Callable
+
+from cascade.spec.dsl.fluent import LazyResult
+from cascade.spec.dsl.task import task
+from cascade.spec.runtime import Connector, StateBackend
+
+from cascade.execution.graph.model.build import build_graph
+from cascade.execution.graph.model.model import Node, EdgeType
+
+from cascade.runtime.host import create_engine
+from cascade.runtime import EventBus
+from cascade.bus.events import (
+    PlanAnalysisStarted,
+    PlanNodeInspected,
+    PlanAnalysisFinished,
+)
+from cascade.runtime.services.observability.subscribers import (
+    HumanReadableLogSubscriber,
+    TelemetrySubscriber,
+)
+from cascade.bus.feedback import bus
+from cascade.common.renderers import CliRenderer, JsonRenderer
+
+
+# --- Internal Helpers ---
+
+
+@task(name="_internal_gather", pure=True)
+def _internal_gather(*args: Any) -> Any:
+    return list(args)
+
+
+def _create_state_backend_factory(
+    backend_spec: Union[str, Callable[[str], StateBackend], None],
+) -> Optional[Callable[[str], StateBackend]]:
+    if backend_spec is None:
+        return None
+
+    if callable(backend_spec):
+        return backend_spec
+
+    if isinstance(backend_spec, str):
+        if backend_spec.startswith("redis://"):
+            try:
+                import redis
+                from cascade.runtime.io.state.redis import RedisStateBackend
+            except ImportError:
+                raise ImportError(
+                    "The 'redis' library is required for redis:// backends."
+                )
+            client = redis.from_url(backend_spec)
+
+            def factory(run_id: str) -> StateBackend:
+                return RedisStateBackend(run_id=run_id, client=client)
+
+            return factory
+        else:
+            raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
+
+    raise TypeError(f"Invalid state_backend type: {type(backend_spec)}")
+
+
+def _get_node_shape(node: Node) -> str:
+    if node.node_type == "param":
+        return "ellipse"
+    if node.node_type == "map":
+        return "hexagon"
+    return "box"
+
+
+class DryRunConsoleSubscriber:
+    def __init__(self, bus: EventBus):
+        bus.subscribe(PlanAnalysisStarted, self.on_start)
+        bus.subscribe(PlanNodeInspected, self.on_node)
+        bus.subscribe(PlanAnalysisFinished, self.on_finish)
+
+    def on_start(self, event: PlanAnalysisStarted):
+        print("--- Cascade Execution Plan (Dry Run) ---")
+
+    def on_node(self, event: PlanNodeInspected):
+        bindings_repr = str(event.input_bindings)
+        print(
+            f"[{event.index}/{event.total_nodes}] {event.node_name} (Bindings: {bindings_repr})"
+        )
+
+    def on_finish(self, event: PlanAnalysisFinished):
+        print("----------------------------------------")
+
+
+# --- CascadeApp ---
+
+
+class CascadeApp:
+    def __init__(
+        self,
+        target: Union[LazyResult, List[Any], Tuple[Any, ...]],
+        params: Optional[Dict[str, Any]] = None,
+        system_resources: Optional[Dict[str, Any]] = None,
+        log_level: str = "INFO",
+        log_format: str = "human",
+        connector: Optional[Connector] = None,
+        state_backend: Union[str, Callable[[str], StateBackend], None] = None,
+        use_vm: bool = False,
+    ):
+        self.raw_target = target
+        self.params = params
+        self.connector = connector
+
+        # 1. Handle Auto-Gathering
+        if isinstance(target, (list, tuple)):
+            if not target:
+                self.workflow_target = _internal_gather()  # Empty gather
+            else:
+                self.workflow_target = _internal_gather(*target)
+        else:
+            self.workflow_target = target
+
+        # 2. Setup Messaging & Rendering
+        if log_format == "json":
+            self.renderer = JsonRenderer(min_level=log_level)
+        else:
+            self.renderer = CliRenderer(store=bus.store, min_level=log_level)
+
+        bus.set_renderer(self.renderer)
+
+        # 3. Setup Event System
+        self.event_bus = EventBus()
+        self.log_subscriber = HumanReadableLogSubscriber(self.event_bus)
+        self.telemetry_subscriber = None
+        if self.connector:
+            self.telemetry_subscriber = TelemetrySubscriber(
+                self.event_bus, self.connector
+            )
+
+        # 4. Create Engine using the central factory
+        self.engine = create_engine(
+            use_vm=use_vm,
+            bus=self.event_bus,
+            system_resources=system_resources,
+            connector=self.connector,
+            state_backend_factory=_create_state_backend_factory(state_backend),
+        )
+
+        if self.telemetry_subscriber:
+            self.engine.add_subscriber(self.telemetry_subscriber)
+
+    def run(self) -> Any:
+        return asyncio.run(self.engine.run(self.workflow_target, params=self.params))
+
+    def visualize(self) -> str:
+        # Note: If workflow_target is an empty list gather (from empty input),
+        # build_graph handles it but we might want a cleaner check.
+        if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
+            return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
+        
+        from cascade.execution.graph.solvers.native import NativeSolver
+        
+        solver = NativeSolver()
+
+        graph, _, _ = build_graph(self.workflow_target)
+
+        dot_parts = [
+            "digraph CascadeWorkflow {",
+            '  rankdir="TB";',
+            '  node [shape=box, style="rounded,filled", fillcolor=white];',
+        ]
+
+        for node in graph.nodes:
+            shape = _get_node_shape(node)
+            label = f"{node.name}\\n({node.node_type})"
+            dot_parts.append(
+                f'  "{node.current_node_instance_hash}" [label="{label}", shape={shape}];'
+            )
+
+        for edge in graph.edges:
+            style = ""
+            if edge.edge_type == EdgeType.CONDITION:
+                style = ' [style=dashed, color=gray, label="run_if"]'
+            elif edge.edge_type == EdgeType.IMPLICIT:
+                style = (
+                    ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
+                )
+            elif edge.edge_type == EdgeType.ROUTER_ROUTE:
+                style = ' [style=dashed, color=orange, arrowhead=open, label="route"]'
+            elif edge.router:
+                style = (
+                    f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
+                )
+            elif edge.edge_type == EdgeType.CONSTRAINT:
+                style = f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
+            elif edge.edge_type == EdgeType.SEQUENCE:
+                style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+            elif edge.edge_type == EdgeType.ITERATIVE_JUMP:
+                style = f' [style=bold, color=blue, label="{edge.arg_name}"]'
+            else:
+                style = f' [label="{edge.arg_name}"]'
+
+            dot_parts.append(
+                f'  "{edge.source.current_node_instance_hash}" -> "{edge.target.current_node_instance_hash}"{style};'
+            )
+
+        dot_parts.append("}")
+        return "\n".join(dot_parts)
+
+    def dry_run(self) -> None:
+        # Create a temporary local bus for the dry run report
+        # We don't want to use the main app bus because dry_run
+        # is a special analysis mode, not a "run".
+        local_bus = EventBus()
+        DryRunConsoleSubscriber(local_bus)
+
+        # Handle empty case
+        if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
+            local_bus.publish(
+                PlanAnalysisStarted(run_id="empty", target_node_id="empty")
+            )
+            local_bus.publish(PlanAnalysisFinished(run_id="empty", total_steps=0))
+            return
+
+        # 1. Build Graph
+        graph, _, _ = build_graph(self.workflow_target)
+        
+        from cascade.execution.graph.solvers.native import NativeSolver
+        
+        solver = NativeSolver()
+
+        # 2. Resolve Plan using the app's solver
+        plan = solver.resolve(graph)
+        total_steps = sum(len(stage) for stage in plan)
+
+        run_id = self.workflow_target._uuid
+        local_bus.publish(PlanAnalysisStarted(run_id=run_id, target_node_id=run_id))
+
+        current_index = 1
+        for stage in plan:
+            for node in stage:
+                local_bus.publish(
+                    PlanNodeInspected(
+                        run_id=run_id,
+                        index=current_index,
+                        total_nodes=total_steps,
+                        node_id=node.current_node_instance_hash,
+                        node_name=node.name,
+                        input_bindings=node.input_bindings,
+                    )
+                )
+                current_index += 1
+
+        local_bus.publish(PlanAnalysisFinished(run_id=run_id, total_steps=total_steps))
+
+
+# --- Global Functions ---
+
+
+def run(
+    target: Union["LazyResult", List[Any], tuple[Any, ...]],
+    params: Optional[Dict[str, Any]] = None,
+    system_resources: Optional[Dict[str, Any]] = None,
+    log_level: str = "INFO",
+    log_format: str = "human",
+    connector: Optional["Connector"] = None,
+    state_backend: Union[str, Callable[[str], "StateBackend"], None] = None,
+    use_vm: bool = False,
+) -> Any:
+    app = CascadeApp(
+        target=target,
+        params=params,
+        system_resources=system_resources,
+        log_level=log_level,
+        log_format=log_format,
+        connector=connector,
+        state_backend=state_backend,
+        use_vm=use_vm,
     )
-    result = await engine.run(value)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_lookup_on_static_dict(engine):
-    @cs.task
-    def provide_dict():
-        return {"a": {"b": 10}}
+    return app.run()
 
-    source = provide_dict()
-    value = cs.lookup(source=source, key="a.b")
 
-    result = await engine.run(value)
+def visualize(target: Any) -> str:
+    app = CascadeApp(target=target)
+    return app.visualize()
+
+
+def dry_run(target: Any) -> None:
+    app = CascadeApp(target=target)
+    app.dry_run()
 ~~~~~
+
+#### Acts 4: 重构 `subflow` 任务以使用工厂
+
+`subflow` 任务现在也将使用中央工厂，确保子流程的引擎与主流程的引擎具有相同的架构正确性。
+
+~~~~~act
+write_file
+packages/cascade-library/src/cascade/providers/subflow.py
+~~~~~
+~~~~~python
+import importlib.util
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from cascade.spec.dsl.task import task
+from cascade.spec.runtime.interfaces import LazyFactory, Provider
+from cascade.runtime.host import create_engine
+
+
+class SubflowProvider(Provider):
+    name = "subflow"
+
+    def create_factory(self) -> LazyFactory:
+        return _subflow_task
+
+
+@task(name="subflow")
+async def _subflow_task(
+    path: str, target: str, params: Optional[Dict[str, Any]] = None
+) -> Any:
+    # 1. Validate and Load Module
+    file_path = Path(path).resolve()
+    if not file_path.exists():
+        raise FileNotFoundError(f"Subflow file not found: {file_path}")
+
+    module_name = file_path.stem
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load spec for subflow file: {file_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as e:
+        raise RuntimeError(
+            f"Error executing subflow definition file '{file_path}': {e}"
+        )
+
+    # 2. Extract Target
+    target_obj = getattr(module, target, None)
+    if target_obj is None:
+        raise ValueError(f"Target '{target}' not found in {file_path}")
+
+    # 3. Create Isolated Engine using the central factory
+    # Note: The subflow runs in isolation. It does not share the parent's
+    # resource manager or event bus. Errors will propagate as exceptions.
+    sub_engine = create_engine()
+
+    # 4. Execute
+    return await sub_engine.run(target_obj, params=params)
+~~~~~
+
+#### Acts 5: 简化 `conftest.py` Fixture
+
+最后，测试的 `engine_factory` 将成为新工厂的一个薄封装。
 
 ~~~~~act
 patch_file
-packages/cascade-library/tests/integration/test_config.py
+conftest.py
 ~~~~~
 ~~~~~python.old
-@pytest.mark.asyncio
-async def test_lookup_missing_key_raises_error():
-    @cs.task
-    def provide_dict():
-        return {"a": 1}
+@pytest.fixture
+def engine_factory() -> Callable[..., Engine]:
+    """
+    Provides a factory function to create a Cascade Engine instance.
 
-    source = provide_dict()
-    # "b" does not exist in the root dict, should raise KeyError
-    missing_value = cs.lookup(source=source, key="b")
+    This factory encapsulates the logic for selecting a default execution strategy
+    and assembling all required services, decoupling the core Engine
+    from specific strategy implementations and service construction.
+    """
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    with pytest.raises(KeyError):
-        await engine.run(missing_value)
+    def _factory(
+        *,  # Force keyword arguments for clarity
+        solver: Optional[Solver] = None,
+        executor: Optional[Executor] = None,
+        bus: Optional[EventBus] = None,
+        strategy: Optional[ExecutionStrategy] = None,
+        resource_manager: Optional[ResourceManager] = None,
+        constraint_manager: Optional[ConstraintManager] = None,
+        **kwargs,  # Pass-through for other Engine args like connector, system_resources etc.
+    ) -> Engine:
+        # 1. Provide sane defaults for core components
+        _solver = solver or NativeSolver()
+        _executor = executor or LocalExecutor()
+        _bus = bus or EventBus()
+
+        # 2. Create and configure shared services
+        _resource_manager = resource_manager or ResourceManager(
+            capacity=kwargs.get("system_resources")
+        )
+        _constraint_manager = constraint_manager or ConstraintManager(_resource_manager)
+        _wakeup_event = asyncio.Event()
+
+        # Register default handlers if the manager is newly created
+        if not constraint_manager:
+            _constraint_manager.register_handler(PauseConstraintHandler())
+            _constraint_manager.register_handler(ConcurrencyConstraintHandler())
+            _constraint_manager.register_handler(RateLimitConstraintHandler())
+
+        _constraint_manager.set_wakeup_callback(_wakeup_event.set)
+
+        # 3. Create strategy if not provided
+        if strategy is None:
+            backend_choice = os.getenv("CASCADE_BACKEND", "graph").lower()
+            if backend_choice == "vm":
+                strategy = VMExecutionStrategy(executor=_executor, bus=_bus)
+            else:  # Default to 'graph'
+                resource_container = ResourceContainer(_bus)
+                node_processor = NodeProcessor(
+                    executor=_executor,
+                    bus=_bus,
+                    resource_manager=_resource_manager,
+                    constraint_manager=_constraint_manager,
+                    solver=_solver,
+                )
+                strategy = GraphExecutionStrategy(
+                    solver=_solver,
+                    node_processor=node_processor,
+                    resource_container=resource_container,
+                    constraint_manager=_constraint_manager,
+                    bus=_bus,
+                    wakeup_event=_wakeup_event,
+                )
+
+        # 4. Construct Engine with all components
+        return Engine(
+            solver=_solver,
+            executor=_executor,
+            bus=_bus,
+            strategy=strategy,
+            resource_manager=_resource_manager,
+            constraint_manager=_constraint_manager,
+            wakeup_event=_wakeup_event,
+            **kwargs,
+        )
+
+    return _factory
 ~~~~~
 ~~~~~python.new
-@pytest.mark.asyncio
-async def test_lookup_missing_key_raises_error(engine):
-    @cs.task
-    def provide_dict():
-        return {"a": 1}
-
-    source = provide_dict()
-    # "b" does not exist in the root dict, should raise KeyError
-    missing_value = cs.lookup(source=source, key="b")
-
-    with pytest.raises(KeyError):
-        await engine.run(missing_value)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_config.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_lookup_invalid_path_raises_type_error():
-    @cs.task
-    def provide_dict():
-        return {"a": 1}
-
-    source = provide_dict()
-    # "a" resolves to 1 (int), which is not a container.
-    # Attempting to look up "nonexistent" on it should raise TypeError.
-    invalid_lookup = cs.lookup(source=source, key="a.nonexistent")
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    with pytest.raises(TypeError, match="Cannot access segment"):
-        await engine.run(invalid_lookup)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_lookup_invalid_path_raises_type_error(engine):
-    @cs.task
-    def provide_dict():
-        return {"a": 1}
-
-    source = provide_dict()
-    # "a" resolves to 1 (int), which is not a container.
-    # Attempting to look up "nonexistent" on it should raise TypeError.
-    invalid_lookup = cs.lookup(source=source, key="a.nonexistent")
-
-    with pytest.raises(TypeError, match="Cannot access segment"):
-        await engine.run(invalid_lookup)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_file.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_file_read_text_success(dummy_file):
-    read_result = cs.read.text(dummy_file)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(read_result)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_file_read_text_success(engine, dummy_file):
-    read_result = cs.read.text(dummy_file)
-
-    result = await engine.run(read_result)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_file.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_file_read_bytes_success(binary_file):
-    read_result = cs.read.bytes(binary_file)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(read_result)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_file_read_bytes_success(engine, binary_file):
-    read_result = cs.read.bytes(binary_file)
-
-    result = await engine.run(read_result)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_file.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_file_exists_true(dummy_file):
-    exist_result = cs.fs.exists(dummy_file)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(exist_result)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_file_exists_true(engine, dummy_file):
-    exist_result = cs.fs.exists(dummy_file)
-
-    result = await engine.run(exist_result)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_file.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_file_exists_false(tmp_path):
-    path = str(tmp_path / "non_existent.txt")
-    exist_result = cs.fs.exists(path)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(exist_result)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_file_exists_false(engine, tmp_path):
-    path = str(tmp_path / "non_existent.txt")
-    exist_result = cs.fs.exists(path)
-
-    result = await engine.run(exist_result)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_file.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_file_json_parsing_composition(dummy_file):
-    @cs.task
-    def parse_json(text: str):
-        return json.loads(text)
-
-    # Chain the new atomic providers
-    text_content = cs.read.text(dummy_file)
-    json_result = parse_json(text_content)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(json_result)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_file_json_parsing_composition(engine, dummy_file):
-    @cs.task
-    def parse_json(text: str):
-        return json.loads(text)
-
-    # Chain the new atomic providers
-    text_content = cs.read.text(dummy_file)
-    json_result = parse_json(text_content)
-
-    result = await engine.run(json_result)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_file.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_file_dynamic_path_dependency(tmp_path):
-    @cs.task
-    def generate_path() -> str:
-        p = tmp_path / "dynamic.txt"
-        p.write_text("dynamic content")
-        return str(p)
-
-    path_result = generate_path()
-    read_result = cs.read.text(path_result)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(read_result)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_file_dynamic_path_dependency(engine, tmp_path):
-    @cs.task
-    def generate_path() -> str:
-        p = tmp_path / "dynamic.txt"
-        p.write_text("dynamic content")
-        return str(p)
-
-    path_result = generate_path()
-    read_result = cs.read.text(path_result)
-
-    result = await engine.run(read_result)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_helpers.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_dict_provider():
-    @cs.task
-    def get_val():
-        return "dynamic_value"
-
-    workflow = cs.dict(static_key="static", dynamic_key=get_val())
-
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
-    result = await engine.run(workflow)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_dict_provider(engine):
-    @cs.task
-    def get_val():
-        return "dynamic_value"
-
-    workflow = cs.dict(static_key="static", dynamic_key=get_val())
-
-    result = await engine.run(workflow)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_helpers.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_format_provider():
-    @cs.task
-    def get_name():
-        return "World"
-
-    workflow = cs.format("Hello, {name}!", name=get_name())
-
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
-    result = await engine.run(workflow)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_format_provider(engine):
-    @cs.task
-    def get_name():
-        return "World"
-
-    workflow = cs.format("Hello, {name}!", name=get_name())
-
-    result = await engine.run(workflow)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_helpers.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_format_provider_with_positional_args():
-    @cs.task
-    def get_first():
-        return "first"
-
-    @cs.task
-    def get_second():
-        return "second"
-
-    workflow = cs.format("Positional: {}, {}", get_first(), get_second())
-
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
-    result = await engine.run(workflow)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_format_provider_with_positional_args(engine):
-    @cs.task
-    def get_first():
-        return "first"
-
-    @cs.task
-    def get_second():
-        return "second"
-
-    workflow = cs.format("Positional: {}, {}", get_first(), get_second())
-
-    result = await engine.run(workflow)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_http.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_http_get_success(aiohttp_client):
-    async def handler(request):
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_http_get_success(engine, aiohttp_client):
-    async def handler(request):
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_http.py
-~~~~~
-~~~~~python.old
-    final_result = process_user(api_response)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(final_result)
-    assert result == "cascade"
-~~~~~
-~~~~~python.new
-    final_result = process_user(api_response)
-
-    result = await engine.run(final_result)
-    assert result == "cascade"
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_http.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_http_post_success(aiohttp_client):
-    async def handler(request):
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_http_post_success(engine, aiohttp_client):
-    async def handler(request):
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_http.py
-~~~~~
-~~~~~python.old
-    final_result = check_response(api_response)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(final_result)
-    assert result["received"] == 42
-~~~~~
-~~~~~python.new
-    final_result = check_response(api_response)
-
-    result = await engine.run(final_result)
-    assert result["received"] == 42
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_http.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_http_with_template(aiohttp_client):
-    async def user_handler(request):
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_http_with_template(engine, aiohttp_client):
-    async def user_handler(request):
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_http.py
-~~~~~
-~~~~~python.old
-    final_status = get_status(api_response)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(final_status, params={"username": "dynamic_user"})
-    assert result == "ok"
-~~~~~
-~~~~~python.new
-    final_status = get_status(api_response)
-
-    result = await engine.run(final_status, params={"username": "dynamic_user"})
-    assert result == "ok"
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_io.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_read_text_provider(test_file):
-    test_file.write_text("hello cascade")
-
-    # cs.read.text matches "read.text" provider
-    lazy = cs.read.text(str(test_file))
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    result = await engine.run(lazy)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_read_text_provider(engine, test_file):
-    test_file.write_text("hello cascade")
-
-    # cs.read.text matches "read.text" provider
-    lazy = cs.read.text(str(test_file))
-
-    result = await engine.run(lazy)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_io.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_write_text_provider(test_file):
-    # cs.write.text matches "write.text" provider
-    lazy = cs.write.text(str(test_file), "written by cascade")
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    await engine.run(lazy)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_write_text_provider(engine, test_file):
-    # cs.write.text matches "write.text" provider
-    lazy = cs.write.text(str(test_file), "written by cascade")
-
-    await engine.run(lazy)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_io.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_fs_exists_provider(test_file):
-    # cs.fs.exists matches "fs.exists" provider
-    lazy_true = cs.fs.exists(str(test_file))
-    lazy_false = cs.fs.exists(str(test_file) + ".missing")
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-
-    test_file.touch()
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_fs_exists_provider(engine, test_file):
-    # cs.fs.exists matches "fs.exists" provider
-    lazy_true = cs.fs.exists(str(test_file))
-    lazy_false = cs.fs.exists(str(test_file) + ".missing")
-
-    test_file.touch()
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_s3.py
-~~~~~
-~~~~~python.old
-    write_op = cs.io.s3.write_text(bucket=bucket_name, key=key, content=content)
-    read_op = cs.io.s3.read_text(bucket=bucket_name, key=key)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-
-    # 3. Execute Write
-    await engine.run(write_op)
-~~~~~
-~~~~~python.new
-    write_op = cs.io.s3.write_text(bucket=bucket_name, key=key, content=content)
-    read_op = cs.io.s3.read_text(bucket=bucket_name, key=key)
-
-    # 3. Execute Write
-    await engine.run(write_op)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_s3.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_s3_write_read_text(s3_mock):
-    import aiobotocore.session
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_s3_write_read_text(engine, s3_mock):
-    import aiobotocore.session
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_s3.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_s3_write_read_bytes(s3_mock):
-    import aiobotocore.session
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_s3_write_read_bytes(engine, s3_mock):
-    import aiobotocore.session
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_s3.py
-~~~~~
-~~~~~python.old
-    write_op = cs.io.s3.write_bytes(bucket=bucket_name, key=key, content=content)
-    read_op = cs.io.s3.read_bytes(bucket=bucket_name, key=key)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-
-    # 2. Execute Write
-    await engine.run(write_op)
-~~~~~
-~~~~~python.new
-    write_op = cs.io.s3.write_bytes(bucket=bucket_name, key=key, content=content)
-    read_op = cs.io.s3.read_bytes(bucket=bucket_name, key=key)
-
-    # 2. Execute Write
-    await engine.run(write_op)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_sql.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_sql_missing_resource():
-    target = cs.sql("SELECT 1", conn=cs.inject("non_existent_db"))
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-    # We don't register anything
-
-    # With the new scanning logic, it should fail at setup time!
-    with pytest.raises(NameError, match="not registered"):
-        await engine.run(target)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_sql_missing_resource(engine):
-    target = cs.sql("SELECT 1", conn=cs.inject("non_existent_db"))
-
-    # We don't register anything
-
-    # With the new scanning logic, it should fail at setup time!
-    with pytest.raises(NameError, match="not registered"):
-        await engine.run(target)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_subflow.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_subflow_execution(subflow_file):
-    # Define a parent workflow that calls the subflow
-    # subflow is loaded via provider registry
-    sub_result = cs.subflow(
-        path=subflow_file, target="result_node", params={"multiplier": 5}
-    )
-
-    @cs.task
-    def finalize(val):
-        return f"Final: {val}"
-
-    workflow = finalize(sub_result)
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-
-    # 10 * 5 = 50 -> "Final: 50"
-    result = await engine.run(workflow)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_subflow_execution(engine, subflow_file):
-    # Define a parent workflow that calls the subflow
-    # subflow is loaded via provider registry
-    sub_result = cs.subflow(
-        path=subflow_file, target="result_node", params={"multiplier": 5}
-    )
-
-    @cs.task
-    def finalize(val):
-        return f"Final: {val}"
-
-    workflow = finalize(sub_result)
-
-    # 10 * 5 = 50 -> "Final: 50"
-    result = await engine.run(workflow)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_subflow.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_subflow_file_not_found():
-    workflow = cs.subflow(path="non_existent.py", target="foo")
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-
-    with pytest.raises(FileNotFoundError):
-        await engine.run(workflow)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_subflow_file_not_found(engine):
-    workflow = cs.subflow(path="non_existent.py", target="foo")
-
-    with pytest.raises(FileNotFoundError):
-        await engine.run(workflow)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-library/tests/integration/test_subflow.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-async def test_subflow_target_not_found(subflow_file):
-    workflow = cs.subflow(path=subflow_file, target="missing_var")
-
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
-
-    with pytest.raises(ValueError, match="Target 'missing_var' not found"):
-        await engine.run(workflow)
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_subflow_target_not_found(engine, subflow_file):
-    workflow = cs.subflow(path=subflow_file, target="missing_var")
-
-    with pytest.raises(ValueError, match="Target 'missing_var' not found"):
-        await engine.run(workflow)
+@pytest.fixture
+def engine_factory() -> Callable[..., Engine]:
+    """
+    Provides a factory function to create a Cascade Engine instance for tests.
+    This is a thin wrapper around the production `create_engine` factory,
+    allowing tests to easily override components.
+    """
+    from cascade.runtime.host import create_engine
+
+    def _factory(**kwargs) -> Engine:
+        # The create_engine function already handles default component creation.
+        # This fixture simply acts as a convenient entry point for pytest.
+        return create_engine(**kwargs)
+
+    return _factory
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了对 `cascade-library` 集成测试和 `subflow` 生产代码的修正。现在，请再次运行测试套件。所有的 `TypeError` 应该都已经消失。如果还有遗漏的直接调用 `Engine()` 的地方，它们会被报错暴露出来，我将继续跟进修复。
+我们已经完成了对 `Engine` 实例化逻辑的终极重构，现在有了一个单一、权威的工厂函数。所有已知的消费者都已被更新。我将再次运行完整的测试套件。这次，所有与 `Engine` 实例化相关的 `TypeError` 都应该被彻底解决。

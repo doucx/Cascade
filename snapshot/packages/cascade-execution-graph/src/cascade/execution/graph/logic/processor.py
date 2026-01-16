@@ -11,7 +11,7 @@ from cascade.spec.runtime.interfaces import Executor, StateBackend, Solver
 from cascade.bus.core import EventBus
 from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints.manager import ConstraintManager
-from cascade.execution.graph.logic.resolvers import ArgumentResolver, ConstraintResolver
+from .resolvers import ArgumentResolver, ConstraintResolver
 from cascade.spec import EventState
 from cascade.bus.events import (
     TaskExecutionStarted,

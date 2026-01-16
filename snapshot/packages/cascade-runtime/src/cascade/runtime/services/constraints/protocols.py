@@ -4,7 +4,7 @@ from cascade.execution.graph.model.model import Node
 from cascade.spec.dsl.constraint import GlobalConstraint
 
 if TYPE_CHECKING:
-    from cascade.runtime.services.constraints.manager import ConstraintManager
+    from .manager import ConstraintManager
 
 
 class ConstraintHandler(Protocol):

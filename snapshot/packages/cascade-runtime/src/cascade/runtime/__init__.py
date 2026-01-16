@@ -1,6 +1,6 @@
 from cascade.bus.core import EventBus
-from cascade.runtime.host.instance import Engine
-from cascade.runtime.services.observability.subscribers import (
+from .host.instance import Engine
+from .services.observability.subscribers import (
     HumanReadableLogSubscriber,
     TelemetrySubscriber,
 )
@@ -17,7 +17,7 @@ from cascade.bus.events import (
     ConnectorDisconnected,
 )
 from cascade.execution.graph.errors import DependencyMissingError
-from cascade.runtime.services.resources.manager import ResourceManager
+from .services.resources.manager import ResourceManager
 from cascade.spec.runtime.interfaces import ExecutionPlan, Solver, Executor, CachePolicy
 
 __all__ = [

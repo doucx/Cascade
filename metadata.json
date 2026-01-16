@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(sdk): 通过提取核心应用逻辑到 cascade.app 解耦循环依赖", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768535506.4167428, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 解耦 cascade-runtime 及其子包的循环依赖", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768535678.3010786, "duration_ms": 0}}

@@ -2,8 +2,8 @@ import time
 from typing import Dict, Any
 from cascade.spec.dsl.constraint import GlobalConstraint
 from cascade.execution.graph.model.model import Node
-from cascade.runtime.services.constraints.protocols import ConstraintHandler
-from cascade.runtime.services.resources.manager import ResourceManager
+from .protocols import ConstraintHandler
+from ..resources.manager import ResourceManager
 
 
 class ConstraintManager:

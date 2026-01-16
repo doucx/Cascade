@@ -10,7 +10,7 @@ from cascade.vm.linker import Linker, LinkerError
 # Standard library function imports for manual wiring (simulating current behavior)
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
+from cascade.std.system.observer import standard_observer
 from cascade.std.triad.dispatcher import standard_dispatcher
 
 

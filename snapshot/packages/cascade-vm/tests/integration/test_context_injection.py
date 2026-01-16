@@ -17,7 +17,7 @@ from cascade.bus.events import (
 from cascade.test_utils import EventDrivenRunner
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
+from cascade.std.system.observer import standard_observer
 from cascade.std.triad.dispatcher import standard_dispatcher
 from cascade.vm.registry import CodeRegistry
 from cascade.reflection import PhysicalIdGenerator

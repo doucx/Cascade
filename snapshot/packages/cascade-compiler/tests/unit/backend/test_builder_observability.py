@@ -1,7 +1,7 @@
 import pytest
 from cascade.spec.ir.graph import GraphIR
 from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.triad import ObservabilityNode
+from cascade.spec.physical.system_nodes import ObservabilityNode
 from cascade.compiler.backend.builder import Builder
 
 

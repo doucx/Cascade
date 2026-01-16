@@ -9,9 +9,9 @@ from cascade.bus.events import Event, TaskExecutionFinished
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.test_utils import EventDrivenRunner
-from cascade.spec.physical.triad import ObservabilityNode
+from cascade.spec.physical.system_nodes import ObservabilityNode
 from cascade.spec.physical.object import Ref
-from cascade.std.triad.observer import standard_observer
+from cascade.std.system.observer import standard_observer
 from cascade.vm.registry import CodeRegistry
 
 

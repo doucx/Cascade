@@ -3,7 +3,7 @@ import pytest
 from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.triad import StainNode
+from cascade.spec.physical.system_nodes import StainNode
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor

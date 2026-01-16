@@ -4,8 +4,8 @@ from typing import List, Dict, Tuple, Optional, Any
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.kernel import PhysicsKernel
+from .memory import VolatileMemory
+from .kernel import PhysicsKernel
 
 logger = logging.getLogger(__name__)
 

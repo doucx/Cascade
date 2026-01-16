@@ -250,3 +250,37 @@ class CascadeApp:
                 current_index += 1
 
         local_bus.publish(PlanAnalysisFinished(run_id=run_id, total_steps=total_steps))
+
+
+# --- Global Functions ---
+
+
+def run(
+    target: Union["LazyResult", List[Any], tuple[Any, ...]],
+    params: Optional[Dict[str, Any]] = None,
+    system_resources: Optional[Dict[str, Any]] = None,
+    log_level: str = "INFO",
+    log_format: str = "human",
+    connector: Optional["Connector"] = None,
+    state_backend: Union[str, Callable[[str], "StateBackend"], None] = None,
+) -> Any:
+    app = CascadeApp(
+        target=target,
+        params=params,
+        system_resources=system_resources,
+        log_level=log_level,
+        log_format=log_format,
+        connector=connector,
+        state_backend=state_backend,
+    )
+    return app.run()
+
+
+def visualize(target: Any) -> str:
+    app = CascadeApp(target=target)
+    return app.visualize()
+
+
+def dry_run(target: Any) -> None:
+    app = CascadeApp(target=target)
+    app.dry_run()

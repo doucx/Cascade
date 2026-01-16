@@ -2,7 +2,8 @@
   "fingerprints": {
     "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus": {
       "baseline_code_signature_text": "class EventBus:",
-      "baseline_code_structure_hash": "455856406d09ec8e0013faa4eeae6ba1eea073bd305bba1e9d6e6c88375888a1"
+      "baseline_code_structure_hash": "455856406d09ec8e0013faa4eeae6ba1eea073bd305bba1e9d6e6c88375888a1",
+      "baseline_yaml_content_hash": "a56370176a45b86eba0f382f4f7c28a3354cd1d10529ab88a4b5fd87303d4419"
     },
     "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus.__init__": {
       "baseline_code_signature_text": "def __init__(self):",
@@ -10,27 +11,33 @@
     },
     "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus.publish": {
       "baseline_code_signature_text": "def publish(self, event: Event):",
-      "baseline_code_structure_hash": "8af1449f40bb54d7c3cb3e911e803addabc3e4083a5af32083200df7b936dd74"
+      "baseline_code_structure_hash": "8af1449f40bb54d7c3cb3e911e803addabc3e4083a5af32083200df7b936dd74",
+      "baseline_yaml_content_hash": "94dc4e13a99c2236e959a2a65ba8558601654c02b3ba02b48ed1404701be4d4f"
     },
     "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus.publish_ir": {
       "baseline_code_signature_text": "def publish_ir(self, ir: EventIR):",
-      "baseline_code_structure_hash": "3d3cd143985be3514e8e017869d4ca1d2cc3ebdc4559c2a3dbe81931f1c9f979"
+      "baseline_code_structure_hash": "3d3cd143985be3514e8e017869d4ca1d2cc3ebdc4559c2a3dbe81931f1c9f979",
+      "baseline_yaml_content_hash": "edec4d588dbf6c494e4f7b1695b266ebe1dcbe46abb0527e2bb69287de455a5a"
     },
     "py://packages/cascade-bus/src/cascade/bus/core.py#EventBus.subscribe": {
       "baseline_code_signature_text": "def subscribe(self, event_type: Type[Event], handler: Handler):",
-      "baseline_code_structure_hash": "d7409aa8a0504d6bccbdca20aadce93d300ca8aec9ad28b54d98501e21b80772"
+      "baseline_code_structure_hash": "d7409aa8a0504d6bccbdca20aadce93d300ca8aec9ad28b54d98501e21b80772",
+      "baseline_yaml_content_hash": "9ea533fdb9b37a077597668d665c62a09db72575f18e932828ea1eedcf67ab5b"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#ConnectorConnected": {
       "baseline_code_signature_text": "class ConnectorConnected(Event):",
-      "baseline_code_structure_hash": "4e21923fdff2adc5352bce5baa4a16b93f381b302a8557ea68bdc017c3d9aa10"
+      "baseline_code_structure_hash": "4e21923fdff2adc5352bce5baa4a16b93f381b302a8557ea68bdc017c3d9aa10",
+      "baseline_yaml_content_hash": "baf5295d3a43bf235c816fdbf1f5dde56b23b79df6651558aebbbb53c41e420f"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#ConnectorDisconnected": {
       "baseline_code_signature_text": "class ConnectorDisconnected(Event):",
-      "baseline_code_structure_hash": "480a1ab7cb99c0d02120e157ac0850e0006c3853cb41c995be72aae4070955c5"
+      "baseline_code_structure_hash": "480a1ab7cb99c0d02120e157ac0850e0006c3853cb41c995be72aae4070955c5",
+      "baseline_yaml_content_hash": "507e92c9fb5189ce7bb94b9674af819930906fd8cc772325c5ce3757fb7c9063"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#Event": {
       "baseline_code_signature_text": "class Event:",
-      "baseline_code_structure_hash": "f6e849b1f78865d6819f3b3b35b4d21a3ba525fdf871a40c1d3239c0174ca29a"
+      "baseline_code_structure_hash": "f6e849b1f78865d6819f3b3b35b4d21a3ba525fdf871a40c1d3239c0174ca29a",
+      "baseline_yaml_content_hash": "6e9f52dd46e13e78c60c6c179a990f00185ba4006a6dec918cadf8538236c191"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#Event.from_ir": {
       "baseline_code_signature_text": "def from_ir(ir: EventIR) -> Event:",
@@ -62,51 +69,63 @@
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#ResourceAcquired": {
       "baseline_code_signature_text": "class ResourceAcquired(ResourceEvent):",
-      "baseline_code_structure_hash": "7cb05c46241ae53051121f4ea85182bea33cdc6e6f9b27f92ce0b22a3beded97"
+      "baseline_code_structure_hash": "7cb05c46241ae53051121f4ea85182bea33cdc6e6f9b27f92ce0b22a3beded97",
+      "baseline_yaml_content_hash": "3cfd4a7d88debd0aea6bbcdfaa80f553221bf811b237fd6040a9e21befeb9db6"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#ResourceEvent": {
       "baseline_code_signature_text": "class ResourceEvent(Event):",
-      "baseline_code_structure_hash": "142864708267fd5987f27167b124cd04ffc6a65f78c716af83f05a02f512b7b9"
+      "baseline_code_structure_hash": "142864708267fd5987f27167b124cd04ffc6a65f78c716af83f05a02f512b7b9",
+      "baseline_yaml_content_hash": "0ea27c951428c981e50e9fd97e6837260c7c307c5eb7effe5d4ef1593c0f377c"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#ResourceReleased": {
       "baseline_code_signature_text": "class ResourceReleased(ResourceEvent):",
-      "baseline_code_structure_hash": "364e8776cb00d2a21a1e6bfa1ffa02355793da141f4d5da8ac0ad5da405b2a95"
+      "baseline_code_structure_hash": "364e8776cb00d2a21a1e6bfa1ffa02355793da141f4d5da8ac0ad5da405b2a95",
+      "baseline_yaml_content_hash": "6cb2fda6ad00dac059913fd0d757c19d770493079b30e694779a2c14102e44a3"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#RunFinished": {
       "baseline_code_signature_text": "class RunFinished(Event):",
-      "baseline_code_structure_hash": "3317af5980a1b87f4e24a97b4f7b4a94e6c773563375d96a61a14056e5a396a1"
+      "baseline_code_structure_hash": "3317af5980a1b87f4e24a97b4f7b4a94e6c773563375d96a61a14056e5a396a1",
+      "baseline_yaml_content_hash": "5fb7a92927fea0e4854f5dc24b82d243ea108ad75998a391b10fd372ad6d042b"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#RunStarted": {
       "baseline_code_signature_text": "class RunStarted(Event):",
-      "baseline_code_structure_hash": "658ac67754d46a14b2afa704f341cfa8611a0732c922bf2d3a527767c8e87333"
+      "baseline_code_structure_hash": "658ac67754d46a14b2afa704f341cfa8611a0732c922bf2d3a527767c8e87333",
+      "baseline_yaml_content_hash": "c9910f746c11abf8b83bb4058af6f56cda3053137d9a8752ef012cac4db43ba7"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#StaticAnalysisWarning": {
       "baseline_code_signature_text": "class StaticAnalysisWarning(TaskEvent):",
-      "baseline_code_structure_hash": "1d77c7ff4dcbc4f2c81038628085c0a84b449de7567a25025ba18ffb28f1398c"
+      "baseline_code_structure_hash": "1d77c7ff4dcbc4f2c81038628085c0a84b449de7567a25025ba18ffb28f1398c",
+      "baseline_yaml_content_hash": "8e61b8eb1638f6b4ff951618febdacb05df559d10c3c5517f85f644a849021be"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#TaskBlocked": {
       "baseline_code_signature_text": "class TaskBlocked(TaskEvent):",
-      "baseline_code_structure_hash": "2954b7d53b883741ebe545ab0128aca05e4b303d0bf9e3aeaecf3c764cfa2c36"
+      "baseline_code_structure_hash": "2954b7d53b883741ebe545ab0128aca05e4b303d0bf9e3aeaecf3c764cfa2c36",
+      "baseline_yaml_content_hash": "1f1e8b4ff7dc9b04cd3cd4b4eef396c8d4ac3aef0264c01d948fb7453961ee1f"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#TaskEvent": {
       "baseline_code_signature_text": "class TaskEvent(Event):",
-      "baseline_code_structure_hash": "b1a26455eef37111f3c15eee928f9e41a6b510a11b442006e67b633399b663f6"
+      "baseline_code_structure_hash": "b1a26455eef37111f3c15eee928f9e41a6b510a11b442006e67b633399b663f6",
+      "baseline_yaml_content_hash": "1596e20b44d5596f246aa3c24ac3b63ffc3a510cec4ea15f1a14d1b0aecea9de"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#TaskExecutionFinished": {
       "baseline_code_signature_text": "class TaskExecutionFinished(TaskEvent):",
-      "baseline_code_structure_hash": "2978ae5a3a451614bdc119cc08685827e21d9a6ea1ca2c207e7fd809666b3d0b"
+      "baseline_code_structure_hash": "2978ae5a3a451614bdc119cc08685827e21d9a6ea1ca2c207e7fd809666b3d0b",
+      "baseline_yaml_content_hash": "62c4e75322153de3d5921712c6a7f0ea7edf20f9da9825b9b9fdc579a2fd51c4"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#TaskExecutionStarted": {
       "baseline_code_signature_text": "class TaskExecutionStarted(TaskEvent):",
-      "baseline_code_structure_hash": "8de71bd9ef848699ee388d68c086271837ef85ff770d6dff762b16b7906a1007"
+      "baseline_code_structure_hash": "8de71bd9ef848699ee388d68c086271837ef85ff770d6dff762b16b7906a1007",
+      "baseline_yaml_content_hash": "9eb006c1d65332ad0dfa77920e32f359cde28552f3362bd5c26fccc95eca7750"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#TaskRetrying": {
       "baseline_code_signature_text": "class TaskRetrying(TaskEvent):",
-      "baseline_code_structure_hash": "50b6299cac3de80940e3bcc9d446e4d9962ac2fffaf6997bcc3dba7ccabac9ba"
+      "baseline_code_structure_hash": "50b6299cac3de80940e3bcc9d446e4d9962ac2fffaf6997bcc3dba7ccabac9ba",
+      "baseline_yaml_content_hash": "a2a28968a7723776924ac68d3a35e3f8668ee7f6c96a835c4ff8dcd0bbc3c03b"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#TaskSkipped": {
       "baseline_code_signature_text": "class TaskSkipped(TaskEvent):",
-      "baseline_code_structure_hash": "bb5912d354376482fceb1f6a615340629078837f6ffbc59a07b8259f8ba4fed5"
+      "baseline_code_structure_hash": "bb5912d354376482fceb1f6a615340629078837f6ffbc59a07b8259f8ba4fed5",
+      "baseline_yaml_content_hash": "2f635112e36d2f9be88edde5698b88e7a8ed45bf1aecb858caf9e6dfb4b62248"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#ToolEvent": {
       "baseline_code_signature_text": "class ToolEvent(Event):",
@@ -114,7 +133,8 @@
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#_from_ir": {
       "baseline_code_signature_text": "def _from_ir(ir: EventIR) -> Event:",
-      "baseline_code_structure_hash": "696779d8a5b7da5c913c31c0b8a79ac20a19b13354f0d25fd1587604ce16376e"
+      "baseline_code_structure_hash": "696779d8a5b7da5c913c31c0b8a79ac20a19b13354f0d25fd1587604ce16376e",
+      "baseline_yaml_content_hash": "f25ae3c101e3f48474253115bdcfa9a2880c99d623b14804c525a346d4be0a8c"
     },
     "py://packages/cascade-bus/src/cascade/bus/events.py#_hydrate_lifecycle": {
       "baseline_code_signature_text": "def _hydrate_lifecycle(ir: EventIR, run_id: Optional[str], timestamp: float) -> TaskEvent:",

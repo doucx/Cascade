@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, List
 
-from cascade.spec.physical.topology import BipartiteGraph
+from .topology import BipartiteGraph
 
 # The SymbolTable defines the mapping between a physical node's ID
 # in the graph and the canonical hash of its executable code structure.

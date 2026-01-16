@@ -3,8 +3,8 @@ from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.std.specs import EgressSpec
 from cascade.spec.physical.constants import NodePrefix
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.expansion.context import ExpansionContext
+from ...expander import SubGraph
+from ..context import ExpansionContext
 from cascade.spec.compiler.interfaces import ExpansionPolicy
 
 

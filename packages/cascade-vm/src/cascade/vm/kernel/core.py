@@ -2,7 +2,7 @@ import logging
 from typing import Callable, Dict
 
 from cascade.spec.physical.nodes import PhysicsFuncNode, Token
-from cascade.vm.resource_registry import ResourceRegistry
+from ..resource_registry import ResourceRegistry
 
 logger = logging.getLogger(__name__)
 

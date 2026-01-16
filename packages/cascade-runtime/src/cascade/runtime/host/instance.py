@@ -19,16 +19,16 @@ from cascade.bus.events import (
 )
 from cascade.spec.runtime.interfaces import Solver, Executor, StateBackend, Connector
 from cascade.spec.runtime.storage import ObjectStore
-from cascade.runtime.storage import InMemoryObjectStore
-from cascade.runtime.services.resources.manager import ResourceManager
-from cascade.runtime.services.constraints import ConstraintManager
-from cascade.runtime.services.constraints.handlers import (
+from ..storage import InMemoryObjectStore
+from ..services.resources.manager import ResourceManager
+from ..services.constraints import ConstraintManager
+from ..services.constraints.handlers import (
     PauseConstraintHandler,
     ConcurrencyConstraintHandler,
     RateLimitConstraintHandler,
 )
-from cascade.runtime.io.state import InMemoryStateBackend
-from cascade.runtime.services.resources.container import ResourceContainer
+from ..io.state import InMemoryStateBackend
+from ..services.resources.container import ResourceContainer
 from cascade.spec.runtime import ExecutionContext
 from cascade.spec.runtime import ExecutionStrategy
 

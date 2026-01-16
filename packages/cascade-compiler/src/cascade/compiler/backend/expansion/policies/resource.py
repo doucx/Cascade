@@ -1,11 +1,11 @@
 from typing import Dict
 
 from cascade.spec.ir.graph import NodeIR
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.expansion.context import ExpansionContext
+from ...expander import SubGraph
+from ..context import ExpansionContext
 from cascade.spec.compiler.interfaces import ExpansionPolicy
-from cascade.compiler.backend.wiring.prism import ResourcePrism
-from cascade.compiler.backend.wiring.prisms.discrete import DiscreteResourcePrism
+from ...wiring.prism import ResourcePrism
+from ...wiring.prisms.discrete import DiscreteResourcePrism
 
 
 class ResourceExpansionPolicy(ExpansionPolicy):

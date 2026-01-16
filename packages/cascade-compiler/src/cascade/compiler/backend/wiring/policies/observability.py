@@ -4,9 +4,9 @@ from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.triad import ObservabilityNode
 from cascade.spec.physical.ports import PortRole, PortDef
 from cascade.std.specs import ObservabilitySpec, BleacherSpec, StainerSpec
-from cascade.compiler.backend.expander import SubGraph
+from ...expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
-from cascade.compiler.backend.wiring.context import WiringContext
+from ..context import WiringContext
 from cascade.spec.compiler.interfaces import WiringPolicy
 
 

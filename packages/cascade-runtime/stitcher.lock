@@ -241,24 +241,24 @@
       "baseline_code_structure_hash": "798635f534a638d16e1baa295c41527fbf3a8f2aaac56003878bada6628fb7fb"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#ConcurrencyConstraintHandler.append_requirements": {
-      "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "1c1b5d025ac6937774fc33a39f53c79432c771333281f2117b6458e5a79bfdd9"
+      "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "098a99992dc0dcc53f3be92de64ce56ca6f7d829c2663254d719b011a284375b"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#ConcurrencyConstraintHandler.check_permission": {
-      "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, manager: ConstraintManager) -> bool:",
-      "baseline_code_structure_hash": "8e660ecffbd8bd7a4c8a45b6ae22a462161fb1c545c2e5edbf56be6187755649"
+      "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, context: HandlerContext) -> bool:",
+      "baseline_code_structure_hash": "29110b0f7e9c52abf7944d87ec3cb3b75793da7bc7eea4c97ae7f20eaf4142d3"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#ConcurrencyConstraintHandler.handles_type": {
       "baseline_code_signature_text": "def handles_type(self) -> str:",
       "baseline_code_structure_hash": "743c22711ab27d46af11128528f8d6c98c8344ae0367289e2f6faacaf7c952f7"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#ConcurrencyConstraintHandler.on_constraint_add": {
-      "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "34291215f40644dd07dea6253e3e21bb31be5b8ec054586f8efb82323b23b094"
+      "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "04c30cb5fa80463bd07e1e93513de0ff85a641eef1f0976efa60a3bd8b648149"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#ConcurrencyConstraintHandler.on_constraint_remove": {
-      "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "96cb9a4ff14b3de9d6e193004cd638a1f842d384a49229a3b86f755e94f94503"
+      "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "caf76728bd147887d5710741e83105ad06b7c676140852d336e5b0166b0822e5"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#PauseConstraintHandler": {
       "baseline_code_signature_text": "class PauseConstraintHandler(ConstraintHandler):",
@@ -266,12 +266,12 @@
       "baseline_yaml_content_hash": "fa87b2661d14374b024434b715a921c7dfb8ce5e8f1b98395f497d6676909c53"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#PauseConstraintHandler.append_requirements": {
-      "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "1c1b5d025ac6937774fc33a39f53c79432c771333281f2117b6458e5a79bfdd9"
+      "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "098a99992dc0dcc53f3be92de64ce56ca6f7d829c2663254d719b011a284375b"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#PauseConstraintHandler.check_permission": {
-      "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, manager: ConstraintManager) -> bool:",
-      "baseline_code_structure_hash": "8e660ecffbd8bd7a4c8a45b6ae22a462161fb1c545c2e5edbf56be6187755649",
+      "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, context: HandlerContext) -> bool:",
+      "baseline_code_structure_hash": "29110b0f7e9c52abf7944d87ec3cb3b75793da7bc7eea4c97ae7f20eaf4142d3",
       "baseline_yaml_content_hash": "9789d965a14c727451c00414ddde1eeef8de1d53048f592d882c9a533ff931a0"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#PauseConstraintHandler.handles_type": {
@@ -279,12 +279,12 @@
       "baseline_code_structure_hash": "743c22711ab27d46af11128528f8d6c98c8344ae0367289e2f6faacaf7c952f7"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#PauseConstraintHandler.on_constraint_add": {
-      "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "34291215f40644dd07dea6253e3e21bb31be5b8ec054586f8efb82323b23b094"
+      "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "04c30cb5fa80463bd07e1e93513de0ff85a641eef1f0976efa60a3bd8b648149"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#PauseConstraintHandler.on_constraint_remove": {
-      "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "96cb9a4ff14b3de9d6e193004cd638a1f842d384a49229a3b86f755e94f94503"
+      "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "caf76728bd147887d5710741e83105ad06b7c676140852d336e5b0166b0822e5"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#RateLimitConstraintHandler": {
       "baseline_code_signature_text": "class RateLimitConstraintHandler(ConstraintHandler):",
@@ -300,12 +300,12 @@
       "baseline_code_structure_hash": "d2f09861af8c24bde417e3284695a13bc1fa71c0b4bccbb8d832f23b60e7c8a4"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#RateLimitConstraintHandler.append_requirements": {
-      "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "1c1b5d025ac6937774fc33a39f53c79432c771333281f2117b6458e5a79bfdd9"
+      "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "098a99992dc0dcc53f3be92de64ce56ca6f7d829c2663254d719b011a284375b"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#RateLimitConstraintHandler.check_permission": {
-      "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, manager: ConstraintManager) -> bool:",
-      "baseline_code_structure_hash": "8e660ecffbd8bd7a4c8a45b6ae22a462161fb1c545c2e5edbf56be6187755649"
+      "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, context: HandlerContext) -> bool:",
+      "baseline_code_structure_hash": "29110b0f7e9c52abf7944d87ec3cb3b75793da7bc7eea4c97ae7f20eaf4142d3"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#RateLimitConstraintHandler.handles_type": {
       "baseline_code_signature_text": "def handles_type(self) -> str:",
@@ -313,12 +313,12 @@
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#RateLimitConstraintHandler.limiter": {},
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#RateLimitConstraintHandler.on_constraint_add": {
-      "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "34291215f40644dd07dea6253e3e21bb31be5b8ec054586f8efb82323b23b094"
+      "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "04c30cb5fa80463bd07e1e93513de0ff85a641eef1f0976efa60a3bd8b648149"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#RateLimitConstraintHandler.on_constraint_remove": {
-      "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "96cb9a4ff14b3de9d6e193004cd638a1f842d384a49229a3b86f755e94f94503"
+      "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "caf76728bd147887d5710741e83105ad06b7c676140852d336e5b0166b0822e5"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/handlers.py#_matches": {
       "baseline_code_signature_text": "def _matches(scope: str, task_name: str) -> bool:",
@@ -331,8 +331,8 @@
       "baseline_yaml_content_hash": "4ea0cbd630900eb4e71edf44bf31a9e0e8d2b816b22432a9a40af5c915e05f4e"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/manager.py#ConstraintManager": {
-      "baseline_code_signature_text": "class ConstraintManager:",
-      "baseline_code_structure_hash": "6c4186f39afaf421411f8c7b83eb0915dbb2c55cbc36b292d028d284c4bdf8c7",
+      "baseline_code_signature_text": "class ConstraintManager(HandlerContext):",
+      "baseline_code_structure_hash": "6333acf2c10b7e895a56c5eb0db2838c6200c9c04f91448be07daa6a1791403b",
       "baseline_yaml_content_hash": "aa67ba6f9929cf012561a4e2d8766dc16032c52b670306a5779c95bfc8a16f5f"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/manager.py#ConstraintManager.__init__": {
@@ -361,6 +361,10 @@
       "baseline_code_signature_text": "def get_extra_requirements(self, task: Node) -> Dict[str, Any]:",
       "baseline_code_structure_hash": "b20492eb07a318f7cc8428c9fc5a95b7b30116b79196b3ae18e41a5029f9d496",
       "baseline_yaml_content_hash": "81d5f1c78647f6ec597aa3a7f7351ead8a6873f303d96ffb2e256f7ed3ad42b6"
+    },
+    "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/manager.py#ConstraintManager.get_resource_manager": {
+      "baseline_code_signature_text": "def get_resource_manager(self) -> ResourceManager:",
+      "baseline_code_structure_hash": "2eceaea7f42581a3111a9c19a88ebd44707bccee03f217d35e046de5cc8ef945"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/manager.py#ConstraintManager.register_handler": {
       "baseline_code_signature_text": "def register_handler(self, handler: ConstraintHandler) -> None:",
@@ -394,13 +398,13 @@
       "baseline_yaml_content_hash": "fa7fa27d7c78367da000d60c6c4ce28d78e4bcab0c43132622e0eeb9778de779"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/protocols.py#ConstraintHandler.append_requirements": {
-      "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "1c1b5d025ac6937774fc33a39f53c79432c771333281f2117b6458e5a79bfdd9",
+      "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "098a99992dc0dcc53f3be92de64ce56ca6f7d829c2663254d719b011a284375b",
       "baseline_yaml_content_hash": "c106e934ef076ed95764039e011b877b7c6a16317cd1ed2fdfce02f4b2a847af"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/protocols.py#ConstraintHandler.check_permission": {
-      "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, manager: ConstraintManager) -> bool:",
-      "baseline_code_structure_hash": "8e660ecffbd8bd7a4c8a45b6ae22a462161fb1c545c2e5edbf56be6187755649",
+      "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, context: HandlerContext) -> bool:",
+      "baseline_code_structure_hash": "29110b0f7e9c52abf7944d87ec3cb3b75793da7bc7eea4c97ae7f20eaf4142d3",
       "baseline_yaml_content_hash": "9bb28622b15b190a00bb3baa6a306efe6b4a45f59133dbfa35c00b6a9422a670"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/protocols.py#ConstraintHandler.handles_type": {
@@ -409,14 +413,27 @@
       "baseline_yaml_content_hash": "395c72c83b7c823b9143ad8672e626a0923cc6a55c6db17d34f05c049ff056a7"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/protocols.py#ConstraintHandler.on_constraint_add": {
-      "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "34291215f40644dd07dea6253e3e21bb31be5b8ec054586f8efb82323b23b094",
+      "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "04c30cb5fa80463bd07e1e93513de0ff85a641eef1f0976efa60a3bd8b648149",
       "baseline_yaml_content_hash": "6e41014acb00284abb6f61e1616493578a2d2c7cd9c03040661f360b2179f769"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/protocols.py#ConstraintHandler.on_constraint_remove": {
-      "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
-      "baseline_code_structure_hash": "96cb9a4ff14b3de9d6e193004cd638a1f842d384a49229a3b86f755e94f94503",
+      "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, context: HandlerContext) -> None:",
+      "baseline_code_structure_hash": "caf76728bd147887d5710741e83105ad06b7c676140852d336e5b0166b0822e5",
       "baseline_yaml_content_hash": "86e2c80af915ab8026bd10bd13e746a763240288938c83e6c95824bacb72940a"
+    },
+    "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/protocols.py#HandlerContext": {
+      "baseline_code_signature_text": "class HandlerContext(Protocol):",
+      "baseline_code_structure_hash": "c3740b5993c09de32ac054605b3c424a174b77039e1830998dd8e0137c372a4a",
+      "baseline_yaml_content_hash": "69ab47b8d45505052e6daa51c7dad9b2ae53e238de32579307af2acec0be61da"
+    },
+    "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/protocols.py#HandlerContext.get_resource_manager": {
+      "baseline_code_signature_text": "def get_resource_manager(self) -> ResourceManager:",
+      "baseline_code_structure_hash": "2eceaea7f42581a3111a9c19a88ebd44707bccee03f217d35e046de5cc8ef945"
+    },
+    "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/protocols.py#HandlerContext.request_wakeup": {
+      "baseline_code_signature_text": "def request_wakeup(self, delay: float) -> None:",
+      "baseline_code_structure_hash": "9202e143017c7268dd1855b4de32eaf3db746564acae68e73c3ae59ff0951fee"
     },
     "py://packages/cascade-runtime/src/cascade/runtime/services/constraints/rate_limiter.py#Bucket": {
       "baseline_code_signature_text": "class Bucket:",

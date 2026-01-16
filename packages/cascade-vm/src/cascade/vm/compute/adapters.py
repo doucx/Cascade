@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Tuple, Optional
 from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime.storage import ObjectStore
 from cascade.spec.runtime.interfaces import Executor
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute.contract import ComputeRequest
+from ..registry import CodeRegistry
+from .contract import ComputeRequest
 
 logger = logging.getLogger(__name__)
 

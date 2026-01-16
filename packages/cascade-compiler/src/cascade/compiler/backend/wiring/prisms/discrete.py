@@ -11,11 +11,11 @@ from cascade.std.specs import (
     GateSpec,
 )
 from cascade.std.resource.discrete import DiscreteLedger
-from cascade.compiler.backend.expander import SubGraph
+from ...expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
-from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.expansion.context import ExpansionContext
-from cascade.compiler.backend.wiring.prism import ResourcePrism
+from ..context import WiringContext
+from ...expansion.context import ExpansionContext
+from ..prism import ResourcePrism
 
 
 class DiscreteResourcePrism(ResourcePrism):

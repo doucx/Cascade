@@ -11,9 +11,9 @@ from cascade.spec.runtime.interfaces import Solver, StateBackend
 from cascade.spec.dsl.jump import Jump
 from cascade.bus.core import EventBus
 from cascade.runtime.services.resources.container import ResourceContainer
-from cascade.execution.graph.logic.processor import NodeProcessor
-from cascade.execution.graph.logic.flow import FlowManager
-from cascade.execution.graph.errors import DependencyMissingError
+from .logic.processor import NodeProcessor
+from .logic.flow import FlowManager
+from .errors import DependencyMissingError
 from cascade.bus.events import TaskSkipped, TaskBlocked
 from cascade.runtime.services.constraints.manager import ConstraintManager
 from cascade.spec.runtime import ExecutionContext

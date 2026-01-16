@@ -1,9 +1,9 @@
 from typing import Protocol, Any
 from cascade.spec.physical.environment import ResourceDef
 from cascade.spec.ir.graph import NodeIR
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.expansion.context import ExpansionContext
+from ..expander import SubGraph
+from .context import WiringContext
+from ..expansion.context import ExpansionContext
 
 
 class ResourcePrism(Protocol):

@@ -3,7 +3,7 @@ import logging
 from typing import Tuple
 
 from cascade.spec.physical.nodes import Token
-from cascade.vm.services.contracts import DelayRequest
+from .contracts import DelayRequest
 
 logger = logging.getLogger(__name__)
 

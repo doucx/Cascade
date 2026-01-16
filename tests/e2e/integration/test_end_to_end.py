@@ -32,7 +32,9 @@ def test_e2e_linear_workflow(mock_messaging_bus):
     # The subscriber will translate these to calls on the mocked messaging_bus.
     event_bus = cs.EventBus()
     HumanReadableLogSubscriber(event_bus)
-    engine = cs.Engine(solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=event_bus)
+    engine = cs.Engine(
+        solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=event_bus
+    )
 
     result = asyncio.run(engine.run(final_greeting))
 
@@ -64,7 +66,9 @@ def test_e2e_failure_propagation(mock_messaging_bus):
 
     event_bus = cs.EventBus()
     HumanReadableLogSubscriber(event_bus)
-    engine = cs.Engine(solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=event_bus)
+    engine = cs.Engine(
+        solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=event_bus
+    )
 
     with pytest.raises(ValueError, match="Something went wrong"):
         asyncio.run(engine.run(failing_task()))

@@ -1,8 +1,8 @@
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.reflection import PhysicalIdGenerator
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.expansion.context import ExpansionContext
+from ...expander import SubGraph
+from ..context import ExpansionContext
 from cascade.spec.compiler.interfaces import ExpansionPolicy
 
 

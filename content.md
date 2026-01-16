@@ -1,115 +1,388 @@
-我也收到了关于 `cascade-vm` 包的强耦合检查报告。
+我已经收到了关于 `cascade-compiler` 包的深度耦合分析报告。
 
-在 `cascade-vm` 中，`compute` 子包及其服务类（`LocalComputeService`, `BridgedComputeService`）之间存在明显的绝对导入导致的循环依赖。例如，`adapters.py` 尝试通过 `cascade.vm.compute.contract` 导入 `ComputeRequest`，这会在 `cascade.vm.compute` 包初始化期间触发对自身的再次加载。
+这个包的情况最为复杂，因为编译器的后端逻辑（Expansion 和 Wiring）是高度交错的：Expansion 策略需要了解 Wiring 容器，而 Wiring 策略又依赖于 Expansion 阶段产生的 `SubGraph` 结构。这种“策略间引用”在绝对导入模式下，会导致 Python 在试图解析 `cascade.compiler.backend.builder` 时，陷入一个巨大的、包含 16 个文件的模块初始化环。
 
-我将按照相同的逻辑，将 `cascade-vm` 内部的所有绝对导入重构为相对导入，以彻底消除这些循环路径。
+我将按照之前的成功实践，系统性地将 `cascade-compiler` 内部的所有绝对导入重写为相对导入。这将确保无论从哪个入口（Builder、Generator 或单独的策略）进入，包都能在局部上下文内安全加载。
 
-## [WIP] refactor: 解耦 cascade-vm 包内的循环依赖，将绝对导入改为相对导入
+## [WIP] refactor: 解耦 cascade-compiler 包内的循环依赖，重构导入路径
 
 ### 用户需求
-修复 `cascade-vm` 包内发现的强耦合组件问题，通过将绝对导入改为相对导入来消除子包间的循环依赖。
+修复 `cascade-compiler` 包内发现的 16 个文件组成的强耦合组件问题，通过将绝对导入（`cascade.compiler...`）改为相对导入来彻底解决初始化循环。
 
 ### 评论
-与 `cascade-spec` 类似，`cascade-vm` 作为执行核心，其内部组件（如 Reactor, Machine, ComputeService）之间的引用非常频繁。使用绝对导入不仅增加了循环依赖的风险，还使得包在动态加载环境下的表现不够健壮。通过相对导入，我们能够确保导入链始终限制在当前的物理目录结构内，避免触发不必要的包根初始化。
+`cascade-compiler` 是整个系统的“织网者”。目前其内部策略（Policies）和上下文（Contexts）之间通过绝对导入形成的硬耦合，使得任何局部的架构调整都可能引发全局的导入失败。将其重构为相对导入，不仅是为了修复当前的循环依赖，更是为了实现编译组件的物理位置透明性，为未来的插件化和动态策略加载打下基础。
 
 ### 目标
-1. 修复 `cascade.vm.compute` 子包内的循环引用。
-2. 修复 `cascade.vm.kernel`, `cascade.vm.services` 以及根模块（`reactor.py`, `machine.py`）中的绝对导入。
-3. 确保 VM 的核心逻辑（如物理内核驱动和计算任务分发）能够正常初始化。
+1. 将 `backend/expansion/policies` 下的所有绝对导入改为相对导入。
+2. 将 `backend/wiring/policies` 和 `backend/wiring/prisms` 下的所有绝对导入改为相对导入。
+3. 修正 `backend/builder.py` 中的大量策略引入路径。
+4. 确保 `ExpansionContext` 和 `WiringContext` 之间的引用关系不会触发包根重载。
 
 ### 基本原理
-相对导入（`.`, `..`）直接利用 Python 的模块命名空间层级，而不通过 `sys.path` 重新查找。这对于解决由于子模块引用父包定义的类型（或反之）而导致的 `Partially Initialized Module` 错误至关重要。
+在大型复杂的包中，相对导入通过 `.` (同级), `..` (上级), `...` (上上级) 建立模块间的拓扑联系。这种方式不依赖于包在 `sys.path` 中的根路径名，能够有效规避 Python 在处理“部分初始化模块”（Partially Initialized Modules）时的局限性。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/runtime #scope/core #ai/instruct #task/domain/vm #task/object/vm-package #task/action/refactor #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/build #scope/core #ai/instruct #task/domain/compiler #task/object/compiler-package #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `cascade.vm.compute` 子包的导入
-
-我们将 `adapters.py` 和 `service.py` 中指向同级或父级的绝对导入改为相对导入。
+#### Acts 1: 修复 Expansion 策略及其上下文的导入
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/compute/adapters.py
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/context.py
 ~~~~~
 ~~~~~python.old
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute.contract import ComputeRequest
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.ir.graph import GraphIR
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring import WiringHarness
+
+
+@dataclass
 ~~~~~
 ~~~~~python.new
-from ..registry import CodeRegistry
-from .contract import ComputeRequest
-~~~~~
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.ir.graph import GraphIR
+from ..expander import SubGraph
+from ..wiring import WiringHarness
 
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/compute/service.py
-~~~~~
-~~~~~python.old
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute.contract import ComputeRequest
-~~~~~
-~~~~~python.new
-from ..registry import CodeRegistry
-from .contract import ComputeRequest
-~~~~~
 
-#### Acts 2: 修复 `cascade.vm.kernel` 和 `cascade.vm.services` 的导入
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/kernel/core.py
-~~~~~
-~~~~~python.old
-from cascade.vm.resource_registry import ResourceRegistry
-~~~~~
-~~~~~python.new
-from ..resource_registry import ResourceRegistry
+@dataclass
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/services/chronos.py
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/control.py
 ~~~~~
 ~~~~~python.old
-from cascade.vm.services.contracts import DelayRequest
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.std.specs import EgressSpec
+from cascade.spec.physical.constants import NodePrefix
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.expansion.context import ExpansionContext
+from cascade.spec.compiler.interfaces import ExpansionPolicy
 ~~~~~
 ~~~~~python.new
-from .contracts import DelayRequest
-~~~~~
-
-#### Acts 3: 修复 `cascade.vm` 根级模块的导入
-
-修复 `machine.py` 和 `reactor.py` 中的交叉引用。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/machine.py
-~~~~~
-~~~~~python.old
-from cascade.vm.services.chronos import ChronosService
-~~~~~
-~~~~~python.new
-from .services.chronos import ChronosService
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.std.specs import EgressSpec
+from cascade.spec.physical.constants import NodePrefix
+from ...expander import SubGraph
+from ..context import ExpansionContext
+from cascade.spec.compiler.interfaces import ExpansionPolicy
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/parameter.py
 ~~~~~
 ~~~~~python.old
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.kernel import PhysicsKernel
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.compiler.backend.expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from cascade.compiler.backend.expansion.context import ExpansionContext
+from cascade.spec.compiler.interfaces import ExpansionPolicy
 ~~~~~
 ~~~~~python.new
-from .memory import VolatileMemory
-from .kernel import PhysicsKernel
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from ...expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from ..context import ExpansionContext
+from cascade.spec.compiler.interfaces import ExpansionPolicy
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/pulse.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.reflection import PhysicalIdGenerator
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.expansion.context import ExpansionContext
+from cascade.spec.compiler.interfaces import ExpansionPolicy
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.reflection import PhysicalIdGenerator
+from ...expander import SubGraph
+from ..context import ExpansionContext
+from cascade.spec.compiler.interfaces import ExpansionPolicy
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/resource.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.graph import NodeIR
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.expansion.context import ExpansionContext
+from cascade.spec.compiler.interfaces import ExpansionPolicy
+from cascade.compiler.backend.wiring.prism import ResourcePrism
+from cascade.compiler.backend.wiring.prisms.discrete import DiscreteResourcePrism
+
+
+class ResourceExpansionPolicy(ExpansionPolicy):
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR
+from ...expander import SubGraph
+from ..context import ExpansionContext
+from cascade.spec.compiler.interfaces import ExpansionPolicy
+from ...wiring.prism import ResourcePrism
+from ...wiring.prisms.discrete import DiscreteResourcePrism
+
+
+class ResourceExpansionPolicy(ExpansionPolicy):
+~~~~~
+
+#### Acts 2: 修复 Wiring 策略及其上下文的导入
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/context.py
+~~~~~
+~~~~~python.old
+from dataclasses import dataclass
+
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.expansion.context import ExpansionContext
+
+
+@dataclass
+~~~~~
+~~~~~python.new
+from dataclasses import dataclass
+
+from ..expander import SubGraph
+from ..expansion.context import ExpansionContext
+
+
+@dataclass
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/prism.py
+~~~~~
+~~~~~python.old
+from typing import Protocol, Any
+from cascade.spec.physical.environment import ResourceDef
+from cascade.spec.ir.graph import NodeIR
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.expansion.context import ExpansionContext
+
+
+class ResourcePrism(Protocol):
+~~~~~
+~~~~~python.new
+from typing import Protocol, Any
+from cascade.spec.physical.environment import ResourceDef
+from cascade.spec.ir.graph import NodeIR
+from ..expander import SubGraph
+from .context import WiringContext
+from ..expansion.context import ExpansionContext
+
+
+class ResourcePrism(Protocol):
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/prisms/discrete.py
+~~~~~
+~~~~~python.old
+from cascade.std.resource.discrete import DiscreteLedger
+from cascade.compiler.backend.expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.expansion.context import ExpansionContext
+from cascade.compiler.backend.wiring.prism import ResourcePrism
+
+
+class DiscreteResourcePrism(ResourcePrism):
+~~~~~
+~~~~~python.new
+from cascade.std.resource.discrete import DiscreteLedger
+from ...expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from ..context import WiringContext
+from ...expansion.context import ExpansionContext
+from ..prism import ResourcePrism
+
+
+class DiscreteResourcePrism(ResourcePrism):
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/control.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.graph import NodeIR
+from cascade.std.specs import StainerSpec, BleacherSpec, EgressSpec
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR
+from cascade.std.specs import StainerSpec, BleacherSpec, EgressSpec
+from ...expander import SubGraph
+from ..context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/observability.py
+~~~~~
+~~~~~python.old
+from cascade.spec.physical.ports import PortRole, PortDef
+from cascade.std.specs import ObservabilitySpec, BleacherSpec, StainerSpec
+from cascade.compiler.backend.expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+~~~~~
+~~~~~python.new
+from cascade.spec.physical.ports import PortRole, PortDef
+from cascade.std.specs import ObservabilitySpec, BleacherSpec, StainerSpec
+from ...expander import SubGraph
+from cascade.reflection import PhysicalIdGenerator
+from ..context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/parameter.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.graph import NodeIR, ArgumentKind
+from cascade.std.specs import StainerSpec
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR, ArgumentKind
+from cascade.std.specs import StainerSpec
+from ...expander import SubGraph
+from ..context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/pulse.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.graph import NodeIR
+from cascade.std.specs import BleacherSpec
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR
+from cascade.std.specs import BleacherSpec
+from ...expander import SubGraph
+from ..context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/wiring/policies/resource.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.graph import NodeIR
+from cascade.compiler.backend.expander import SubGraph
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+from cascade.compiler.backend.wiring.prism import ResourcePrism
+from cascade.compiler.backend.wiring.prisms.discrete import DiscreteResourcePrism
+
+
+class ResourceWiringPolicy(WiringPolicy):
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.graph import NodeIR
+from ...expander import SubGraph
+from ..context import WiringContext
+from cascade.spec.compiler.interfaces import WiringPolicy
+from ..prism import ResourcePrism
+from ..prisms.discrete import DiscreteResourcePrism
+
+
+class ResourceWiringPolicy(WiringPolicy):
+~~~~~
+
+#### Acts 3: 修复 Builder 的导入路径
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python.old
+from .expander import Expander
+from .validator import GraphValidator
+from .wiring import WiringHarness
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.expansion.policies.parameter import (
+    ParameterExpansionPolicy,
+)
+from cascade.compiler.backend.expansion.policies.control import (
+    ControlFlowExpansionPolicy,
+)
+from cascade.compiler.backend.expansion.policies.pulse import PulseExpansionPolicy
+from cascade.compiler.backend.expansion.policies.resource import (
+    ResourceExpansionPolicy,
+)
+from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
+from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
+from cascade.compiler.backend.wiring.policies.observability import (
+    ObservabilityWiringPolicy,
+)
+from cascade.compiler.backend.wiring.policies.resource import ResourceWiringPolicy
+from cascade.compiler.backend.wiring.policies.pulse import PulseWiringPolicy
+from cascade.spec.physical.constants import NodePrefix
+~~~~~
+~~~~~python.new
+from .expander import Expander
+from .validator import GraphValidator
+from .wiring import WiringHarness
+from .wiring.context import WiringContext
+from .expansion.policies.parameter import (
+    ParameterExpansionPolicy,
+)
+from .expansion.policies.control import (
+    ControlFlowExpansionPolicy,
+)
+from .expansion.policies.pulse import PulseExpansionPolicy
+from .expansion.policies.resource import (
+    ResourceExpansionPolicy,
+)
+from .wiring.policies.parameter import ParameterWiringPolicy
+from .wiring.policies.control import ControlFlowWiringPolicy
+from .wiring.policies.observability import (
+    ObservabilityWiringPolicy,
+)
+from .wiring.policies.resource import ResourceWiringPolicy
+from .wiring.policies.pulse import PulseWiringPolicy
+from cascade.spec.physical.constants import NodePrefix
 ~~~~~
 
 ### 下一步建议
-1. **引导检查**: 尝试运行 `python3 -c "from cascade.vm.machine import Machine; print('Import OK')"` 来验证核心组件的加载。
-2. **集成测试**: 重点运行物理引擎的集成测试（如果存在），确保 Reactor 能够正确调用 Kernel 并且 Machine 能够正确驱动 Services。
-3. **继续重构**: 报告中还提到了 `cascade-compiler` 的 16 个文件强耦合组件，那是接下来的重构重点。
+1. **编译器冒烟测试**: 创建一个简单的 DSL 任务，通过 `Builder().build(ir, env)` 验证整个编译管线是否能无阻塞运行。
+2. **符号表检查**: 确保 `CompilationArtifact` 中的 `symbol_table` 能够正确映射到物理 Node ID，没有因为导入方式改变而导致类型识别错误。
+3. **完成最后两个强耦合组件**: 解决 `cascade-runtime` (8个文件) 和 `cascade-sdk` (3个文件) 的耦合问题。

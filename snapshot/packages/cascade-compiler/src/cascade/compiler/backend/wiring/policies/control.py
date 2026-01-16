@@ -1,7 +1,7 @@
 from cascade.spec.ir.graph import NodeIR
 from cascade.std.specs import StainerSpec, BleacherSpec, EgressSpec
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.wiring.context import WiringContext
+from ...expander import SubGraph
+from ..context import WiringContext
 from cascade.spec.compiler.interfaces import WiringPolicy
 
 

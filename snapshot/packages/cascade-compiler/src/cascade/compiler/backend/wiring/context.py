@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.expansion.context import ExpansionContext
+from ..expander import SubGraph
+from ..expansion.context import ExpansionContext
 
 
 @dataclass

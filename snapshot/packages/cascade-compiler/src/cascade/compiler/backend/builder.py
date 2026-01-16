@@ -14,24 +14,24 @@ from cascade.spec.compiler.interfaces import WiringPolicy, ExpansionPolicy
 from .expander import Expander
 from .validator import GraphValidator
 from .wiring import WiringHarness
-from cascade.compiler.backend.wiring.context import WiringContext
-from cascade.compiler.backend.expansion.policies.parameter import (
+from .wiring.context import WiringContext
+from .expansion.policies.parameter import (
     ParameterExpansionPolicy,
 )
-from cascade.compiler.backend.expansion.policies.control import (
+from .expansion.policies.control import (
     ControlFlowExpansionPolicy,
 )
-from cascade.compiler.backend.expansion.policies.pulse import PulseExpansionPolicy
-from cascade.compiler.backend.expansion.policies.resource import (
+from .expansion.policies.pulse import PulseExpansionPolicy
+from .expansion.policies.resource import (
     ResourceExpansionPolicy,
 )
-from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
-from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
-from cascade.compiler.backend.wiring.policies.observability import (
+from .wiring.policies.parameter import ParameterWiringPolicy
+from .wiring.policies.control import ControlFlowWiringPolicy
+from .wiring.policies.observability import (
     ObservabilityWiringPolicy,
 )
-from cascade.compiler.backend.wiring.policies.resource import ResourceWiringPolicy
-from cascade.compiler.backend.wiring.policies.pulse import PulseWiringPolicy
+from .wiring.policies.resource import ResourceWiringPolicy
+from .wiring.policies.pulse import PulseWiringPolicy
 from cascade.spec.physical.constants import NodePrefix
 
 

@@ -1,13 +1,6 @@
 import pytest
 import cascade.sdk as cs
 import io
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
-
-
-@pytest.fixture
-def engine():
-    return cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus())
 
 
 @pytest.mark.asyncio

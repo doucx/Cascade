@@ -3,9 +3,6 @@ import cascade.sdk as cs
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
-
 # Skip if sqlalchemy missing
 pytest.importorskip("sqlalchemy")
 
@@ -36,10 +33,7 @@ def sqlite_db():
 
 
 @pytest.fixture
-def db_engine():
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
+def db_engine(engine):
     engine.register(sqlite_db)
     return engine
 

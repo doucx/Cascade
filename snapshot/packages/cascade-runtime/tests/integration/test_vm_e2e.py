@@ -47,11 +47,11 @@ def strategy(executor, bus):
 
 
 @pytest.fixture
-def engine(executor, bus, strategy):
+def engine(engine_factory, executor, bus, strategy):
     # Solver is not used by VMStrategy but required by Engine interface
     solver = MockSolver(plan=[])
 
-    return Engine(
+    return engine_factory(
         solver=solver,
         executor=executor,
         bus=bus,

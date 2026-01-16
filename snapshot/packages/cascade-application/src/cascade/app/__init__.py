@@ -187,6 +187,8 @@ class CascadeApp:
             executor=self.executor,
             bus=self.event_bus,
             strategy=strategy,
+            constraint_manager=constraint_manager,
+            wakeup_event=wakeup_event,
             resource_manager=self.resource_manager,
             system_resources=self.system_resources,
             connector=self.connector,

@@ -4,7 +4,8 @@ from typing import Callable, Any, Dict, Optional
 
 from .instance import Engine
 from cascade.spec.runtime import ExecutionStrategy, Solver, Executor, Connector
-from cascade.runtime import EventBus, ResourceManager
+from cascade.bus.core import EventBus
+from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints.manager import ConstraintManager
 from cascade.runtime.services.resources.container import ResourceContainer
 from cascade.runtime.services.constraints.handlers import (

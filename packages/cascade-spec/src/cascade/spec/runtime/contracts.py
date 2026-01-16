@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Any
 
 from ..physical.object import Ref
@@ -10,7 +10,7 @@ class ComputeRequest:
     code_hash: str
     input_refs: Dict[str, Ref]
     reply_to_nid: str
-    trace: Dict[str, Any] = field(default_factory=dict)
+    trace: Dict[str, Any]
 
 
 @dataclass(frozen=True)

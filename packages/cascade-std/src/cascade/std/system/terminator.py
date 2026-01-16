@@ -1,7 +1,7 @@
 from typing import Any
 from cascade.spec.physical.nodes import Token, PhysicsNode
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from cascade.std.specs import TerminatorSpec
+from cascade.spec.components import TerminatorSpec
 from cascade.spec.physics.binding import implements
 
 

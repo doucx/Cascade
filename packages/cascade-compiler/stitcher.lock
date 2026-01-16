@@ -501,6 +501,10 @@
       "baseline_code_signature_text": "def test_builder_creates_observer_sidecar(empty_graph_ir):",
       "baseline_code_structure_hash": "ed73afb888230e48a6e82a759a2575b66a6d412057b7423a806f7226f0dada82"
     },
+    "py://packages/cascade-compiler/tests/unit/backend/test_expander.py#test_expander_creates_dyad_structure": {
+      "baseline_code_signature_text": "def test_expander_creates_dyad_structure():",
+      "baseline_code_structure_hash": "1e075350845ceb1a7493c5b666249a81b96f2912ee1d10b0653e59f1211ad00a"
+    },
     "py://packages/cascade-compiler/tests/unit/backend/test_expander.py#test_expander_creates_triad_structure": {
       "baseline_code_signature_text": "def test_expander_creates_triad_structure():",
       "baseline_code_structure_hash": "d692d73cd82722536692ce1d1e0be0f194d09e35a50ba044dc11fa7ef9fc64f8"

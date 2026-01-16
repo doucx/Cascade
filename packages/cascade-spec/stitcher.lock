@@ -54,6 +54,54 @@
     "py://packages/cascade-spec/src/cascade/spec/compiler/model.py#SubGraph.resources": {},
     "py://packages/cascade-spec/src/cascade/spec/compiler/model.py#SubGraph.stainer": {},
     "py://packages/cascade-spec/src/cascade/spec/compiler/model.py#SubGraph.worker": {},
+    "py://packages/cascade-spec/src/cascade/spec/components/resource.py#ContinuousAllocatorSpec": {
+      "baseline_code_signature_text": "class ContinuousAllocatorSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "f89c88686da49c4a7ec53e1f1802e145c2c34f7bf7d6101d47f1afa3215fedce"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/resource.py#ContinuousReclaimerSpec": {
+      "baseline_code_signature_text": "class ContinuousReclaimerSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "ddadc5690bc6eaa540561921b589b2ffc71ad94cdcbc73525f6172e09c94ea3c"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/resource.py#DiscreteAllocatorSpec": {
+      "baseline_code_signature_text": "class DiscreteAllocatorSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "545d4119c6fd5c2e9f2a9c78045b08cd9bcdfc959f7b5a81bf54b81cb1cafc0b"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/resource.py#DiscreteReclaimerSpec": {
+      "baseline_code_signature_text": "class DiscreteReclaimerSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "74774bcb6c70b4ae71e40b76ff06b4ba6d675b96f0967d0760f77932ecce73b5"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/resource.py#ResourceRequestorSpec": {
+      "baseline_code_signature_text": "class ResourceRequestorSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "2cdc1c7120c6ae9032043f2fbdfa06ae449272279ee9b98755349f6f93a1e6b5"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/system.py#DrainerSpec": {
+      "baseline_code_signature_text": "class DrainerSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "8378f890f6cfa00ab08c4ef3992c8c1562fe58775f7f3fbbe7971e384b67cc7a"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/system.py#EgressSpec": {
+      "baseline_code_signature_text": "class EgressSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "702da3d1c7772e4789a2c2a3d1ce718f6b63a700538bc35a92c867ac69889f0e"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/system.py#GateSpec": {
+      "baseline_code_signature_text": "class GateSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "9f6529fae894567e7a462cfd47a98f3ee95da60f4ce30932363bedccd6f700c8"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/system.py#ObservabilitySpec": {
+      "baseline_code_signature_text": "class ObservabilitySpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "68a5e03adac245755934c277fd4b5e7b03c6919bf4d5adaabcbf5142941e9357"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/system.py#RetrySpec": {
+      "baseline_code_signature_text": "class RetrySpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "5a1448640533b1153ed39af961859cf27b6821485798f7d805769f0a0e575964"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/system.py#SleepSpec": {
+      "baseline_code_signature_text": "class SleepSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "9ff1657adf9c2c18ab9e7acc9ffa83d4b63fdf364cc324b475e3eb4ec5641ef0"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/components/system.py#TerminatorSpec": {
+      "baseline_code_signature_text": "class TerminatorSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "55dbd74ce94261fd0323978c3704f205a798f3cf7bb99414118b6e46704d5de5"
+    },
     "py://packages/cascade-spec/src/cascade/spec/dsl/constraint.py#GlobalConstraint": {
       "baseline_code_signature_text": "class GlobalConstraint:",
       "baseline_code_structure_hash": "e0061a9138a9407b85ea837147ba0aa192d80dd32a0a5c2376ca9eb4f6902700",
@@ -478,6 +526,16 @@
     "py://packages/cascade-spec/src/cascade/spec/physical/constants.py#NodePrefix.STAIN": {},
     "py://packages/cascade-spec/src/cascade/spec/physical/constants.py#NodePrefix.WAKEUP": {},
     "py://packages/cascade-spec/src/cascade/spec/physical/constants.py#NodePrefix.WORKER": {},
+    "py://packages/cascade-spec/src/cascade/spec/physical/dyad.py#LanderNode": {
+      "baseline_code_signature_text": "class LanderNode(PhysicsFuncNode):",
+      "baseline_code_structure_hash": "f11a046b32b3cd6dc376f60b2b64f7b09e020fbfc87032f743a7d9aa7e82e508",
+      "baseline_yaml_content_hash": "135f8be215252a6da8ced70aa98331d4308d52d0341748c90a75d393d964d255"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physical/dyad.py#LauncherNode": {
+      "baseline_code_signature_text": "class LauncherNode(PhysicsFuncNode):",
+      "baseline_code_structure_hash": "1b30de217a6b0371a341f340669eac098b6d91d4c5f2bbce8a7969f775a7d045",
+      "baseline_yaml_content_hash": "0460f04be44d5f793b6a8e0558da2655b6c40ccd30c1674f794846bbe5264726"
+    },
     "py://packages/cascade-spec/src/cascade/spec/physical/environment.py#EnvironmentDef": {
       "baseline_code_signature_text": "class EnvironmentDef:",
       "baseline_code_structure_hash": "fad6c768b5f15da7e46477155c31a070e9e6e0e605f79bd7b844b8cc3df91d3d",
@@ -574,6 +632,14 @@
       "baseline_code_signature_text": "class ResourceSlot(PhysicsDataNode):",
       "baseline_code_structure_hash": "1854d3e542e3e0f3adadf96651e794aca5811a947ace48a1c73a0156117b411c",
       "baseline_yaml_content_hash": "63da9b86134fe02aa50461e1b7e2c2c03fb2ae0155f4fdce0c5475faba58fc2b"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physical/system_nodes.py#ObservabilityNode": {
+      "baseline_code_signature_text": "class ObservabilityNode(PhysicsFuncNode):",
+      "baseline_code_structure_hash": "90907bb3eb227f94857d10b941d2feb8812f98f83224c0046ebd1e3410296d86"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/physical/system_nodes.py#RetryNode": {
+      "baseline_code_signature_text": "class RetryNode(PhysicsFuncNode):",
+      "baseline_code_structure_hash": "9be0f5520b25527b8155b85cd370bbab5dc74cc5934e964869aec59ebdfffa3e"
     },
     "py://packages/cascade-spec/src/cascade/spec/physical/topology.py#BipartiteGraph": {
       "baseline_code_signature_text": "class BipartiteGraph:",
@@ -1055,6 +1121,14 @@
     "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.source": {},
     "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.ts": {},
     "py://packages/cascade-spec/src/cascade/spec/runtime/telemetry.py#TelemetryHeader.v": {},
+    "py://packages/cascade-spec/src/cascade/spec/specs/dyad.py#LanderSpec": {
+      "baseline_code_signature_text": "class LanderSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "eafb3ebad669d6b8987e8b47afe2cc3dfb25a59277074d8ec08975a55a1bfa96"
+    },
+    "py://packages/cascade-spec/src/cascade/spec/specs/dyad.py#LauncherSpec": {
+      "baseline_code_signature_text": "class LauncherSpec(PhysicsSpec):",
+      "baseline_code_structure_hash": "910bf9245a36109e7acdfdb79842ba54ea9adc2cad9294af3b3abc4f98c9ac23"
+    },
     "py://packages/cascade-spec/src/cascade/spec/vm/interfaces.py#ComputeServiceProtocol": {
       "baseline_code_signature_text": "class ComputeServiceProtocol(Protocol):",
       "baseline_code_structure_hash": "96102957e018d272ee3dc6fa52be277ed1e410e368ce4f7039fcac66dbde7b98"

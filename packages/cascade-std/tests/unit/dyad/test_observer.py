@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 from cascade.spec.physical.nodes import Token
 from cascade.spec import EventIR, EventType, EventState
-from cascade.std.triad.observer import standard_observer
+from cascade.std.system.observer import standard_observer
 
 
 @pytest.fixture

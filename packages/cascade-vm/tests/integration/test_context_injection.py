@@ -1,90 +1,53 @@
 import pytest
-
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.triad import (
-    BleachNode,
-    WorkerNode,
-    StainNode,
-    ObservabilityNode,
-)
+from cascade.spec.physical.dyad import LauncherNode, LanderNode
+from cascade.spec.physical.system_nodes import ObservabilityNode
 from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.specs.dyad import LanderSpec
 from cascade.spec.runtime.observability import EventState
-from cascade.bus.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-)
+from cascade.bus.events import TaskExecutionStarted, TaskExecutionFinished
 from cascade.test_utils import EventDrivenRunner
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-from cascade.std.triad.dispatcher import standard_dispatcher
+from cascade.std.dyad.launcher import standard_launcher
+from cascade.std.dyad.lander import standard_lander
+from cascade.std.system.observer import standard_observer
 from cascade.vm.registry import CodeRegistry
 from cascade.reflection import PhysicalIdGenerator
 
 
-# --- User Logic ---
 async def actual_user_logic(arg1: str) -> str:
     return f"processed_{arg1}"
 
 
-# --- Helper: Build a Physical Triad manually ---
-def build_test_triad_for_injection() -> BipartiteGraph:
+def build_test_dyad_for_injection() -> BipartiteGraph:
     graph = BipartiteGraph()
-
-    # Base logical ID for the task
     base_id = "task"
+    f_launch_id = PhysicalIdGenerator.launcher_node(base_id)
+    d_result_id = PhysicalIdGenerator.result_data(base_id)
+    f_land_id = PhysicalIdGenerator.lander_node(base_id)
+    d_life_id = PhysicalIdGenerator.observability_bus()
+    f_obs_id = PhysicalIdGenerator.observability_observer()
 
-    # Generate IDs using the standard protocol
-    f_pre_id = PhysicalIdGenerator.bleach_node(base_id)  # e.g., task.bleach
-    f_worker_id = PhysicalIdGenerator.worker_node(base_id)  # e.g., task.worker
-    f_stain_id = PhysicalIdGenerator.stain_node(base_id)  # e.g., task.stain
-
-    # Data nodes must also follow convention where Dispatcher relies on it
-    d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
-    d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
-    d_trace_id = PhysicalIdGenerator.trace_data(base_id)
-
-    # 1. Nodes
-    # Input Data (External)
     d_in = PhysicsDataNode(id="d_in", name="Input")
 
-    # F_pre (Bleacher)
-    f_pre = BleachNode(
-        id=f_pre_id,
-        name="Bleacher",
+    f_launch = LauncherNode(
+        id=f_launch_id,
+        name="Launch",
         input_ports={"arg1": PortDef("arg1", PortRole.DATA)},
-        output_ports={
-            "worker_input": PortDef("worker_input", PortRole.DATA),
-            "trace_output": PortDef("trace_output", PortRole.DATA),
-            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
-        },
-    )
-
-    # D_worker_in & D_trace
-    d_worker_in = PhysicsDataNode(id=d_worker_in_id, name="WorkerIn")
-    d_trace = PhysicsDataNode(id=d_trace_id, name="Trace")
-
-    # F_exec (Worker)
-    # NOTE: In v3.3, WorkerNode holds the hash of the code it should dispatch.
-    f_worker = WorkerNode(
-        id=f_worker_id,
-        name="Worker",
+        output_ports={"obs_output": PortDef("obs_output", PortRole.OBSERVABILITY)},
         canonical_code_structure_hash="hash_user_logic_001",
-        input_ports={"worker_input": PortDef("worker_input", PortRole.DATA)},
-        output_ports={"worker_result": PortDef("worker_result", PortRole.DATA)},
+        reply_to_nid=d_result_id,
     )
 
-    # D_worker_out
-    d_worker_out = PhysicsDataNode(id=d_worker_out_id, name="WorkerOut")
+    d_result = PhysicsDataNode(id=d_result_id, name="Result")
 
-    # F_post (Stainer)
-    f_stain = StainNode(
-        id=f_stain_id,
-        name="Stainer",
+    f_land = LanderNode(
+        id=f_land_id,
+        name="Land",
         input_ports={
-            "worker_result": PortDef("worker_result", PortRole.DATA),
-            "trace_input": PortDef("trace_input", PortRole.DATA),
+            LanderSpec.result_token.name: PortDef(
+                LanderSpec.result_token.name, PortRole.DATA
+            )
         },
         output_ports={
             "output_default": PortDef("output_default", PortRole.DATA),
@@ -92,12 +55,7 @@ def build_test_triad_for_injection() -> BipartiteGraph:
         },
     )
 
-    # D_out (Final Result)
     d_out = PhysicsDataNode(id="d_out", name="Output")
-
-    # Observability Infrastructure
-    d_life_id = PhysicalIdGenerator.observability_bus()
-    f_obs_id = PhysicalIdGenerator.observability_observer()
 
     d_life = PhysicsDataNode(id=d_life_id, name="EventBus", capacity=100)
     f_obs = ObservabilityNode(
@@ -106,88 +64,49 @@ def build_test_triad_for_injection() -> BipartiteGraph:
         input_ports={"event_token": PortDef("event_token", PortRole.OBSERVABILITY)},
     )
 
-    # Register Nodes
-    for n in [
-        d_in,
-        f_pre,
-        d_worker_in,
-        d_trace,
-        f_worker,
-        d_worker_out,
-        f_stain,
-        d_out,
-        d_life,
-        f_obs,
-    ]:
+    for n in [d_in, f_launch, d_result, f_land, d_out, d_life, f_obs]:
         graph.nodes[n.id] = n
 
-    # 2. Channels (Wiring)
-    channels = [
-        # Input -> Bleacher
-        Channel("d_in", "out", f_pre_id, "arg1"),
-        # Bleacher -> Worker
-        Channel(f_pre_id, "worker_input", d_worker_in_id, "in"),
-        Channel(d_worker_in_id, "out", f_worker_id, "worker_input"),
-        # Worker -> Stainer
-        Channel(f_worker_id, "worker_result", d_worker_out_id, "in"),
-        Channel(d_worker_out_id, "out", f_stain_id, "worker_result"),
-        # Bleacher -> Trace -> Stainer (The Wormhole)
-        Channel(f_pre_id, "trace_output", d_trace_id, "in"),
-        Channel(d_trace_id, "out", f_stain_id, "trace_input"),
-        # Stainer -> Output
-        Channel(f_stain_id, "output_default", "d_out", "in"),
-        # Observability Wiring
-        Channel(f_pre_id, "obs_output", d_life_id, "in"),
-        Channel(f_stain_id, "obs_output", d_life_id, "in"),
-        Channel(
-            d_life_id,
-            "out",
-            f_obs_id,
-            "event_token",
-        ),
-    ]
-
-    graph.channels.extend(channels)
+    graph.channels.extend(
+        [
+            Channel("d_in", "out", f_launch_id, "arg1"),
+            Channel(d_result_id, "out", f_land_id, LanderSpec.result_token.name),
+            Channel(f_land_id, "output_default", "d_out", "in"),
+            Channel(f_launch_id, "obs_output", d_life_id, "in"),
+            Channel(f_land_id, "obs_output", d_life_id, "in"),
+            Channel(d_life_id, "out", f_obs_id, "event_token"),
+        ]
+    )
     return graph
 
 
 @pytest.mark.asyncio
 async def test_genesis_injection_propagates_run_id():
-    # 1. Setup Code Registry
     registry = CodeRegistry()
     registry.register("hash_user_logic_001", actual_user_logic)
 
-    # 2. Setup Graph
-    graph = build_test_triad_for_injection()
-
-    # 3. Setup Physics Kernel Function Map
-    # NOTE: The worker now maps to the standard_dispatcher!
-    # We must use the exact IDs generated by PhysicalIdGenerator
+    graph = build_test_dyad_for_injection()
     base_id = "task"
+
     function_map = {
-        PhysicalIdGenerator.bleach_node(base_id): standard_bleacher,
-        PhysicalIdGenerator.worker_node(base_id): standard_dispatcher,
-        PhysicalIdGenerator.stain_node(base_id): standard_stainer,
+        PhysicalIdGenerator.launcher_node(base_id): standard_launcher,
+        PhysicalIdGenerator.lander_node(base_id): standard_lander,
         PhysicalIdGenerator.observability_observer(): standard_observer,
     }
 
     runner = EventDrivenRunner(graph, function_map, registry)
-
-    # Assert Runner has generated a Run ID
-    assert runner.run_id is not None
-    print(f"Test Run ID: {runner.run_id}")
-
-    # 4. Prime and Start
     runner.prime()
+
+    # Manually configure compute service to bridge queue -> d_result
+    # The EventDrivenRunner sets up a LocalComputeService, but we need to ensure
+    # it knows about our object store and queues.
+    # EventDrivenRunner internal setup handles this.
+
     await runner.start_loop()
 
     try:
-        # 5. Inject Input (Trigger Genesis Injection)
-        # Runner.inject_input will embed the runner.run_id into the Token trace.
         runner.inject_input("d_in", "test_data")
 
-        # 6. Wait for completion
-        # We look for the SUCCEEDED event from the stainer.
         def is_success(e):
             return (
                 isinstance(e, TaskExecutionFinished)
@@ -197,23 +116,16 @@ async def test_genesis_injection_propagates_run_id():
 
         await runner.wait_for_event(is_success, timeout=2.0)
 
-        # 7. Verify Events
         events = runner._captured_events
-
         lifecycle_events = [
             e
             for e in events
             if isinstance(e, (TaskExecutionStarted, TaskExecutionFinished))
         ]
+
         assert len(lifecycle_events) >= 2
-
         for event in lifecycle_events:
-            # The Critical Assertion:
-            # Did the run_id survive the trip through:
-            # Bleacher -> Dispatcher -> ComputeService -> Worker -> Stainer -> EventBus?
-            assert event.run_id == runner.run_id, f"Run ID mismatch in event {event}"
-
-        print("Context propagation verified successfully.")
+            assert event.run_id == runner.run_id
 
     finally:
         await runner.stop_loop()

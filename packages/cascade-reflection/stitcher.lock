@@ -67,6 +67,14 @@
       "baseline_code_signature_text": "def global_resource(resource_name: str) -> str:",
       "baseline_code_structure_hash": "dc428514da57a65d56f05022b9f88dc2aaf050bf668e9f9d98c55a907c8ae23d"
     },
+    "py://packages/cascade-reflection/src/cascade/reflection/naming.py#PhysicalIdGenerator.lander_node": {
+      "baseline_code_signature_text": "def lander_node(logical_node_id: str) -> str:",
+      "baseline_code_structure_hash": "4609001f90f8e5b1c7b3e47a74bf5c4d00ae95d409af13403cde3b30a7824526"
+    },
+    "py://packages/cascade-reflection/src/cascade/reflection/naming.py#PhysicalIdGenerator.launcher_node": {
+      "baseline_code_signature_text": "def launcher_node(logical_node_id: str) -> str:",
+      "baseline_code_structure_hash": "6278816a8801ce6d9424a83a9ae37c8bcf5077c57c95bdf958e7bc4fccb625df"
+    },
     "py://packages/cascade-reflection/src/cascade/reflection/naming.py#PhysicalIdGenerator.observability_bus": {
       "baseline_code_signature_text": "def observability_bus() -> str:",
       "baseline_code_structure_hash": "c916f40c96b47133bed9a63f6b0c6787a4248ca0fdf51fe44f4855b5df605e75"
@@ -86,6 +94,10 @@
     "py://packages/cascade-reflection/src/cascade/reflection/naming.py#PhysicalIdGenerator.requestor": {
       "baseline_code_signature_text": "def requestor(target_node_id: str, resource_name: str) -> str:",
       "baseline_code_structure_hash": "03a61c8cdee8ae9025d161ceeb366df01da900e7115bdb84548808afd581d154"
+    },
+    "py://packages/cascade-reflection/src/cascade/reflection/naming.py#PhysicalIdGenerator.result_data": {
+      "baseline_code_signature_text": "def result_data(logical_node_id: str) -> str:",
+      "baseline_code_structure_hash": "7fc734caac1d1935cc2dbf4e781a05e5b6d6af1ccacb5c312e94bb4d197d8b87"
     },
     "py://packages/cascade-reflection/src/cascade/reflection/naming.py#PhysicalIdGenerator.sleep_node": {
       "baseline_code_signature_text": "def sleep_node(logical_node_id: str) -> str:",

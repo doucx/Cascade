@@ -2,7 +2,7 @@ from typing import Any, Union
 from dataclasses import dataclass
 from cascade.spec.physical.nodes import Token, PhysicsNode
 from cascade.spec.physical.object import Ref
-from cascade.std.specs import DiscreteAllocatorSpec, DiscreteReclaimerSpec
+from cascade.spec.components import DiscreteAllocatorSpec, DiscreteReclaimerSpec
 from cascade.spec.physics.binding import implements
 
 

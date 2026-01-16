@@ -4,8 +4,9 @@ from typing import Dict, Callable, Tuple
 
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
+from cascade.spec.physical.dyad import LauncherNode, LanderNode
 from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.specs.dyad import LanderSpec
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
 from cascade.reflection import PhysicalIdGenerator
 from cascade.vm.machine import Machine
@@ -21,159 +22,135 @@ from cascade.bus.core import EventBus
 from cascade.runtime.storage import InMemoryObjectStore
 
 # Standard Library ICs
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.dispatcher import standard_dispatcher
-from cascade.std.triad.stainer import standard_stainer
+from cascade.std.dyad.launcher import standard_launcher
+from cascade.std.dyad.lander import standard_lander
 
 
 # --- Test Fixtures ---
 
 
-# 1. A simple async user function to be executed by the ComputeService
 async def user_square(n: int) -> int:
-    await asyncio.sleep(0.01)  # Simulate real async work
+    await asyncio.sleep(0.01)
     return n * n
 
 
-# 2. A transparent terminator kernel function
 def transparent_halt(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    # Pass through the data
     data_token = inputs["in"]
-
-    # Emit HALT signal AND pass data
     return {
         "out": data_token,
         "ctrl": Token(payload=SystemControlToken(command=ControlCommand.HALT)),
     }
 
 
-# 3. A helper to build the physical graph for the test
 def build_test_graph() -> BipartiteGraph:
     graph = BipartiteGraph()
     base_id = "task_square"
 
     # Node IDs
     d_in_id = "d_in"
-    f_bleach_id = PhysicalIdGenerator.bleach_node(base_id)
-    d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
-    f_worker_id = PhysicalIdGenerator.worker_node(base_id)
-    d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
-    d_trace_id = PhysicalIdGenerator.trace_data(base_id)
-    f_stain_id = PhysicalIdGenerator.stain_node(base_id)
-    d_out_id = "d_out"  # Output of Stainer
+    f_launch_id = PhysicalIdGenerator.launcher_node(base_id)
+    d_result_id = PhysicalIdGenerator.result_data(base_id)
+    f_land_id = PhysicalIdGenerator.lander_node(base_id)
+    d_out_id = "d_out"
     f_halt_id = "f_halt"
-    d_final_id = "d_final"  # Final output after Halt pass-through
+    d_final_id = "d_final"
 
-    # Node Definitions
-    nodes = [
-        PhysicsDataNode(id=d_in_id, name="Input"),
-        BleachNode(
-            id=f_bleach_id,
-            name="Bleach(square)",
-            input_ports={"n": PortDef("n", PortRole.DATA)},
-            output_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA),
-                "trace_output": PortDef("trace_output", PortRole.DATA),
-                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
-            },
-        ),
-        PhysicsDataNode(id=d_worker_in_id, name="In(square)"),
-        WorkerNode(
-            id=f_worker_id,
-            name="Exec(square)",
-            canonical_code_structure_hash="hash_for_user_square",
-            input_ports={"worker_input": PortDef("worker_input", PortRole.DATA)},
-            output_ports={"worker_result": PortDef("worker_result", PortRole.DATA)},
-        ),
-        PhysicsDataNode(id=d_worker_out_id, name="Out(square)"),
-        PhysicsDataNode(id=d_trace_id, name="Trace(square)"),
-        StainNode(
-            id=f_stain_id,
-            name="Stain(square)",
-            input_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA),
-                "trace_input": PortDef("trace_input", PortRole.DATA),
-            },
-            output_ports={"output_default": PortDef("output_default", PortRole.DATA)},
-        ),
-        PhysicsDataNode(id=d_out_id, name="IntermediateOutput"),
-        PhysicsFuncNode(
-            id=f_halt_id,
-            name="TransparentHalt",
-            input_ports={"in": PortDef("in", PortRole.DATA)},
-            output_ports={
-                "out": PortDef("out", PortRole.DATA),
-                "ctrl": PortDef("ctrl", PortRole.SIGNAL),
-            },
-        ),
-        PhysicsDataNode(id=d_final_id, name="FinalOutput"),
-    ]
-    for node in nodes:
+    # Nodes
+    d_in = PhysicsDataNode(id=d_in_id, name="Input")
+
+    f_launch = LauncherNode(
+        id=f_launch_id,
+        name="Launch(square)",
+        input_ports={"n": PortDef("n", PortRole.DATA)},
+        output_ports={"obs_output": PortDef("obs_output", PortRole.OBSERVABILITY)},
+        canonical_code_structure_hash="hash_for_user_square",
+        reply_to_nid=d_result_id,
+    )
+
+    d_result = PhysicsDataNode(id=d_result_id, name="Result(square)")
+
+    f_land = LanderNode(
+        id=f_land_id,
+        name="Land(square)",
+        input_ports={
+            LanderSpec.result_token.name: PortDef(
+                LanderSpec.result_token.name, PortRole.DATA
+            )
+        },
+        output_ports={
+            "output_default": PortDef("output_default", PortRole.DATA),
+            "output_error": PortDef("output_error", PortRole.DATA),
+            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
+        },
+    )
+
+    d_out = PhysicsDataNode(id=d_out_id, name="IntermediateOutput")
+
+    f_halt = PhysicsFuncNode(
+        id=f_halt_id,
+        name="TransparentHalt",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={
+            "out": PortDef("out", PortRole.DATA),
+            "ctrl": PortDef("ctrl", PortRole.SIGNAL),
+        },
+    )
+
+    d_final = PhysicsDataNode(id=d_final_id, name="FinalOutput")
+
+    for node in [d_in, f_launch, d_result, f_land, d_out, f_halt, d_final]:
         graph.nodes[node.id] = node
 
     # Channels
     graph.channels.extend(
         [
-            Channel(d_in_id, "out", f_bleach_id, "n"),
-            Channel(f_bleach_id, "worker_input", d_worker_in_id, "in"),
-            Channel(d_worker_in_id, "out", f_worker_id, "worker_input"),
-            Channel(f_worker_id, "worker_result", d_worker_out_id, "in"),
-            Channel(d_worker_out_id, "out", f_stain_id, "worker_result"),
-            Channel(f_bleach_id, "trace_output", d_trace_id, "in"),
-            Channel(d_trace_id, "out", f_stain_id, "trace_input"),
-            Channel(f_stain_id, "output_default", d_out_id, "in"),
-            # Connect Stainer Output to Halt Node
+            # Input -> Launcher
+            Channel(d_in_id, "out", f_launch_id, "n"),
+            # Note: Launcher -> Queue is NOT a physical channel.
+            # Queue -> D_result is NOT a physical channel (handled by ComputeService).
+            # D_result -> Lander
+            Channel(d_result_id, "out", f_land_id, LanderSpec.result_token.name),
+            # Lander -> Output
+            Channel(f_land_id, "output_default", d_out_id, "in"),
+            # Output -> Halt
             Channel(d_out_id, "out", f_halt_id, "in"),
-            # Connect Halt Node to Final Data
             Channel(f_halt_id, "out", d_final_id, "in"),
         ]
     )
+
     return graph
-
-
-# --- The Test ---
 
 
 @pytest.mark.asyncio
 async def test_machine_self_terminating_flow():
-    # 1. Setup: Build all components of the Machine
     graph = build_test_graph()
     memory = VolatileMemory()
 
-    # Kernel Function Map
     function_map: Dict[str, Callable] = {
-        PhysicalIdGenerator.bleach_node("task_square"): standard_bleacher,
-        PhysicalIdGenerator.worker_node("task_square"): standard_dispatcher,
-        PhysicalIdGenerator.stain_node("task_square"): standard_stainer,
+        PhysicalIdGenerator.launcher_node("task_square"): standard_launcher,
+        PhysicalIdGenerator.lander_node("task_square"): standard_lander,
         "f_halt": transparent_halt,
     }
 
-    # Code Registry
     code_registry = CodeRegistry()
     code_registry.register("hash_for_user_square", user_square)
-
-    # Object Store
     object_store = InMemoryObjectStore()
 
-    # Communication Queues & Events
     compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
     chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
     ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
     wakeup_event = asyncio.Event()
-
-    # Event Bus (Connecting the missing piece)
     event_bus = EventBus()
 
-    # Resource Registry
     resource_registry = ResourceRegistry()
     resource_registry.register("system.object_store", object_store)
     resource_registry.register("system.compute_queue", compute_queue)
     resource_registry.register("system.chronos_queue", chronos_queue)
     resource_registry.register("system.event_bus", event_bus)
 
-    # Instantiate Core Components
     kernel = PhysicsKernel(function_map, resource_registry)
     reactor = Reactor(graph, memory, kernel, ingress_queue)
+
     compute_service = LocalComputeService(
         store=object_store,
         registry=code_registry,
@@ -181,34 +158,30 @@ async def test_machine_self_terminating_flow():
         outbound_queue=ingress_queue,
         wakeup_event=wakeup_event,
     )
+
     chronos_service = ChronosService(
         inbound_queue=chronos_queue,
         outbound_queue=ingress_queue,
         wakeup_event=wakeup_event,
     )
+
     machine = Machine(reactor, compute_service, chronos_service, wakeup_event)
 
-    # 2. Prime the System
+    # Prime
     initial_value = 10
     initial_ref = object_store.put(initial_value)
     initial_token = Token(payload=initial_ref, trace={"rid": "self_term_run"})
     memory.put(graph.nodes["d_in"], initial_token)
 
-    # 3. Execute
-    # The graph is designed to self-terminate. We just wait.
-    # We add a timeout to prevent infinite hangs if logic fails.
+    # Run
     try:
         await asyncio.wait_for(machine.run(), timeout=5.0)
     except asyncio.TimeoutError:
         pytest.fail("Machine execution timed out! Self-termination failed.")
 
-    # 4. Assert
-    # Check if the result propagated to the final node
-    assert memory.get_count("d_final") == 1, "Final output node should have one token"
-
+    # Assert
+    assert memory.get_count("d_final") == 1
     final_token = memory.take("d_final")
     final_ref = final_token.payload
     final_result = object_store.get(final_ref)
-
-    assert final_result == 100, "The final result should be 10*10"
-    print("Machine self-termination test passed: Final result is 100.")
+    assert final_result == 100

@@ -43,10 +43,10 @@ async def test_full_ref_based_e2e_flow():
     def register_task(task_name, func):
         # Find the NodeIR
         node_ir = next(n for n in graph_ir.nodes if n.name == task_name)
-        # Construct the physical worker ID (Convention from PhysicalIdGenerator)
-        worker_id = f"{node_ir.current_node_instance_hash}.worker"
+        # Construct the physical launcher ID (Convention from PhysicalIdGenerator)
+        launcher_id = f"{node_ir.current_node_instance_hash}.launch"
         # Lookup canonical hash
-        canonical_hash = assembly.symbol_table[worker_id]
+        canonical_hash = assembly.symbol_table[launcher_id]
         code_registry.register(canonical_hash, func)
 
     register_task("add_one", add_one.func)

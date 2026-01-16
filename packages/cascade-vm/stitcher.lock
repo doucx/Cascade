@@ -425,6 +425,10 @@
       "baseline_code_structure_hash": "ef883be13113539a729b201b2600f5e0239348b65bd28bc465ceb2ef3d1f7a4f",
       "baseline_yaml_content_hash": "401784ff551e72e0d24d403e6fcae0588dd08efece7b31d2f7b81587350fc6de"
     },
+    "py://packages/cascade-vm/tests/integration/test_context_injection.py#build_test_dyad_for_injection": {
+      "baseline_code_signature_text": "def build_test_dyad_for_injection() -> BipartiteGraph:",
+      "baseline_code_structure_hash": "67009b9e329e959e3a05e9a369efe04107463c2d0d1e984fd0ef7128d0fe991d"
+    },
     "py://packages/cascade-vm/tests/integration/test_context_injection.py#build_test_triad_for_injection": {
       "baseline_code_signature_text": "def build_test_triad_for_injection() -> BipartiteGraph:",
       "baseline_code_structure_hash": "f299540f2c4f5b191e6e3ac67730d75ddafa6cd5139c93f76d347fea178245c8"

@@ -1,7 +1,7 @@
 from typing import Any
 from dataclasses import dataclass
 from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.std.specs import ContinuousAllocatorSpec, ContinuousReclaimerSpec
+from cascade.spec.components import ContinuousAllocatorSpec, ContinuousReclaimerSpec
 from cascade.spec.physics.binding import implements
 
 

@@ -5,7 +5,6 @@ from .resource import (
     ContinuousAllocatorSpec,
     ContinuousReclaimerSpec,
 )
-from .triad import BleacherSpec, WorkerSpec, StainerSpec, ObservabilitySpec
 from .system import (
     EgressSpec,
     GateSpec,
@@ -13,15 +12,13 @@ from .system import (
     RetrySpec,
     TerminatorSpec,
     DrainerSpec,
+    ObservabilitySpec,
 )
 
 __all__ = [
     "DiscreteAllocatorSpec",
     "DiscreteReclaimerSpec",
-    "BleacherSpec",
     "ObservabilitySpec",
-    "WorkerSpec",
-    "StainerSpec",
     "EgressSpec",
     "GateSpec",
     "SleepSpec",

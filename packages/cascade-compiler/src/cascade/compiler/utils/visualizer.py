@@ -1,6 +1,8 @@
 from typing import List
 from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, PhysicsNode
+from cascade.spec.physical.dyad import LauncherNode, LanderNode
+from cascade.spec.physical.constants import NodePrefix
 
 
 class GraphDumper:
@@ -47,43 +49,56 @@ class GraphDumper:
 
         if isinstance(node, PhysicsDataNode):
             attrs["shape"] = "ellipse"
-            attrs["fillcolor"] = "#e1f5fe"  # Light Blue
-            attrs["color"] = "#01579b"
+            attrs["fillcolor"] = "#ffffff"  # Default White
+            attrs["color"] = "#333333"
+
+            # Heuristics based on NodePrefix
+            if node.id.startswith(f"{NodePrefix.CONST}."):
+                attrs["fillcolor"] = "#e1f5fe"  # Light Blue (Data Source)
+                attrs["color"] = "#01579b"
+            elif node.id.startswith(f"{NodePrefix.PULSE}."):
+                attrs["fillcolor"] = "#e8eaf6"  # Indigo Tint (Trigger)
+                attrs["color"] = "#1a237e"
+            elif NodePrefix.LEDGER in node.id or "resource" in node.id:
+                attrs["fillcolor"] = "#e0f7fa"  # Cyan tint (Resource State)
+                attrs["color"] = "#006064"
+            elif node.id.endswith(f".{NodePrefix.RESULT}"):
+                attrs["fillcolor"] = "#f3e5f5"  # Purple Tint (Landing Pad)
+                attrs["color"] = "#4a148c"
 
             # Highlight nodes with initial potential energy
             if node.initial_tokens > 0:
                 attrs["penwidth"] = "2"
                 attrs["label"] += f"\\nTokens: {node.initial_tokens}"
 
-            # Special coloring for Resources buffers/ledgers
-            if "resource" in node.id or "ledger" in node.id:
-                attrs["fillcolor"] = "#e0f7fa"  # Cyan tint
-            elif "trace" in node.id:
-                attrs["fillcolor"] = "#f5f5f5"  # Grey (less important)
-
         elif isinstance(node, PhysicsFuncNode):
             attrs["shape"] = "box"
-            attrs["fillcolor"] = "#fff9c4"  # Light Yellow (Default Worker)
+            attrs["fillcolor"] = "#fff9c4"  # Default Worker (Yellow)
             attrs["color"] = "#fbc02d"
 
-            # Color coding based on role heuristics
-            if ".bleach" in node.id:
-                attrs["fillcolor"] = "#ffccbc"  # Light Orange
-                attrs["color"] = "#d84315"
-            elif ".stain" in node.id:
-                attrs["fillcolor"] = "#c8e6c9"  # Light Green
+            # 1. Check Dyad Roles
+            if isinstance(node, LauncherNode):
+                attrs["fillcolor"] = "#c8e6c9"  # Light Green (The Starter)
                 attrs["color"] = "#2e7d32"
+            elif isinstance(node, LanderNode):
+                attrs["fillcolor"] = "#ffccbc"  # Light Orange (The Finisher)
+                attrs["color"] = "#d84315"
+
+            # 2. Check System ICs based on prefixes
+            elif node.id.startswith(f"{NodePrefix.EGRESS}."):
+                attrs["fillcolor"] = "#f8bbd0"  # Pink (System Exit)
+                attrs["color"] = "#880e4f"
             elif "allocator" in node.id:
-                attrs["fillcolor"] = "#b2ebf2"  # Cyan
+                attrs["fillcolor"] = "#b2ebf2"  # Cyan (Broker)
                 attrs["color"] = "#006064"
             elif "reclaimer" in node.id:
-                attrs["fillcolor"] = "#b2dfdb"  # Teal
+                attrs["fillcolor"] = "#b2dfdb"  # Teal (Broker)
                 attrs["color"] = "#004d40"
             elif "observer" in node.id:
-                attrs["fillcolor"] = "#e1bee7"  # Purple
+                attrs["fillcolor"] = "#e1bee7"  # Purple (Observability)
                 attrs["color"] = "#4a148c"
-            elif "probe" in node.id:
-                attrs["fillcolor"] = "#ffecb3"  # Amber
-                attrs["shape"] = "hexagon"
+            elif "gate" in node.id:
+                attrs["fillcolor"] = "#fff3e0"  # Orange Tint (Control)
+                attrs["color"] = "#e65100"
 
         return attrs

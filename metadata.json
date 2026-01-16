@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor: 集中核心接口与契约至 cascade-spec 以实现彻底解耦", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768550908.6826577, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(spec): enforce Trace propagation in ComputeRequest", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768551500.0809479, "duration_ms": 0}}

@@ -1,5 +1,5 @@
 import json
-import cascade as cs
+import cascade.sdk as cs
 from cascade.execution.graph.model.build import build_graph
 from cascade.execution.graph.model.serialize import to_json, from_json, graph_to_dict
 

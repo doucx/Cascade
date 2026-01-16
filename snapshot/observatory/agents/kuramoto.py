@@ -13,7 +13,7 @@ import random
 import time
 from typing import List
 
-import cascade as cs
+import cascade.sdk as cs
 from cascade.spec.runtime.interfaces import Connector
 from cascade.spec.blueprint import TailCall
 from observatory.networking.direct_channel import DirectChannel

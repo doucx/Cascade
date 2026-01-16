@@ -1,5 +1,5 @@
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 from cascade.execution.graph.model.exceptions import StaticGraphError
 from cascade.runtime import Engine, EventBus
 from cascade.runtime.io.executors.local import LocalExecutor

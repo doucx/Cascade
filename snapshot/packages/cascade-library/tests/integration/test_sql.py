@@ -1,5 +1,5 @@
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 

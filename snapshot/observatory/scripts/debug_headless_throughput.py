@@ -21,7 +21,7 @@ import random
 import time
 from typing import List
 
-import cascade as cs
+import cascade.sdk as cs
 from cascade.spec.resource import resource
 
 from observatory.agents.kuramoto import firefly_agent

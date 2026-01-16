@@ -14,7 +14,7 @@ def test_context_isolation():
 
 
 def test_param_factory_registration():
-    import cascade as cs
+    import cascade.sdk as cs
 
     # 获取并清理上下文
     ctx = get_current_context()
@@ -43,7 +43,7 @@ def test_param_factory_registration():
 
 
 def test_env_factory_registration():
-    import cascade as cs
+    import cascade.sdk as cs
 
     ctx = get_current_context()
     if hasattr(ctx, "input_specs"):

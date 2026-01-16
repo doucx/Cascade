@@ -1,6 +1,6 @@
 import asyncio
 import time
-import cascade as cs
+import cascade.sdk as cs
 from cascade.connectors.local import LocalBusConnector
 from cascade.spec.dsl.resources import resource
 from observatory.agents.kuramoto import firefly_agent

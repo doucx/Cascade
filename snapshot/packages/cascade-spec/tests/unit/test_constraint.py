@@ -1,4 +1,4 @@
-import cascade as cs
+import cascade.sdk as cs
 from cascade.execution.graph.model.build import build_graph
 from cascade.spec.dsl.constraint import ResourceConstraint
 

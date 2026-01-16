@@ -1,5 +1,5 @@
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 
 
 def test_router_selects_correct_path():

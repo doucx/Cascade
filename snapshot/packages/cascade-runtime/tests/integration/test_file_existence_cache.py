@@ -1,4 +1,4 @@
-import cascade as cs
+import cascade.sdk as cs
 from cascade.runtime.io.caching import FileExistenceCache
 
 

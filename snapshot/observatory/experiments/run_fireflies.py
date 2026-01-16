@@ -6,7 +6,7 @@ import multiprocessing as mp
 from typing import Dict, Any, List, Optional
 import typer
 
-import cascade as cs
+import cascade.sdk as cs
 from cascade.connectors.local import LocalBusConnector
 from cascade.spec.dsl.resources import resource
 from cascade.runtime.services.resources.manager import ResourceManager

@@ -1,5 +1,5 @@
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 
 # Mark all tests in this module to be skipped if jinja2 is not installed
 pytest.importorskip("jinja2")

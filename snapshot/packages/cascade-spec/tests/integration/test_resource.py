@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-import cascade as cs
+import cascade.sdk as cs
 from cascade.bus.events import (
     ResourceAcquired,
     ResourceReleased,

@@ -3,7 +3,7 @@ import pytest
 
 def test_core_components_are_accessible_from_top_level():
     try:
-        from cascade import (
+        from cascade.sdk import (
             Engine,
             EventBus,
             NativeSolver,
@@ -22,10 +22,10 @@ def test_core_components_are_accessible_from_top_level():
 
 
 def test_accessing_non_existent_attribute_raises_attribute_error():
-    import cascade as cs
+    import cascade.sdk as cs
 
     with pytest.raises(
         AttributeError,
-        match="module 'cascade' has no attribute 'ThisClassShouldNotExist'",
+        match="module 'cascade.sdk' has no attribute 'ThisClassShouldNotExist'",
     ):
         _ = cs.ThisClassShouldNotExist

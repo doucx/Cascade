@@ -5,7 +5,7 @@ import statistics
 import os
 from typing import List
 
-import cascade as cs
+import cascade.sdk as cs
 
 # --- Experiment Configuration ---
 # Correctly model CPU saturation by pinning the number of CPU-bound tasks

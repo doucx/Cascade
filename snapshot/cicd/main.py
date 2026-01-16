@@ -1,5 +1,5 @@
 import sys
-import cascade as cs
+import cascade.sdk as cs
 import typer
 from .workflows import pr_check_workflow
 

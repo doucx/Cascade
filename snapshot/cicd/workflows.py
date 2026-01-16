@@ -1,5 +1,5 @@
 import os
-import cascade as cs
+import cascade.sdk as cs
 from typing import List
 from .tasks import (
     parse_git_diff,

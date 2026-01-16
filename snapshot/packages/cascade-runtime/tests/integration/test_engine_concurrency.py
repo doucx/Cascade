@@ -1,6 +1,6 @@
 import time
 import pytest
-import cascade as cs
+import cascade.sdk as cs
 from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus

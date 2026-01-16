@@ -1,6 +1,6 @@
 import pytest
 from typer.testing import CliRunner
-import cascade as cs
+import cascade.sdk as cs
 from cascade.common.context import get_current_context
 
 # Skip if typer is not installed

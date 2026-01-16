@@ -2,7 +2,7 @@ import asyncio
 import pytest
 from unittest.mock import MagicMock, ANY
 
-import cascade as cs
+import cascade.sdk as cs
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine

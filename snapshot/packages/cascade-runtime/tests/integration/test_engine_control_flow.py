@@ -1,10 +1,7 @@
 import pytest
 import cascade.sdk as cs
 from cascade.runtime import EventBus
-from cascade.runtime.host.instance import Engine
 from cascade.bus.events import TaskSkipped
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.execution.graph.errors import DependencyMissingError
 from cascade.test_utils.helpers import SpySubscriber
 
@@ -23,7 +20,7 @@ async def test_run_if_true(engine_factory):
 
     bus = EventBus()
     spy = SpySubscriber(bus)
-    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
 
     result = await engine.run(flow)
     assert result == "executed"
@@ -46,7 +43,7 @@ async def test_run_if_false(engine_factory):
 
     bus = EventBus()
     spy = SpySubscriber(bus)
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
 
     # Now asserts DependencyMissingError instead of KeyError
     with pytest.raises(DependencyMissingError):
@@ -78,7 +75,7 @@ async def test_cascade_skip(engine_factory):
 
     bus = EventBus()
     spy = SpySubscriber(bus)
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
 
     # Now asserts DependencyMissingError instead of KeyError
     with pytest.raises(DependencyMissingError):

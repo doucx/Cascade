@@ -1,15 +1,12 @@
 import pytest
 import cascade.sdk as cs
 from cascade.runtime import EventBus
-from cascade.runtime.host.instance import Engine
 from cascade.bus.events import TaskSkipped
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.test_utils.helpers import SpySubscriber
 
 
 @pytest.mark.asyncio
-async def test_pruning_exclusive_branches():
+async def test_pruning_exclusive_branches(engine_factory):
     @cs.task
     def get_route():
         return "a"
@@ -30,10 +27,6 @@ async def test_pruning_exclusive_branches():
     def branch_b_upstream(dep):
         return "B_UP"  # Should also be pruned (recursive)
 
-    # branch_b depends on branch_b_upstream
-    # branch_b_upstream depends on dummy_dep
-    # This pushes branch_b_upstream to Stage 1, while get_route (selector) is in Stage 0.
-    # This ensures pruning happens BEFORE branch_b_upstream is scheduled.
     b_chain = branch_b(branch_b_upstream(dummy_dep()))
 
     router = cs.Router(selector=get_route(), routes={"a": branch_a(), "b": b_chain})
@@ -46,7 +39,7 @@ async def test_pruning_exclusive_branches():
 
     bus = EventBus()
     spy = SpySubscriber(bus)
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
 
     result = await engine.run(workflow)
     assert result == "A"
@@ -64,7 +57,7 @@ async def test_pruning_exclusive_branches():
 
 
 @pytest.mark.asyncio
-async def test_pruning_shared_dependency():
+async def test_pruning_shared_dependency(engine_factory):
     @cs.task
     def get_route():
         return "a"
@@ -96,7 +89,7 @@ async def test_pruning_shared_dependency():
 
     bus = EventBus()
     spy = SpySubscriber(bus)
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
 
     result = await engine.run(workflow)
     assert result == "A(SHARED)"

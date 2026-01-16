@@ -1,7 +1,5 @@
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 
 @cs.task
@@ -20,7 +18,7 @@ def sum_all(numbers: list[int]) -> int:
 
 
 @pytest.mark.asyncio
-async def test_map_reduce_pipeline():
+async def test_map_reduce_pipeline(engine):
     # 1. Generate dynamic input: [0, 1, 2, 3, 4]
     nums = generate_range(5)
 
@@ -28,13 +26,8 @@ async def test_map_reduce_pipeline():
     doubled_nums = double.map(x=nums)
 
     # 3. Reduce: 20
-    # Here doubled_nums is a MappedLazyResult.
-    # The engine must resolve this to [0, 2, 4, 6, 8] before calling sum_all.
     total = sum_all(numbers=doubled_nums)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(total)
 
     assert result == 20

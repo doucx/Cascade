@@ -1,29 +1,21 @@
 import pytest
 import cascade.sdk as cs
 from cascade.execution.graph.model.exceptions import StaticGraphError
-from cascade.runtime import Engine, EventBus
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 
 @pytest.mark.asyncio
-async def test_task_returning_lazy_result_is_forbidden_at_runtime():
+async def test_task_returning_lazy_result_is_forbidden_at_runtime(engine):
     @cs.task
     def task_b():
         return "B"
 
     @cs.task
     def task_a_violating():
-        # This is the anti-pattern: a task's logic should not be
-        # building new graph components at runtime. It should return data or a Jump.
         return task_b()
 
     workflow = task_a_violating()
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
-
-    # This test will FAIL initially because the LocalExecutor does not yet
-    # raise StaticGraphError. It will pass once the validation is implemented.
+    # Use default engine fixture
     with pytest.raises(
         StaticGraphError,
         match="Task 'task_a_violating' illegally returned a LazyResult",

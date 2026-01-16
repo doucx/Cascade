@@ -1,13 +1,10 @@
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.host.instance import Engine
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.bus.events import TaskSkipped
 
 
 @pytest.mark.asyncio
-async def test_sequence_executes_in_order(bus_and_spy):
+async def test_sequence_executes_in_order(bus_and_spy, engine_factory):
     bus, spy = bus_and_spy
     execution_order = []
 
@@ -25,14 +22,14 @@ async def test_sequence_executes_in_order(bus_and_spy):
 
     workflow = cs.sequence([task_a(), task_b(), task_c()])
 
-    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
     await engine.run(workflow)
 
     assert execution_order == ["A", "B", "C"]
 
 
 @pytest.mark.asyncio
-async def test_sequence_forwards_last_result(bus_and_spy):
+async def test_sequence_forwards_last_result(bus_and_spy, engine_factory):
     bus, _ = bus_and_spy
 
     @cs.task
@@ -44,14 +41,14 @@ async def test_sequence_forwards_last_result(bus_and_spy):
         return "last"
 
     workflow = cs.sequence([first(), last()])
-    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
     result = await engine.run(workflow)
 
     assert result == "last"
 
 
 @pytest.mark.asyncio
-async def test_sequence_aborts_on_failure(bus_and_spy):
+async def test_sequence_aborts_on_failure(bus_and_spy, engine_factory):
     bus, spy = bus_and_spy
     execution_order = []
 
@@ -69,7 +66,7 @@ async def test_sequence_aborts_on_failure(bus_and_spy):
         execution_order.append("never")
 
     workflow = cs.sequence([task_ok(), task_fail(), task_never()])
-    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
 
     with pytest.raises(ValueError, match="This task fails"):
         await engine.run(workflow)
@@ -78,7 +75,7 @@ async def test_sequence_aborts_on_failure(bus_and_spy):
 
 
 @pytest.mark.asyncio
-async def test_sequence_aborts_on_skipped_node(bus_and_spy):
+async def test_sequence_aborts_on_skipped_node(bus_and_spy, engine_factory):
     bus, spy = bus_and_spy
 
     @cs.task
@@ -97,7 +94,7 @@ async def test_sequence_aborts_on_skipped_node(bus_and_spy):
     # task_b will be skipped, which should cause task_c to be skipped too.
     workflow = cs.sequence([task_a(), task_b(1).run_if(false_condition), task_c(2)])
 
-    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
     await engine.run(workflow)
 
     skipped_events = spy.events_of_type(TaskSkipped)
@@ -112,7 +109,7 @@ async def test_sequence_aborts_on_skipped_node(bus_and_spy):
 
 
 @pytest.mark.asyncio
-async def test_pipeline_chains_data_correctly(bus_and_spy):
+async def test_pipeline_chains_data_correctly(bus_and_spy, engine_factory):
     bus, _ = bus_and_spy
 
     @cs.task
@@ -124,14 +121,14 @@ async def test_pipeline_chains_data_correctly(bus_and_spy):
         return x * 2
 
     workflow = cs.pipeline(10, [add_one, multiply_by_two])
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
     result = await engine.run(workflow)
 
     assert result == 22
 
 
 @pytest.mark.asyncio
-async def test_pipeline_with_lazy_initial_input(bus_and_spy):
+async def test_pipeline_with_lazy_initial_input(bus_and_spy, engine_factory):
     bus, _ = bus_and_spy
 
     @cs.task
@@ -143,14 +140,14 @@ async def test_pipeline_with_lazy_initial_input(bus_and_spy):
         return x + 1
 
     workflow = cs.pipeline(get_initial(), [add_one])
-    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
     result = await engine.run(workflow)
 
     assert result == 11
 
 
 @pytest.mark.asyncio
-async def test_pipeline_with_run_if_data_penetration(bus_and_spy):
+async def test_pipeline_with_run_if_data_penetration(bus_and_spy, engine_factory):
     bus, spy = bus_and_spy
 
     @cs.task
@@ -175,7 +172,7 @@ async def test_pipeline_with_run_if_data_penetration(bus_and_spy):
         ],
     )
 
-    engine = engine_factory(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+    engine = engine_factory(bus=bus)
     result = await engine.run(workflow)
 
     # Expected: 10 -> add_one -> 11

@@ -1,7 +1,5 @@
 import pytest
 import cascade.sdk as cs
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.execution.graph.solvers.native import NativeSolver
 
 
 @cs.task
@@ -15,7 +13,7 @@ def sum_all(numbers: list[int]) -> int:
 
 
 @pytest.mark.asyncio
-async def test_map_basic():
+async def test_map_basic(engine):
     inputs = [1, 2, 3]
 
     # 1. Map 'double' over the inputs -> [2, 4, 6]
@@ -24,29 +22,23 @@ async def test_map_basic():
     # 2. Reduce the results -> 12
     total = sum_all(numbers=mapped_results)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(total)
     assert result == 12
 
 
 @pytest.mark.asyncio
-async def test_map_empty():
+async def test_map_empty(engine):
     inputs = []
 
     mapped_results = double.map(x=inputs)
     total = sum_all(numbers=mapped_results)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(total)
     assert result == 0
 
 
 @pytest.mark.asyncio
-async def test_map_dynamic_input():
+async def test_map_dynamic_input(engine):
     @cs.task
     def generate_numbers(n: int) -> list[int]:
         return list(range(n))
@@ -60,15 +52,12 @@ async def test_map_dynamic_input():
     # 3. Sum -> 12
     total = sum_all(numbers=doubled)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(total)
     assert result == 12
 
 
 @pytest.mark.asyncio
-async def test_map_multiple_args():
+async def test_map_multiple_args(engine):
     @cs.task
     def add(a: int, b: int) -> int:
         return a + b
@@ -80,15 +69,12 @@ async def test_map_multiple_args():
     mapped = add.map(a=list_a, b=list_b)
     total = sum_all(numbers=mapped)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     result = await engine.run(total)
     assert result == 66
 
 
 @pytest.mark.asyncio
-async def test_map_mismatched_lengths():
+async def test_map_mismatched_lengths(engine):
     @cs.task
     def add(a: int, b: int) -> int:
         return a + b
@@ -98,8 +84,5 @@ async def test_map_mismatched_lengths():
 
     mapped = add.map(a=list_a, b=list_b)
 
-    engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
-    )
     with pytest.raises(ValueError, match="mismatched lengths"):
         await engine.run(mapped)

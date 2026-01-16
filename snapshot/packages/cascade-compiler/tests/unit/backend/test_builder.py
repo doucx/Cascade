@@ -5,7 +5,7 @@ from cascade.compiler.backend.builder import Builder
 from cascade.spec.physical.environment import EnvironmentDef
 from cascade.reflection import PhysicalIdGenerator
 from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.std.specs import BleacherSpec
+from cascade.spec.components import BleacherSpec
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ from cascade.spec.physical.object import Ref
 from cascade.spec.physical.triad import WorkerNode
 from cascade.reflection import PhysicalIdGenerator
 from cascade.spec.runtime import ComputeRequest
-from cascade.std.specs import WorkerSpec
+from cascade.spec.components import WorkerSpec
 from cascade.spec.physics.binding import implements
 
 logger = logging.getLogger(__name__)

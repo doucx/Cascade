@@ -1,7 +1,7 @@
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.std.specs import EgressSpec
+from cascade.spec.components import EgressSpec
 from cascade.spec.physical.constants import NodePrefix
 from ...expander import SubGraph
 from ..context import ExpansionContext

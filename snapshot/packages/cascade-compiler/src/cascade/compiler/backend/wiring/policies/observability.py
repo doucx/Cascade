@@ -3,7 +3,7 @@ from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.triad import ObservabilityNode
 from cascade.spec.physical.ports import PortRole, PortDef
-from cascade.std.specs import ObservabilitySpec, BleacherSpec, StainerSpec
+from cascade.spec.components import ObservabilitySpec, BleacherSpec, StainerSpec
 from ...expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from ..context import WiringContext

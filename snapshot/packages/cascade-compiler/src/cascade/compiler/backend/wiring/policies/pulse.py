@@ -1,5 +1,5 @@
 from cascade.spec.ir.graph import NodeIR
-from cascade.std.specs import BleacherSpec
+from cascade.spec.components import BleacherSpec
 from ...expander import SubGraph
 from ..context import WiringContext
 from cascade.spec.compiler.interfaces import WiringPolicy

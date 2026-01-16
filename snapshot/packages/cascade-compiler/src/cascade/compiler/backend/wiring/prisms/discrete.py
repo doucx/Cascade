@@ -4,7 +4,7 @@ from cascade.spec.physical.environment import ResourceDef
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.std.specs import (
+from cascade.spec.components import (
     DiscreteAllocatorSpec,
     DiscreteReclaimerSpec,
     ResourceRequestorSpec,

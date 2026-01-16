@@ -4,7 +4,7 @@ from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.physical.topology import Channel
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.compiler.model import SubGraph
-from cascade.std.specs import BleacherSpec
+from cascade.spec.components import BleacherSpec
 from cascade.reflection import PhysicalIdGenerator
 
 

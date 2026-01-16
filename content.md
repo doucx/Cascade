@@ -4,6 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-packages/cascade-test-utils/src/cascade/test_utils/harness.py | 4 +++-
- 1 file changed, 3 insertions(+), 1 deletion(-)
+packages/cascade-vm/tests/integration/test_machine_integration.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 ```

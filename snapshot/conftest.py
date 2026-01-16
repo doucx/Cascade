@@ -95,6 +95,11 @@ from cascade.execution.graph.logic.processor import NodeProcessor
 from cascade.execution.graph.strategy import GraphExecutionStrategy
 from cascade.runtime.services.constraints.manager import ConstraintManager
 from cascade.runtime.services.resources.container import ResourceContainer
+from cascade.runtime.services.constraints.handlers import (
+    PauseConstraintHandler,
+    ConcurrencyConstraintHandler,
+    RateLimitConstraintHandler,
+)
 
 # Default Components for VM Strategy
 from cascade.runtime.strategies.vm import VMExecutionStrategy
@@ -106,8 +111,8 @@ def engine_factory() -> Callable[..., Engine]:
     Provides a factory function to create a Cascade Engine instance.
 
     This factory encapsulates the logic for selecting a default execution strategy
-    based on the CASCADE_BACKEND environment variable, decoupling the core Engine
-    from specific strategy implementations.
+    and assembling all required services, decoupling the core Engine
+    from specific strategy implementations and service construction.
     """
 
     def _factory(
@@ -117,6 +122,7 @@ def engine_factory() -> Callable[..., Engine]:
         bus: Optional[EventBus] = None,
         strategy: Optional[ExecutionStrategy] = None,
         resource_manager: Optional[ResourceManager] = None,
+        constraint_manager: Optional[ConstraintManager] = None,
         **kwargs,  # Pass-through for other Engine args like connector, system_resources etc.
     ) -> Engine:
         # 1. Provide sane defaults for core components
@@ -124,11 +130,20 @@ def engine_factory() -> Callable[..., Engine]:
         _executor = executor or LocalExecutor()
         _bus = bus or EventBus()
 
-        # 2. Manage shared ResourceManager dependency
-        # If a manager is passed in, use it. Otherwise, create one from system_resources kwarg.
+        # 2. Create and configure shared services
         _resource_manager = resource_manager or ResourceManager(
             capacity=kwargs.get("system_resources")
         )
+        _constraint_manager = constraint_manager or ConstraintManager(_resource_manager)
+        _wakeup_event = asyncio.Event()
+
+        # Register default handlers if the manager is newly created
+        if not constraint_manager:
+            _constraint_manager.register_handler(PauseConstraintHandler())
+            _constraint_manager.register_handler(ConcurrencyConstraintHandler())
+            _constraint_manager.register_handler(RateLimitConstraintHandler())
+
+        _constraint_manager.set_wakeup_callback(_wakeup_event.set)
 
         # 3. Create strategy if not provided
         if strategy is None:
@@ -136,25 +151,21 @@ def engine_factory() -> Callable[..., Engine]:
             if backend_choice == "vm":
                 strategy = VMExecutionStrategy(executor=_executor, bus=_bus)
             else:  # Default to 'graph'
-                # build graph strategy with shared components
-                constraint_manager = ConstraintManager(_resource_manager)
-                wakeup_event = asyncio.Event()
-                constraint_manager.set_wakeup_callback(wakeup_event.set)
                 resource_container = ResourceContainer(_bus)
                 node_processor = NodeProcessor(
                     executor=_executor,
                     bus=_bus,
                     resource_manager=_resource_manager,
-                    constraint_manager=constraint_manager,
+                    constraint_manager=_constraint_manager,
                     solver=_solver,
                 )
                 strategy = GraphExecutionStrategy(
                     solver=_solver,
                     node_processor=node_processor,
                     resource_container=resource_container,
-                    constraint_manager=constraint_manager,
+                    constraint_manager=_constraint_manager,
                     bus=_bus,
-                    wakeup_event=wakeup_event,
+                    wakeup_event=_wakeup_event,
                 )
 
         # 4. Construct Engine with all components
@@ -164,7 +175,9 @@ def engine_factory() -> Callable[..., Engine]:
             bus=_bus,
             strategy=strategy,
             resource_manager=_resource_manager,
-            **kwargs,  # Pass through system_resources, connector etc.
+            constraint_manager=_constraint_manager,
+            wakeup_event=_wakeup_event,
+            **kwargs,
         )
 
     return _factory

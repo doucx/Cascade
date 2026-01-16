@@ -17,20 +17,20 @@ from cascade.bus.events import (
     ConnectorConnected,
     ConnectorDisconnected,
 )
-from cascade.spec.runtime.interfaces import Solver, Executor, StateBackend, Connector
-from cascade.spec.runtime.storage import ObjectStore
+from cascade.spec.runtime import (
+    Solver,
+    Executor,
+    StateBackend,
+    Connector,
+    ExecutionStrategy,
+    ExecutionContext,
+    ObjectStore,
+)
 from ..storage import InMemoryObjectStore
 from ..services.resources.manager import ResourceManager
 from ..services.constraints import ConstraintManager
-from ..services.constraints.handlers import (
-    PauseConstraintHandler,
-    ConcurrencyConstraintHandler,
-    RateLimitConstraintHandler,
-)
 from ..io.state import InMemoryStateBackend
 from ..services.resources.container import ResourceContainer
-from cascade.spec.runtime import ExecutionContext
-from cascade.spec.runtime import ExecutionStrategy
 
 
 class Engine:
@@ -40,6 +40,8 @@ class Engine:
         executor: Executor,
         bus: EventBus,
         strategy: ExecutionStrategy,
+        constraint_manager: ConstraintManager,
+        wakeup_event: asyncio.Event,
         state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
         system_resources: Optional[Dict[str, Any]] = None,
         connector: Optional[Connector] = None,
@@ -51,6 +53,8 @@ class Engine:
         self.executor = executor
         self.bus = bus
         self.strategy = strategy
+        self.constraint_manager = constraint_manager
+        self._wakeup_event = wakeup_event
         self.connector = connector
         # Default to InMemory factory if none provided
         self.state_backend_factory = state_backend_factory or (
@@ -67,17 +71,7 @@ class Engine:
         else:
             self.resource_manager = ResourceManager(capacity=system_resources)
 
-        # Setup constraint manager with default handlers
-        self.constraint_manager = ConstraintManager(self.resource_manager)
-        self.constraint_manager.register_handler(PauseConstraintHandler())
-        self.constraint_manager.register_handler(ConcurrencyConstraintHandler())
-        self.constraint_manager.register_handler(RateLimitConstraintHandler())
-
-        self._wakeup_event = asyncio.Event()
-        self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
-
         self.resource_container = ResourceContainer(self.bus)
-
         self._managed_subscribers = []
 
     def add_subscriber(self, subscriber: Any):

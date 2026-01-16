@@ -37,15 +37,21 @@ def reactor_backend_factory(
     if backend == "python":
         # Return the Python implementation
         return Reactor
-    elif backend == "rust":
-        # Import the high-performance Rust implementation
-        from cascade_vm_rs import RustReactor
+    # elif backend == "rust":
+    #     # Import the high-performance Rust implementation
+    #     # from cascade_vm_js import JSReactor
 
-        return RustReactor
+    #     # return RustReactor
+    #     return Reactor
+    # elif backend == "js":
+    #     # from cascade_vm_rs import RustReactor
+
+    #     # return RustReactor
+    #     return Reactor
     else:
         pytest.fail(
             f"Invalid reactor backend specified: '{backend}'. "
-            "Choose from 'python' or 'rust'."
+            "Choose from 'python'."
         )
 
 

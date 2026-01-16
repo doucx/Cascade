@@ -128,6 +128,13 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module 'cascade.sdk' has no attribute '{name}'")
 
 
+# --- for Introspection ---
+
+
+def __dir__():
+    return sorted(set(list(globals().keys()) + list(_IMPORT_MAP.keys())))
+
+
 # --- Public API Export ---
 
 __all__ = [

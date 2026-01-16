@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 迁移测试套件以适配 Dyad 架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768554937.5168548, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat: 实施二元体 (Dyad) 架构重构并迁移测试套件", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768555065.7573247, "duration_ms": 0}}

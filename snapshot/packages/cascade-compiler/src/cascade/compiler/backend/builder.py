@@ -87,12 +87,12 @@ class Builder:
             subgraph = self._expander.expand_node(node_ir)
             ctx.register_subgraph(node_ir.current_node_instance_hash, subgraph)
 
-            # 3.2 Populate Symbol Table from core triad
-            if subgraph.worker:
+            # 3.2 Populate Symbol Table from Dyad
+            if subgraph.launcher:
                 canonical_hash = node_ir.task.fingerprint[
                     "canonical_code_structure_hash"
                 ]
-                symbol_table[subgraph.worker.id] = canonical_hash
+                symbol_table[subgraph.launcher.id] = canonical_hash
 
             # 3.3 Apply expansion policies to create auxiliary nodes
             for policy in self._expansion_policies:

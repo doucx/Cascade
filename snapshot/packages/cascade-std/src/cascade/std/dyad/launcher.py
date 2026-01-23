@@ -17,37 +17,35 @@ logger = logging.getLogger(__name__)
 @implements(LauncherSpec)
 def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -> None:
     # 1. Prepare Inputs & Trace
-    input_args: List[Any] = []
+    pos_args: Dict[int, Any] = {}
     input_kwargs: Dict[str, Any] = {}
     trace_payload: Dict[str, Any] = {}
     held_resources: List[str] = []
 
-    # Use the metadata from the LauncherNode to reconstruct args and kwargs
-    for port_name in node.arg_port_names:
-        token = io.args.get(port_name)
-        if token:
-            input_args.append(token.payload)
-            trace_payload.update(token.trace)
-
-    for port_name in node.kwarg_port_names:
-        token = io.args.get(port_name)
-        if token:
-            input_kwargs[port_name] = token.payload
-            trace_payload.update(token.trace)
-
-    # Handle other non-data ports like resources
+    # Iterate over all connected input ports
     for port_name, input_token in io.args.items():
-        if not input_token or port_name in node.arg_port_names or port_name in node.kwarg_port_names:
+        if not input_token:
             continue
 
         port_def = node.input_ports[port_name]
         trace_payload.update(input_token.trace)
 
-        if port_def.role == PortRole.RESOURCE:
+        if port_def.role == PortRole.DATA:
+            if port_name.isdigit():
+                pos_args[int(port_name)] = input_token.payload
+            else:
+                input_kwargs[port_name] = input_token.payload
+        elif port_def.role == PortRole.RESOURCE:
             held_resources.append(port_name)
             if "resource_amounts" not in trace_payload:
                 trace_payload["resource_amounts"] = {}
             trace_payload["resource_amounts"][port_name] = input_token.payload
+
+    # Reconstruct the final positional args list from the sparse map
+    input_args = []
+    if pos_args:
+        for i in range(max(pos_args.keys()) + 1):
+            input_args.append(pos_args.get(i))
 
 
     start_ts = time.time()  # Wall clock for IR

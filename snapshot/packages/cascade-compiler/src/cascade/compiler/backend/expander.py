@@ -81,8 +81,6 @@ class Expander:
             },
             canonical_code_structure_hash=canonical_hash,
             reply_to_nid=d_result_id,
-            arg_port_names=[str(i) for i in range(len(node_ir.args))],
-            kwarg_port_names=set(node_ir.kwargs.keys()),
         )
 
         # 3. Create Result Data Node (The Landing Pad)

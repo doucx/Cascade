@@ -28,41 +28,43 @@ class SignatureBinder:
         if "params_context" in self.sig.parameters and "params_context" not in kw_inputs:
             kw_inputs["params_context"] = self.context.params
 
-        # 3. Reconstruct args_list based on signature consumption
-        # This is critical to handle cases where positional args are sparse or skipped
-        # because an earlier parameter was supplied via kwargs.
-        args_list = []
-        next_pos_idx = 0
+        # 3. Argument Reconstruction
+        # This logic reconstructs a canonical `*args` and `**kwargs` from the
+        # flat `pos_inputs` and `kw_inputs` maps, respecting the function signature.
+        final_args = []
+        final_kwargs = kw_inputs.copy()
 
-        for param in self.sig.parameters.values():
-            if param.kind in (
-                inspect.Parameter.POSITIONAL_ONLY,
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            ):
-                # If this parameter is already satisfied by kwargs, it consumes no positional index.
-                if param.name in kw_inputs:
-                    continue
+        pos_params = [
+            p
+            for p in self.sig.parameters.values()
+            if p.kind
+            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
 
-                # Otherwise, try to satisfy it from pos_inputs.
-                if next_pos_idx in pos_inputs:
-                    args_list.append(pos_inputs[next_pos_idx])
-                    next_pos_idx += 1
-                else:
-                    # Missing positional argument. Let 'bind' handle the error or default value.
-                    pass
-
-            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-                # *args consumes ALL remaining positional inputs, even if sparse.
-                # We sort them to ensure deterministic order.
-                remaining_keys = sorted([k for k in pos_inputs.keys() if k >= next_pos_idx])
-                for k in remaining_keys:
-                    args_list.append(pos_inputs[k])
-                # No more positional consumption possible after *args
+        # Handle named positional parameters first.
+        for i, param in enumerate(pos_params):
+            if param.name in final_kwargs:
+                # This positional slot is filled by a keyword argument.
+                if i in pos_inputs:
+                    raise TypeError(f"multiple values for argument '{param.name}'")
+                final_args.append(final_kwargs.pop(param.name))
+            elif i in pos_inputs:
+                # This positional slot is filled by a positional argument.
+                final_args.append(pos_inputs.pop(i))
+            else:
+                # This slot is unfilled. Python requires positional arguments to be
+                # contiguous before keyword-only ones. We stop filling `final_args` here
+                # and let `bind()` handle defaults or raise a TypeError for missing arguments.
                 break
+
+        # Any remaining items in pos_inputs are for the `*args` parameter.
+        if pos_inputs:
+            for i in sorted(pos_inputs.keys()):
+                final_args.append(pos_inputs[i])
 
         # 4. Bind
         try:
-            bound = self.sig.bind(*args_list, **kw_inputs)
+            bound = self.sig.bind(*final_args, **final_kwargs)
         except TypeError as e:
             raise TypeError(
                 f"Failed to bind arguments for function '{self.func.__name__}': {e}"

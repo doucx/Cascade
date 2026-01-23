@@ -1,50 +1,61 @@
-## [WIP] 增强 `SignatureBinder` 引入参数消费模拟逻辑
+我已分析完日志。
 
-好的，基于详细的错误分析，我将执行以下修复计划：
-1.  **增强 `SignatureBinder`**: 引入参数消费模拟逻辑，使其能正确处理“关键字参数优先”和“稀疏位置参数归入 `*args`”的混合场景，从而解决 `test_helpers.py` 中的 `TypeError`。
-2.  **更新测试**: 修改 `test_compute_adapters.py` 中的断言，以适应 `inspect` 库将参数归一化为位置参数的标准行为。
+## [WIP] fix(vm): 修复 SignatureBinder 中混合参数的绑定错误
+
+### 错误分析
+
+**错误现象**:
+在调用带有 `*args` 的函数（如 `_format_task(template, *args, **kwargs)`）时，如果第一个参数（`template`）通过关键字参数形式提供，同时后续的位置参数（`*args`）也存在，会触发 `TypeError: multiple values for argument 'template'`。
+
+**根本原因**:
+`SignatureBinder` 的 `bind_and_resolve` 方法在重构参数列表时存在缺陷。它的逻辑如下：
+1.  它正确地识别出 `template` 是通过关键字参数 `kw_inputs` 提供的，并跳过将其添加到位置参数列表 `args_list` 中。
+2.  **但它没有记录下位置 `0` 已经被消耗**。
+3.  当它处理 `*args` 时，它会收集所有未被消耗的位置参数。在错误场景中，它找到了索引为 `1` 的参数。
+4.  它将这个参数（来自索引 `1`）放入 `args_list` 的**第一个位置**（索引 `0`）。
+5.  最终，`inspect.signature.bind` 被调用时，它收到了一个位置参数（`args_list[0]`）和一个同名的关键字参数（`template`），从而导致了 `multiple values` 错误。
+
+### 用户需求
+
+修复 `SignatureBinder`，使其能够正确处理混合了关键字参数和 `*args` 的函数调用。
+
+### 评论
+
+这是一个微妙但关键的绑定逻辑错误。修复此问题将增强 Cascade 对复杂函数签名的支持，提高框架的健壮性。
+
+### 目标
+
+修改 `packages/cascade-vm/src/cascade/vm/compute/binding.py` 中的 `bind_and_resolve` 方法，实现一个更精确的参数重构算法，该算法能够正确处理被关键字参数占用的位置槽。
+
+### 基本原理
+
+新的实现将不再简单地跳过被关键字参数满足的位置参数。取而代之，它会：
+1.  构建一个 `final_args` 列表。
+2.  按顺序检查函数签名中的每一个位置参数。
+3.  如果一个位置被关键字参数满足，就从关键字参数字典中取出值，并放入 `final_args` 的正确位置。
+4.  如果一个位置被位置参数满足，就从位置参数字典中取出值，并放入 `final_args`。
+5.  所有剩余的位置参数都将被正确地追加到 `final_args` 列表的末尾，以供 `*args` 使用。
+6.  最后，用重建好的 `final_args` 和剩余的 `final_kwargs` 调用 `self.sig.bind()`。
+
+这种方法确保了传递给 `bind` 的参数列表与函数签名的期望完全一致，从根本上解决了冲突。
+
+### 标签
+
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/signature-binder #task/action/bug-fix #task/state/continue
+
+---
 
 ### Script
 
-#### Acts 1: 增强 SignatureBinder 逻辑
+#### Acts 1: 修复 SignatureBinder 的参数绑定逻辑
 
-我们将重写 `binding.py` 中的 `bind_and_resolve` 方法，添加对函数签名的预扫描，以智能地构建 `args_list`。
+我将用更健壮的参数重构逻辑替换 `binding.py` 中的相关代码块。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-vm/src/cascade/vm/compute/binding.py
 ~~~~~
-~~~~~python
-import inspect
-import logging
-from contextlib import ExitStack
-from typing import Any, Dict, List, Tuple, Callable
-
-from cascade.spec.dsl.resources import Inject
-from cascade.spec.runtime import ExecutionContext
-from cascade.bus.events import ResourceAcquired, ResourceReleased
-
-logger = logging.getLogger(__name__)
-
-
-class SignatureBinder:
-    def __init__(self, func: Callable, context: ExecutionContext):
-        self.func = func
-        self.sig = inspect.signature(func)
-        self.context = context
-
-    def bind_and_resolve(
-        self, raw_inputs: Dict[str, Any], stack: ExitStack
-    ) -> Tuple[List[Any], Dict[str, Any]]:
-        # 1. Input Separation
-        pos_inputs = {int(k): v for k, v in raw_inputs.items() if k.isdigit()}
-        kw_inputs = {k: v for k, v in raw_inputs.items() if not k.isdigit()}
-
-        # 2. System Parameter Injection
-        # Ensure 'params_context' is available if requested by signature
-        if "params_context" in self.sig.parameters and "params_context" not in kw_inputs:
-            kw_inputs["params_context"] = self.context.params
-
+~~~~~python.old
         # 3. Reconstruct args_list based on signature consumption
         # This is critical to handle cases where positional args are sparse or skipped
         # because an earlier parameter was supplied via kwargs.
@@ -84,142 +95,51 @@ class SignatureBinder:
             raise TypeError(
                 f"Failed to bind arguments for function '{self.func.__name__}': {e}"
             ) from e
-
-        # Apply defaults (including Inject defaults)
-        bound.apply_defaults()
-
-        # 5. Recursive Resolution
-        for name, value in bound.arguments.items():
-            resolved = self._resolve_value(value, stack)
-            if resolved is not value:
-                bound.arguments[name] = resolved
-
-        # Return the normalized arguments
-        return bound.args, bound.kwargs
-
-    def _resolve_value(self, value: Any, stack: ExitStack) -> Any:
-        if isinstance(value, Inject):
-            return self._resolve_resource(value, stack)
-        return value
-
-    def _resolve_resource(self, inject_def: Inject, stack: ExitStack) -> Any:
-        name = inject_def.resource_name
-
-        # 1. Check Active Resources (Run Scope)
-        if name in self.context.active_resources:
-            return self.context.active_resources[name]
-
-        # 2. Create Ephemeral Resource (Task Scope)
-        # Assuming resource_container is available on context
-        if not hasattr(self.context, "resource_container"):
-            raise RuntimeError(
-                "Context missing 'resource_container', cannot resolve resources."
-            )
-
-        provider = self.context.resource_container.get_provider(name)
-
-        # 3. Recursively Resolve Dependencies for the Provider
-        sig = inspect.signature(provider)
-        deps = {}
-        for param_name, param in sig.parameters.items():
-            if isinstance(param.default, Inject):
-                deps[param_name] = self._resolve_resource(param.default, stack)
-
-        # Access bus for event publishing
-        bus = getattr(self.context.resource_container, "bus", None)
-        run_id = self.context.run_id
-
-        # 4. Instantiate
-        resource = None
-        if inspect.isgeneratorfunction(provider):
-            gen = provider(**deps)
-            try:
-                resource = next(gen)
-            except StopIteration:
-                raise RuntimeError(f"Resource provider '{name}' yielded nothing.")
-
-            if bus:
-                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-
-            # Register cleanup
-            def cleanup():
-                try:
-                    next(gen)
-                except StopIteration:
-                    pass
-                except Exception as e:
-                    logger.warning(f"Error during teardown of resource '{name}': {e}")
-
-                if bus:
-                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
-
-            stack.callback(cleanup)
-            return resource
-        else:
-            resource = provider(**deps)
-
-            if bus:
-                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-
-            def cleanup_event():
-                if bus:
-                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
-
-            stack.callback(cleanup_event)
-            return resource
-~~~~~
-
-#### Acts 2: 更新 Adapter 测试
-
-由于 `SignatureBinder` 使用 `inspect.bind`，它会将通过 `kwargs` 传入但签名中定义为位置参数的参数归一化到 `args` 元组中。我们需要更新测试断言以接受这种标准行为。
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_compute_adapters.py
-~~~~~
-~~~~~python.old
-    func = mock_executor.execute.await_args.args[1]
-    assert func == sync_add
-
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    assert args == [1, 2]
-    assert kwargs == {}
 ~~~~~
 ~~~~~python.new
-    func = mock_executor.execute.await_args.args[1]
-    assert func == sync_add
+        # 3. Argument Reconstruction
+        # This logic reconstructs a canonical `*args` and `**kwargs` from the
+        # flat `pos_inputs` and `kw_inputs` maps, respecting the function signature.
+        final_args = []
+        final_kwargs = kw_inputs.copy()
 
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    # SignatureBinder normalizes args to a tuple
-    assert tuple(args) == (1, 2)
-    assert kwargs == {}
-~~~~~
+        pos_params = [
+            p
+            for p in self.sig.parameters.values()
+            if p.kind
+            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
 
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_compute_adapters.py
-~~~~~
-~~~~~python.old
-    func = mock_executor.execute.await_args.args[1]
-    assert func == async_add
+        # Handle named positional parameters first.
+        for i, param in enumerate(pos_params):
+            if param.name in final_kwargs:
+                # This positional slot is filled by a keyword argument.
+                if i in pos_inputs:
+                    raise TypeError(f"multiple values for argument '{param.name}'")
+                final_args.append(final_kwargs.pop(param.name))
+            elif i in pos_inputs:
+                # This positional slot is filled by a positional argument.
+                final_args.append(pos_inputs.pop(i))
+            else:
+                # This slot is unfilled. Python requires positional arguments to be
+                # contiguous before keyword-only ones. We stop filling `final_args` here
+                # and let `bind()` handle defaults or raise a TypeError for missing arguments.
+                break
 
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    assert args == []
-    assert kwargs == {"a": 2, "b": 3}
-~~~~~
-~~~~~python.new
-    func = mock_executor.execute.await_args.args[1]
-    assert func == async_add
+        # Any remaining items in pos_inputs are for the `*args` parameter.
+        if pos_inputs:
+            for i in sorted(pos_inputs.keys()):
+                final_args.append(pos_inputs[i])
 
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    # inspect.bind normalizes named arguments to positional if they match positional parameters
-    assert tuple(args) == (2, 3)
-    assert kwargs == {}
+        # 4. Bind
+        try:
+            bound = self.sig.bind(*final_args, **final_kwargs)
+        except TypeError as e:
+            raise TypeError(
+                f"Failed to bind arguments for function '{self.func.__name__}': {e}"
+            ) from e
 ~~~~~
 
 ### 下一步建议
-运行 `pytest` 验证所有测试通过，特别是 `test_helpers.py`（验证参数混合处理）和 `test_compute_adapters.py`（验证资源解析和绑定）。这将确认计算适配层已经修复并更加健壮。
+
+现在 Bug 已经修复，我建议我们继续推进，为这个修复创建一个 `[COMMIT]` 计划，将其作为一个原子性的、完整的单元提交到版本控制中。如果你同意，请告诉我，我将生成相应的 `git add` 和 `git commit` 指令。

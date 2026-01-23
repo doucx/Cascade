@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(compiler): 同步 GraphDumper 与 V3 二元体架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1768555426.6758556, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 更新 visualizer 测试以适配 Dyad 架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769181266.7681208, "duration_ms": 0}}

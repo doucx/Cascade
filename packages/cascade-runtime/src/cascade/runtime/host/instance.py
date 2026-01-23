@@ -190,6 +190,7 @@ class Engine:
                     run_stack=run_stack,
                     active_resources=active_resources,
                     params=params or {},
+                    resource_container=self.resource_container,
                 )
 
                 final_result = await strategy.execute(

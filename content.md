@@ -1,107 +1,160 @@
-好的，我分析了新的错误日志。第一个 `TypeError` 已经被我们之前的修复解决了，但现在暴露出了一个更深层次的逻辑问题，导致了 `IndexError`。
-
-## [WIP] fix(vm): 修复 SignatureBinder 对 *args 的处理逻辑
+## [WIP] refactor(compiler): 为参数传递重新定义确定性的 IR 规约
 
 ### 错误分析
 
-**错误现象**:
-`IndexError: Replacement index 1 out of range for positional args tuple`。这个错误发生在 `_format_task` 内部，意味着 `template.format()` 接收到的位置参数 (`*args`) 数量少于模板字符串中的占位符数量。
-
-**根本原因**:
-我们上一个补丁在修复 `TypeError` 时，引入了一个新的缺陷。让我们追踪数据流：
-1.  测试调用 `cs.format("Positional: {}, {}", get_first(), get_second())`，这会产生一个 `raw_inputs` 字典，内容为 `{'0': "...", '1': "first", '2': "second"}`。
-2.  我修改后的 `SignatureBinder` 会处理这个 `raw_inputs`。
-3.  它首先处理命名位置参数。对于 `_format_task`，只有 `template`。它正确地从 `pos_inputs` 中取出索引为 `0` 的值，并将其放入 `final_args`。同时，它使用 `pop` 从 `pos_inputs` 中**移除了**这个元素。
-4.  然后，它处理 `*args`。它遍历**剩余**的 `pos_inputs` 的键（`[1, 2]`），并将相应的值追加到 `final_args`。
-5.  **问题在于**：在 `bind` 调用时，`final_args` 包含了 `template` 的值以及 `*args` 的值，这本身是正确的。然而，`bind` 方法在解析 `*args` 时，似乎没有正确地将所有剩余的参数都分配给它，导致只有第一个参数被捕获。
-
-我之前的修复过于复杂。一个更简单、更健壮的策略是：**不要试图去重构一个完美的 `args` 列表给 `bind` 方法**。`bind` 方法本身就非常强大，能够处理关键字参数满足位置参数的情况。我们只需要确保不向它同时提供一个参数的位置值和关键字值。
-
-**解决方案**:
-我们将修改 `SignatureBinder` 的逻辑，使其只准备一个干净的 `args_list`（仅包含那些**未**通过关键字参数提供的位置参数），然后让 `bind` 方法自己去合并 `args_list` 和 `kw_inputs`。
+连续的 `TypeError` 和 `IndexError` 表明，根本问题不在于 `SignatureBinder` 的实现细节，而在于它所接收的数据结构 `raw_inputs`（源自 `NodeIR.inputs`）是信息有损且语义模糊的。该扁平字典无法区分位置参数和关键字参数，迫使绑定器进行脆弱的猜测，从而在处理 `*args` 等复杂签名时必然失败。
 
 ### 用户需求
 
-修复 `SignatureBinder`，使其能够正确地为带有 `*args` 的函数准备参数，即使某些前面的参数是通过关键字提供的。
+建立一个能够无歧义地处理任何复杂 Python 函数签名的、确定性的参数传递系统。
 
 ### 评论
 
-这是一个典型的“修复引入新 bug”的案例。这表明原始的绑定逻辑非常微妙。新的修复将采取一种更简单、更依赖 Python 内省库自身能力的方法，从而减少自定义逻辑中出错的可能性。
+这是一次必要的架构重构。通过修复 IR（系统内部的“API契约”），我们可以简化所有与之交互的组件（生产者和消费者），并消除一整类潜在的绑定错误。这完全符合 HFEA（高保真工程公理）协议的精神。
 
 ### 目标
 
-修改 `packages/cascade-vm/src/cascade/vm/compute/binding.py`，实现一个更简单、更正确的参数绑定准备逻辑。
+1.  **修改规约**: 在 `cascade-spec` 中，更新 `NodeIR` 数据结构，用明确的 `args` 和 `kwargs` 字段取代模糊的 `inputs` 字段。
+2.  **更新生产者**: 在 `cascade-compiler` 中，修改 `IRGenerator` 以生成符合新规约的 `NodeIR` 实例。
+3.  **简化消费者**: 在 `cascade-vm` 中，简化 `SignatureBinder`，移除所有参数重构逻辑，使其直接处理干净的 `args` 和 `kwargs`。
 
 ### 基本原理
 
-新的逻辑如下：
-1.  创建一个 `args_list`。
-2.  遍历所有潜在的位置参数（通过索引 `0, 1, 2...`）。
-3.  对于每个位置 `i`，检查对应的函数参数（`param = params[i]`）是否已在 `kw_inputs` 中提供。
-4.  如果**没有**在 `kw_inputs` 中提供，并且 `pos_inputs` 中有这个位置 `i` 的值，才将其添加到 `args_list`。
-5.  所有 `kw_inputs` 保持原样。
-6.  最后调用 `self.sig.bind(*args_list, **kw_inputs)`。`bind` 方法将正确地将 `args_list` 分配给未被关键字满足的参数，并将 `kw_inputs` 分配给其余的参数，从而避免冲突。
+我们将通过强化 `NodeIR` 这个核心数据契约，将参数绑定的复杂性从运行时（VM）转移到编译时（Compiler）。编译器拥有完整的 DSL 上下文，能够无歧义地分离位置参数和关键字参数。这使得运行时的绑定过程变得简单、快速且无懈可击。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/signature-binder #task/action/bug-fix #task/state/continue
+#intent/architect #intent/refine #flow/ready #priority/critical #comp/spec #comp/compiler #comp/runtime #scope/api #scope/core #ai/brainstorm #task/domain/compiler #task/object/ir-spec #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 简化并修复 SignatureBinder 的绑定逻辑
+#### Acts 1: 修改 `cascade-spec`，重新定义 NodeIR 规约
 
-我们将用上述更简单的逻辑替换 `binding.py` 中有问题的代码块。
+我们将首先修改 `NodeIR` 的定义，使其具有确定性的参数字段。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/graph.py
+~~~~~
+~~~~~python.old
+    # The logical UUID from the high-level DSL (LazyResult), if available.
+    logical_id: Optional[str] = None
+
+    inputs: Dict[str, Any] = field(default_factory=dict)
+
+    constraints: Dict[str, Any] = field(default_factory=dict)
+~~~~~
+~~~~~python.new
+    # The logical UUID from the high-level DSL (LazyResult), if available.
+    logical_id: Optional[str] = None
+
+    # V2 Argument Specification: Separated for clarity and determinism
+    args: List[Any] = field(default_factory=list)
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+
+    constraints: Dict[str, Any] = field(default_factory=dict)
+~~~~~
+
+#### Acts 2: 更新 `cascade-compiler`，使其生成符合新规约的 IR
+
+现在，我们将修改 `IRGenerator` 以填充新的 `args` 和 `kwargs` 字段。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
+~~~~~
+~~~~~python.old
+        node_ir = NodeIR(
+            current_node_instance_hash=node_id,
+            name=task_def.name,
+            task=task_def,
+            type=node_type,
+            logical_id=lr._uuid,
+            inputs=inputs,
+            constraints=constraints,
+            condition=condition_id,
+            dependencies=dependency_ids,
+            flow_control=flow_control,
+            retry_policy=self._extract_retry_policy(lr),
+            cache_policy=lr._cache_policy,
+        )
+~~~~~
+~~~~~python.new
+        node_ir = NodeIR(
+            current_node_instance_hash=node_id,
+            name=task_def.name,
+            task=task_def,
+            type=node_type,
+            logical_id=lr._uuid,
+            args=transformed_args,
+            kwargs=transformed_kwargs,
+            constraints=constraints,
+            condition=condition_id,
+            dependencies=dependency_ids,
+            flow_control=flow_control,
+            retry_policy=self._extract_retry_policy(lr),
+            cache_policy=lr._cache_policy,
+        )
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
+~~~~~
+~~~~~python.old
+        node_ir = NodeIR(
+            current_node_instance_hash=node_id,
+            name=task_def.name,
+            task=task_def,
+            type="map",
+            logical_id=lr._uuid,
+            inputs=transformed_kwargs,
+            constraints=constraints,
+            condition=condition_id,
+            dependencies=dependency_ids,
+            retry_policy=self._extract_retry_policy(lr),
+        )
+~~~~~
+~~~~~python.new
+        node_ir = NodeIR(
+            current_node_instance_hash=node_id,
+            name=task_def.name,
+            task=task_def,
+            type="map",
+            logical_id=lr._uuid,
+            # For map nodes, all inputs are keyword-based
+            args=[],
+            kwargs=transformed_kwargs,
+            constraints=constraints,
+            condition=condition_id,
+            dependencies=dependency_ids,
+            retry_policy=self._extract_retry_policy(lr),
+        )
+~~~~~
+
+#### Acts 3: 简化 `cascade-vm` 的 `SignatureBinder`
+
+最后，我们将移除 `SignatureBinder` 中所有复杂的、脆弱的参数重构逻辑。
 
 ~~~~~act
 patch_file
 packages/cascade-vm/src/cascade/vm/compute/binding.py
 ~~~~~
 ~~~~~python.old
-        # 3. Argument Reconstruction
-        # This logic reconstructs a canonical `*args` and `**kwargs` from the
-        # flat `pos_inputs` and `kw_inputs` maps, respecting the function signature.
-        final_args = []
-        final_kwargs = kw_inputs.copy()
+    def bind_and_resolve(
+        self, raw_inputs: Dict[str, Any], stack: ExitStack
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        # 1. Input Separation
+        pos_inputs = {int(k): v for k, v in raw_inputs.items() if k.isdigit()}
+        kw_inputs = {k: v for k, v in raw_inputs.items() if not k.isdigit()}
 
-        pos_params = [
-            p
-            for p in self.sig.parameters.values()
-            if p.kind
-            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-        ]
+        # 2. System Parameter Injection
+        # Ensure 'params_context' is available if requested by signature
+        if "params_context" in self.sig.parameters and "params_context" not in kw_inputs:
+            kw_inputs["params_context"] = self.context.params
 
-        # Handle named positional parameters first.
-        for i, param in enumerate(pos_params):
-            if param.name in final_kwargs:
-                # This positional slot is filled by a keyword argument.
-                if i in pos_inputs:
-                    raise TypeError(f"multiple values for argument '{param.name}'")
-                final_args.append(final_kwargs.pop(param.name))
-            elif i in pos_inputs:
-                # This positional slot is filled by a positional argument.
-                final_args.append(pos_inputs.pop(i))
-            else:
-                # This slot is unfilled. Python requires positional arguments to be
-                # contiguous before keyword-only ones. We stop filling `final_args` here
-                # and let `bind()` handle defaults or raise a TypeError for missing arguments.
-                break
-
-        # Any remaining items in pos_inputs are for the `*args` parameter.
-        if pos_inputs:
-            for i in sorted(pos_inputs.keys()):
-                final_args.append(pos_inputs[i])
-
-        # 4. Bind
-        try:
-            bound = self.sig.bind(*final_args, **final_kwargs)
-        except TypeError as e:
-            raise TypeError(
-                f"Failed to bind arguments for function '{self.func.__name__}': {e}"
-            ) from e
-~~~~~
-~~~~~python.new
         # 3. Reconstruct args_list, excluding any params already covered by kwargs.
         args_list = []
         params = list(self.sig.parameters.values())
@@ -142,8 +195,201 @@ packages/cascade-vm/src/cascade/vm/compute/binding.py
             raise TypeError(
                 f"Failed to bind arguments for function '{self.func.__name__}': {e}"
             ) from e
+
+        # Apply defaults (including Inject defaults)
+        bound.apply_defaults()
+~~~~~
+~~~~~python.new
+    def bind_and_resolve(
+        self, args: List[Any], kwargs: Dict[str, Any], stack: ExitStack
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        # With the new IR spec, the caller is responsible for providing
+        # clean args and kwargs. This binder's role is simplified.
+
+        # 1. System Parameter Injection
+        if "params_context" in self.sig.parameters and "params_context" not in kwargs:
+            kwargs["params_context"] = self.context.params
+
+        # 2. Bind
+        try:
+            bound = self.sig.bind(*args, **kwargs)
+        except TypeError as e:
+            raise TypeError(
+                f"Failed to bind arguments for function '{self.func.__name__}': {e}"
+            ) from e
+
+        # 3. Apply defaults (including Inject defaults)
+        bound.apply_defaults()
+~~~~~
+
+#### Acts 4: 更新 `SignatureBinder` 的调用者
+
+`BridgedComputeService._process_request` 是调用者，需要修改它以从新的 IR 结构中提取 `args` 和 `kwargs`。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/compute/adapters.py
+~~~~~
+~~~~~python.old
+    async def _process_request(self, request: ComputeRequest) -> None:
+        try:
+            with ExitStack() as stack:
+                # 1. Resolve Inputs (Dereference Refs)
+                raw_inputs: Dict[str, Any] = {
+                    key: self.store.get(ref) for key, ref in request.input_refs.items()
+                }
+
+                # 2. Resolve Code
+                func = self.registry.get(request.code_hash)
+
+                # 3. Smart Binding & Injection
+                binder = SignatureBinder(func, self.context)
+                args, kwargs = binder.bind_and_resolve(raw_inputs, stack)
+~~~~~
+~~~~~python.new
+    async def _process_request(self, request: ComputeRequest) -> None:
+        try:
+            with ExitStack() as stack:
+                # 1. Resolve Inputs (Dereference Refs)
+                # The request now carries pre-separated args and kwargs
+                resolved_args = [self.store.get(ref) for ref in request.input_args]
+                resolved_kwargs = {
+                    key: self.store.get(ref) for key, ref in request.input_kwargs.items()
+                }
+
+                # 2. Resolve Code
+                func = self.registry.get(request.code_hash)
+
+                # 3. Smart Binding & Injection
+                binder = SignatureBinder(func, self.context)
+                args, kwargs = binder.bind_and_resolve(
+                    resolved_args, resolved_kwargs, stack
+                )
+~~~~~
+
+#### Acts 5: 更新 `ComputeRequest` 的规约
+
+为了将 `args` 和 `kwargs` 从编译器传递到 VM，我们需要更新 `ComputeRequest` 的定义。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/runtime/contracts.py
+~~~~~
+~~~~~python.old
+@dataclass(frozen=True)
+class ComputeRequest:
+    code_hash: str
+    input_refs: Dict[str, Ref]
+    reply_to_nid: str
+    trace: Dict[str, Any]
+~~~~~
+~~~~~python.new
+from ..physical.object import Ref
+from ..physical.nodes import Token
+
+
+@dataclass(frozen=True)
+class ComputeRequest:
+    code_hash: str
+    input_args: List[Ref]
+    input_kwargs: Dict[str, Ref]
+    reply_to_nid: str
+    trace: Dict[str, Any]
+~~~~~
+
+#### Acts 6: 更新 `standard_launcher` 以创建新的 `ComputeRequest`
+
+`standard_launcher` 是 `ComputeRequest` 的生产者，也需要更新。
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/dyad/launcher.py
+~~~~~
+~~~~~python.old
+@implements(LauncherSpec)
+def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -> None:
+    # 1. Prepare Inputs & Trace
+    input_refs: Dict[str, Ref] = {}
+    trace_payload: Dict[str, Any] = {}
+    held_resources: List[str] = []
+
+    # Iterate over dynamic args
+    for port_name, input_token in io.args.items():
+        # Check port definition in node for role
+        port_def = node.input_ports[port_name]
+
+        if port_def.role == PortRole.DATA:
+            # Launcher expects inputs to be Refs (for compute) or values.
+            # The Bleacher logic assumed payload was the value/ref.
+            input_refs[port_name] = input_token.payload
+        elif port_def.role == PortRole.RESOURCE:
+            held_resources.append(port_name)
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
+
+        trace_payload.update(input_token.trace)
+~~~~~
+~~~~~python.new
+@implements(LauncherSpec)
+def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -> None:
+    # 1. Prepare Inputs & Trace
+    input_args: List[Any] = []
+    input_kwargs: Dict[str, Any] = {}
+    trace_payload: Dict[str, Any] = {}
+    held_resources: List[str] = []
+
+    # Iterate over all connected input ports
+    for port_name, input_token in io.args.items():
+        if not input_token:
+            continue
+
+        port_def = node.input_ports[port_name]
+
+        # Update trace from every token
+        trace_payload.update(input_token.trace)
+
+        if port_def.role == PortRole.DATA:
+            if port_name.isdigit():
+                # This is a temporary list to build the sparse array
+                idx = int(port_name)
+                while len(input_args) <= idx:
+                    input_args.append(None)  # Pad with placeholders
+                input_args[idx] = input_token.payload
+            else:
+                input_kwargs[port_name] = input_token.payload
+        elif port_def.role == PortRole.RESOURCE:
+            held_resources.append(port_name)
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/dyad/launcher.py
+~~~~~
+~~~~~python.old
+    request = ComputeRequest(
+        code_hash=node.canonical_code_structure_hash,
+        input_refs=input_refs,
+        reply_to_nid=node.reply_to_nid,
+        trace=trace_payload,  # Trace Tunneling happens here
+    )
+~~~~~
+~~~~~python.new
+    # Filter out any None placeholders from sparse array creation
+    final_input_args = [arg for arg in input_args if arg is not None]
+
+    request = ComputeRequest(
+        code_hash=node.canonical_code_structure_hash,
+        input_args=final_input_args,
+        input_kwargs=input_kwargs,
+        reply_to_nid=node.reply_to_nid,
+        trace=trace_payload,  # Trace Tunneling happens here
+    )
 ~~~~~
 
 ### 下一步建议
 
-这个修复应该能同时解决 `TypeError` 和 `IndexError`。在确认所有测试通过后，我建议我们创建一个 `[COMMIT]` 计划来提交这个重要的修复。
+这一系列的修改是系统性的，涉及多个核心组件。在执行之后，我们需要运行完整的测试套件来验证重构的正确性，并确保没有引入回归。一旦所有测试通过，我们就可以将这个重构作为一个主要的架构改进进行提交。

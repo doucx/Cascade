@@ -17,59 +17,24 @@ class SignatureBinder:
         self.context = context
 
     def bind_and_resolve(
-        self, raw_inputs: Dict[str, Any], stack: ExitStack
+        self, args: List[Any], kwargs: Dict[str, Any], stack: ExitStack
     ) -> Tuple[List[Any], Dict[str, Any]]:
-        # 1. Input Separation
-        pos_inputs = {int(k): v for k, v in raw_inputs.items() if k.isdigit()}
-        kw_inputs = {k: v for k, v in raw_inputs.items() if not k.isdigit()}
+        # With the new IR spec, the caller is responsible for providing
+        # clean args and kwargs. This binder's role is simplified.
 
-        # 2. System Parameter Injection
-        # Ensure 'params_context' is available if requested by signature
-        if "params_context" in self.sig.parameters and "params_context" not in kw_inputs:
-            kw_inputs["params_context"] = self.context.params
+        # 1. System Parameter Injection
+        if "params_context" in self.sig.parameters and "params_context" not in kwargs:
+            kwargs["params_context"] = self.context.params
 
-        # 3. Reconstruct args_list, excluding any params already covered by kwargs.
-        args_list = []
-        params = list(self.sig.parameters.values())
-        has_var_positional = any(
-            p.kind == inspect.Parameter.VAR_POSITIONAL for p in params
-        )
-
-        max_pos_arg = -1
-        if pos_inputs:
-            max_pos_arg = max(pos_inputs.keys())
-
-        for i in range(max_pos_arg + 1):
-            # We only add a positional argument to the list if its corresponding
-            # parameter is not already provided as a keyword argument.
-            is_in_kwargs = False
-            if i < len(params):
-                param = params[i]
-                if param.kind in (
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    inspect.Parameter.POSITIONAL_ONLY,
-                ):
-                    if param.name in kw_inputs:
-                        is_in_kwargs = True
-
-            if not is_in_kwargs:
-                if i in pos_inputs:
-                    args_list.append(pos_inputs[i])
-                elif not has_var_positional:
-                    # If there's no *args, we can't have gaps in positional args
-                    # unless they have defaults, which bind() will handle.
-                    # We can stop building the list here.
-                    break
-
-        # 4. Bind
+        # 2. Bind
         try:
-            bound = self.sig.bind(*args_list, **kw_inputs)
+            bound = self.sig.bind(*args, **kwargs)
         except TypeError as e:
             raise TypeError(
                 f"Failed to bind arguments for function '{self.func.__name__}': {e}"
             ) from e
 
-        # Apply defaults (including Inject defaults)
+        # 3. Apply defaults (including Inject defaults)
         bound.apply_defaults()
 
         # 5. Recursive Resolution

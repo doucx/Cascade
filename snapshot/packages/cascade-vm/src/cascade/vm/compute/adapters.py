@@ -210,12 +210,18 @@ class BridgedComputeService:
             return self.context.active_resources[name]
 
         # 2. Create Ephemeral Resource (Task Scope)
-        # Note: We assume task-scoped resources here don't have complex recursive dependencies
-        # for this adaptation layer.
         provider = self.context.resource_container.get_provider(name)
 
+        # 3. Recursively Resolve Dependencies for the Provider
+        sig = inspect.signature(provider)
+        deps = {}
+        for param_name, param in sig.parameters.items():
+            if isinstance(param.default, Inject):
+                deps[param_name] = self._resolve_resource(param.default, stack)
+
+        # 4. Instantiate
         if inspect.isgeneratorfunction(provider):
-            gen = provider()
+            gen = provider(**deps)
             try:
                 resource = next(gen)
             except StopIteration:
@@ -233,4 +239,4 @@ class BridgedComputeService:
             stack.callback(cleanup)
             return resource
         else:
-            return provider()
+            return provider(**deps)

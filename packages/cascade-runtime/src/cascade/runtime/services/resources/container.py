@@ -22,6 +22,9 @@ class ResourceContainer:
         self._resource_providers[resource_def.name] = resource_def
 
     def get_provider(self, name: str) -> Callable:
+        if name not in self._resource_providers:
+            raise NameError(f"Resource '{name}' is required but not registered.")
+
         provider = self._resource_providers[name]
         if isinstance(provider, ResourceDefinition):
             return provider.func

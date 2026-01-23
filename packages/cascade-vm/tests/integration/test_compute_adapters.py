@@ -120,7 +120,8 @@ async def test_process_sync_task(
     ref2 = store.put(2)
     request = ComputeRequest(
         code_hash="sync_add_hash",
-        input_refs={"0": ref1, "1": ref2},
+        input_args=[ref1, ref2],
+        input_kwargs={},
         reply_to_nid="d_worker_out.node1",
         trace={"rid": "run1"},
     )
@@ -147,7 +148,8 @@ async def test_process_sync_task(
 
     args = mock_executor.execute.await_args.args[2]
     kwargs = mock_executor.execute.await_args.args[3]
-    assert args == [1, 2]
+    # SignatureBinder normalizes args to a tuple
+    assert tuple(args) == (1, 2)
     assert kwargs == {}
 
 
@@ -163,7 +165,8 @@ async def test_process_async_task(
     ref_b = store.put(3)
     request = ComputeRequest(
         code_hash="async_add_hash",
-        input_refs={"a": ref_a, "b": ref_b},
+        input_args=[],
+        input_kwargs={"a": ref_a, "b": ref_b},
         reply_to_nid="d_worker_out.node2",
         trace={},
     )
@@ -185,8 +188,9 @@ async def test_process_async_task(
 
     args = mock_executor.execute.await_args.args[2]
     kwargs = mock_executor.execute.await_args.args[3]
-    assert args == []
-    assert kwargs == {"a": 2, "b": 3}
+    # inspect.bind normalizes named arguments to positional if they match positional parameters
+    assert tuple(args) == (2, 3)
+    assert kwargs == {}
 
 
 @pytest.mark.asyncio
@@ -198,7 +202,8 @@ async def test_task_with_compute_mode(
 
     request = ComputeRequest(
         code_hash="compute_hash",
-        input_refs={"x": store.put(10)},
+        input_args=[],
+        input_kwargs={"x": store.put(10)},
         reply_to_nid="d_worker_out.node3",
         trace={},
     )
@@ -222,7 +227,8 @@ async def test_execution_failure(
 
     request = ComputeRequest(
         code_hash="fail_hash",
-        input_refs={"0": store.put(1), "1": store.put(1)},
+        input_args=[store.put(1), store.put(1)],
+        input_kwargs={},
         reply_to_nid="d_worker_out.node4",
         trace={},
     )
@@ -255,9 +261,12 @@ async def test_is_idle_state_changes(
     service.executor.execute = blocking_executor
     service.registry.register("idle_test_hash", sync_add)
 
+    # Provide valid arguments to pass the signature binding stage
+    store = service.store
     request = ComputeRequest(
         code_hash="idle_test_hash",
-        input_refs={},
+        input_args=[store.put(1), store.put(2)],
+        input_kwargs={},
         reply_to_nid="d_out",
         trace={},
     )

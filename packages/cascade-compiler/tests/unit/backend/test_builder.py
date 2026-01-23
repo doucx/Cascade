@@ -23,7 +23,7 @@ def sample_graph_ir():
         current_node_instance_hash="node_b",
         name="NodeB",
         task=task_b_def,
-        inputs={"data": "node_a"},  # task_b.data comes from node_a
+        kwargs={"data": "node_a"},  # task_b.data comes from node_a
     )
 
     return GraphIR(nodes=[node_a, node_b])

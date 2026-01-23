@@ -49,7 +49,9 @@ class NodeIR:
     # The logical UUID from the high-level DSL (LazyResult), if available.
     logical_id: Optional[str] = None
 
-    inputs: Dict[str, Any] = field(default_factory=dict)
+    # V2 Argument Specification: Separated for clarity and determinism
+    args: List[Any] = field(default_factory=list)
+    kwargs: Dict[str, Any] = field(default_factory=dict)
 
     constraints: Dict[str, Any] = field(default_factory=dict)
 

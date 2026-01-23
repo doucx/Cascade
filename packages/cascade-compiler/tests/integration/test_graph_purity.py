@@ -51,14 +51,14 @@ def test_graph_is_serializable_and_pure():
     # with the expected stable properties exist in the graph.
     nodes_collection = deserialized_graph.nodes.values()
 
-    # Check for the constant node for argument 'a' with value 1
+    # Check for the constant node for argument '0' (was 'a') with value 1
     assert any(
-        node.name == "Const(a)" and node.initial_payload == 1
+        node.name == "Const(0)" and node.initial_payload == 1
         for node in nodes_collection
     ), "Constant node for value 1 not found after deserialization"
 
-    # Check for the constant node for argument 'b' with value 2
+    # Check for the constant node for argument '1' (was 'b') with value 2
     assert any(
-        node.name == "Const(b)" and node.initial_payload == 2
+        node.name == "Const(1)" and node.initial_payload == 2
         for node in nodes_collection
     ), "Constant node for value 2 not found after deserialization"

@@ -64,10 +64,10 @@ class LocalComputeService:
         # Note: self._active_count is incremented in run() before calling this
         try:
             # 1. Resolve Inputs
-            inputs: Dict[str, Any] = {
-                key: self.store.get(ref) for key, ref in request.input_refs.items()
+            args = [self.store.get(ref) for ref in request.input_args]
+            kwargs = {
+                key: self.store.get(ref) for key, ref in request.input_kwargs.items()
             }
-            args, kwargs = self._resolve_arguments(inputs)
 
             # 2. Resolve Code
             func = self.registry.get(request.code_hash)
@@ -103,6 +103,9 @@ class LocalComputeService:
     def _resolve_arguments(
         self, inputs: Dict[str, Any]
     ) -> Tuple[List[Any], Dict[str, Any]]:
+        # This method is now DEPRECATED due to the new ComputeRequest format
+        # but we keep it to avoid breaking other potential internal usages,
+        # though it's unlikely.
         args_map: Dict[int, Any] = {}
         kwargs: Dict[str, Any] = {}
 

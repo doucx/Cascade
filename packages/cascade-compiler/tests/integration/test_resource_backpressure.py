@@ -62,14 +62,14 @@ async def test_concurrency_limit():
         current_node_instance_hash="node_1",
         name="Task1",
         task=task_def,
-        inputs={"x": 10},
+        kwargs={"x": 10},
         constraints={"gpu": 1},
     )
     node_2 = NodeIR(
         current_node_instance_hash="node_2",
         name="Task2",
         task=task_def,
-        inputs={"x": 20},
+        kwargs={"x": 20},
         constraints={"gpu": 1},
     )
 

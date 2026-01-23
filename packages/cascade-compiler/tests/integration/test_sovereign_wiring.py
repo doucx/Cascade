@@ -53,4 +53,5 @@ def test_sovereign_wiring_flow():
 
     # That buffer should go to t2.launch
     t2_launch_id = f"{t2_id}.launch"
-    inspector.assert_connection(d_dep_id, t2_launch_id, target_port="msg")
+    # The port name is now the positional index '0', not the arg name 'msg'
+    inspector.assert_connection(d_dep_id, t2_launch_id, target_port="0")

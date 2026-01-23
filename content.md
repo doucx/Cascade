@@ -1,108 +1,67 @@
 简要回答
-我们已识别出导致测试失败的两个关键问题：`BridgedComputeService` 中缺乏对递归资源依赖解析的支持（导致 `TypeError`），以及 `ResourceContainer.get_provider` 抛出了错误的异常类型（导致 `KeyError` 而非预期的 `NameError`）。
+测试失败是因为 `BridgedComputeService` 在创建和销毁资源时**没有发布相应的生命周期事件** (`ResourceAcquired`, `ResourceReleased`)。虽然资源本身的创建逻辑（递归注入）已经修复，但 VM 后端需要显式地通过 EventBus 广播这些事件，以便测试（以及遥测系统）能够观测到资源的生命周期。
 
-我们将修复这两个问题，以确保依赖注入（DI）系统能够处理嵌套依赖，并提供正确的错误反馈。
+我们将修改 `BridgedComputeService._resolve_resource` 方法，使其在资源实例化成功后发布 `ResourceAcquired` 事件，并在资源清理时发布 `ResourceReleased` 事件。
 
-## [WIP] fix(vm): implement recursive resource injection and standardize errors
+## [WIP] fix(vm): publish resource lifecycle events in bridged compute service
 
 ### 错误分析
-
-1.  **`TypeError: 'Inject' object is not subscriptable`**:
-    *   **原因**: `BridgedComputeService._resolve_resource` 方法在实例化资源提供者（Provider）时，没有检查并注入该 Provider 本身所需的依赖。它直接无参数调用 `provider()`，导致 Provider 函数使用了其参数默认值（即 `Inject` 对象），从而在后续使用该参数时（如 `config['db_url']`）引发类型错误。
-    *   **证据**: 测试 `test_di_end_to_end` 失败，堆栈指向 `resource = next(gen)` 调用了 `db_connection`，而 `db_connection` 接收到的 `config` 是 `Inject` 对象。
-
-2.  **`KeyError: 'non_existent_db'`**:
-    *   **原因**: 测试期望在请求不存在的资源时抛出 `NameError`，但 `ResourceContainer.get_provider` 直接通过字典键访问 `self._resource_providers[name]`，在键不存在时抛出的是 Python 原生的 `KeyError`。
-    *   **证据**: 测试 `test_unregistered_resource_raises_error` 失败，捕获到 `KeyError` 而非预期的 `NameError`。
+测试 `test_resource_events` 失败，断言错误 `AssertionError: assert 'config' in []` 表明事件列表中没有任何 `ResourceAcquired` 事件。这证实了资源虽然被正确创建和使用（stdout 显示了 SETUP/TEARDOWN 日志），但 VM 适配层遗漏了事件发布的逻辑。
 
 ### 用户需求
-修复 VM 适配层以支持嵌套的资源依赖注入，并确保在资源未注册时抛出符合规范的 `NameError`。
+确保 VM 后端在处理资源注入时，能够像 Graph 后端一样发布完整的生命周期事件，以满足可观测性和测试需求。
 
 ### 评论
-这是一个关键的修复。由于 `cascade-vm` 是新的后端实现，它必须达到与旧版 Execution Graph 相同的功能完备性，特别是在 DI 这样核心的特性上。目前的实现对于简单的、无依赖的资源是有效的，但对于真实场景中常见的嵌套资源（如 DB 连接依赖 Config）则无法工作。
+这是一个“一致性”修复。VM 后端必须模仿 Graph 后端的行为，包括副作用（如事件发布）。我们可以通过 `ExecutionContext` 间接访问 `ResourceContainer` 上的 `EventBus` 来实现这一点，而无需修改大量构造函数签名。
 
 ### 目标
-1.  修改 `cascade-vm` 中的 `BridgedComputeService._resolve_resource`，使其能够检查 Provider 的签名并递归解析其依赖。
-2.  修改 `cascade-runtime` 中的 `ResourceContainer.get_provider`，使其在资源未找到时抛出 `NameError`。
+1.  在 `packages/cascade-vm/src/cascade/vm/compute/adapters.py` 中引入 `ResourceAcquired` 和 `ResourceReleased` 事件。
+2.  修改 `_resolve_resource` 方法，从上下文获取 EventBus，并在适当的时机发布事件。
 
 ### 基本原理
-1.  **递归解析**: 类似于 `ResourceContainer.setup` 的逻辑，我们需要在运行时通过反射（`inspect.signature`）来识别 Provider 的依赖，并在实例化之前先解决这些依赖。
-2.  **异常一致性**: 保持 API 契约的一致性。如果某个东西是“必需但缺失的”，`NameError`（或自定义的 `DependencyMissingError`，但此处遵循现有测试约定）比底层的 `KeyError` 语义更准确。
+资源容器 (`ResourceContainer`) 持有 `EventBus`。`BridgedComputeService` 持有 `ExecutionContext`，而后者持有 `ResourceContainer`。我们可以利用这个链条来获取 Bus 并发布事件。对于非生成器（普通函数）资源，我们也应注册一个仅用于发布 Released 事件的 cleanup 回调，以保持语义完整性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/runtime #task/object/dependency-injection #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/medium #comp/vm #concept/observability #scope/core #ai/instruct #task/domain/runtime #task/object/resource-events #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 ResourceContainer 的异常类型
-首先，我们修改 `ResourceContainer.get_provider` 以抛出正确的异常。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/services/resources/container.py
-~~~~~
-~~~~~python.old
-    def get_provider(self, name: str) -> Callable:
-        provider = self._resource_providers[name]
-        if isinstance(provider, ResourceDefinition):
-            return provider.func
-        return provider
-~~~~~
-~~~~~python.new
-    def get_provider(self, name: str) -> Callable:
-        if name not in self._resource_providers:
-            raise NameError(f"Resource '{name}' is required but not registered.")
-
-        provider = self._resource_providers[name]
-        if isinstance(provider, ResourceDefinition):
-            return provider.func
-        return provider
-~~~~~
-
-#### Acts 2: 实现递归资源解析
-接下来，我们升级 `BridgedComputeService` 以支持递归依赖注入。
+#### Acts 1: 添加事件发布逻辑
+修改 `BridgedComputeService` 以发布资源事件。
 
 ~~~~~act
 patch_file
 packages/cascade-vm/src/cascade/vm/compute/adapters.py
 ~~~~~
 ~~~~~python.old
-    def _resolve_resource(self, inject_def: Inject, stack: ExitStack) -> Any:
-        name = inject_def.resource_name
+from cascade.spec.dsl.resources import Inject
+from cascade.spec.physical.nodes import Token
+from cascade.spec.runtime.storage import ObjectStore
+from cascade.spec.runtime.interfaces import Executor
+from ..registry import CodeRegistry
+from cascade.spec.runtime import ComputeRequest, ExecutionContext
 
-        # 1. Check Active Resources (Run Scope)
-        if name in self.context.active_resources:
-            return self.context.active_resources[name]
-
-        # 2. Create Ephemeral Resource (Task Scope)
-        # Note: We assume task-scoped resources here don't have complex recursive dependencies
-        # for this adaptation layer.
-        provider = self.context.resource_container.get_provider(name)
-
-        if inspect.isgeneratorfunction(provider):
-            gen = provider()
-            try:
-                resource = next(gen)
-            except StopIteration:
-                raise RuntimeError(f"Resource provider '{name}' yielded nothing.")
-
-            # Register cleanup
-            def cleanup():
-                try:
-                    next(gen)
-                except StopIteration:
-                    pass
-                except Exception as e:
-                    logger.warning(f"Error during teardown of resource '{name}': {e}")
-
-            stack.callback(cleanup)
-            return resource
-        else:
-            return provider()
+logger = logging.getLogger(__name__)
 ~~~~~
 ~~~~~python.new
+from cascade.spec.dsl.resources import Inject
+from cascade.spec.physical.nodes import Token
+from cascade.spec.runtime.storage import ObjectStore
+from cascade.spec.runtime.interfaces import Executor
+from ..registry import CodeRegistry
+from cascade.spec.runtime import ComputeRequest, ExecutionContext
+from cascade.bus.events import ResourceAcquired, ResourceReleased
+
+logger = logging.getLogger(__name__)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/compute/adapters.py
+~~~~~
+~~~~~python.old
     def _resolve_resource(self, inject_def: Inject, stack: ExitStack) -> Any:
         name = inject_def.resource_name
 
@@ -142,6 +101,70 @@ packages/cascade-vm/src/cascade/vm/compute/adapters.py
         else:
             return provider(**deps)
 ~~~~~
+~~~~~python.new
+    def _resolve_resource(self, inject_def: Inject, stack: ExitStack) -> Any:
+        name = inject_def.resource_name
+
+        # 1. Check Active Resources (Run Scope)
+        if name in self.context.active_resources:
+            return self.context.active_resources[name]
+
+        # 2. Create Ephemeral Resource (Task Scope)
+        provider = self.context.resource_container.get_provider(name)
+
+        # 3. Recursively Resolve Dependencies for the Provider
+        sig = inspect.signature(provider)
+        deps = {}
+        for param_name, param in sig.parameters.items():
+            if isinstance(param.default, Inject):
+                deps[param_name] = self._resolve_resource(param.default, stack)
+
+        # Access bus for event publishing
+        # ResourceContainer has the bus, and Context has the container
+        bus = getattr(self.context.resource_container, "bus", None)
+        run_id = self.context.run_id
+
+        # 4. Instantiate
+        resource = None
+        if inspect.isgeneratorfunction(provider):
+            gen = provider(**deps)
+            try:
+                resource = next(gen)
+            except StopIteration:
+                raise RuntimeError(f"Resource provider '{name}' yielded nothing.")
+
+            if bus:
+                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
+
+            # Register cleanup
+            def cleanup():
+                try:
+                    next(gen)
+                except StopIteration:
+                    pass
+                except Exception as e:
+                    logger.warning(f"Error during teardown of resource '{name}': {e}")
+                
+                if bus:
+                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
+
+            stack.callback(cleanup)
+            return resource
+        else:
+            resource = provider(**deps)
+            
+            if bus:
+                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
+
+            # Even for non-generators, we register a callback to emit the Released event
+            # when the scope (stack) exits.
+            def cleanup_event():
+                if bus:
+                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
+            
+            stack.callback(cleanup_event)
+            return resource
+~~~~~
 
 ### 下一步建议
-现在我们已经修复了两个核心问题。接下来的步骤是运行集成测试以验证修复是否有效。如果这些测试通过，我们将确信 VM 后端的 DI 系统已经具备了处理复杂依赖关系的能力。
+这次修复后，`ResourceAcquired` 和 `ResourceReleased` 事件应该能正确发出，从而让 `test_resource_events` 通过。请运行测试进行验证。

@@ -11,6 +11,7 @@ from cascade.spec.runtime.storage import ObjectStore
 from cascade.spec.runtime.interfaces import Executor
 from ..registry import CodeRegistry
 from cascade.spec.runtime import ComputeRequest, ExecutionContext
+from cascade.bus.events import ResourceAcquired, ResourceReleased
 
 logger = logging.getLogger(__name__)
 
@@ -219,13 +220,22 @@ class BridgedComputeService:
             if isinstance(param.default, Inject):
                 deps[param_name] = self._resolve_resource(param.default, stack)
 
+        # Access bus for event publishing
+        # ResourceContainer has the bus, and Context has the container
+        bus = getattr(self.context.resource_container, "bus", None)
+        run_id = self.context.run_id
+
         # 4. Instantiate
+        resource = None
         if inspect.isgeneratorfunction(provider):
             gen = provider(**deps)
             try:
                 resource = next(gen)
             except StopIteration:
                 raise RuntimeError(f"Resource provider '{name}' yielded nothing.")
+
+            if bus:
+                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
 
             # Register cleanup
             def cleanup():
@@ -235,8 +245,23 @@ class BridgedComputeService:
                     pass
                 except Exception as e:
                     logger.warning(f"Error during teardown of resource '{name}': {e}")
+                
+                if bus:
+                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
 
             stack.callback(cleanup)
             return resource
         else:
-            return provider(**deps)
+            resource = provider(**deps)
+            
+            if bus:
+                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
+
+            # Even for non-generators, we register a callback to emit the Released event
+            # when the scope (stack) exits.
+            def cleanup_event():
+                if bus:
+                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
+            
+            stack.callback(cleanup_event)
+            return resource

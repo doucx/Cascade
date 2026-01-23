@@ -8,7 +8,8 @@ from ..physical.nodes import Token
 @dataclass(frozen=True)
 class ComputeRequest:
     code_hash: str
-    input_refs: Dict[str, Ref]
+    input_args: List[Ref]
+    input_kwargs: Dict[str, Ref]
     reply_to_nid: str
     trace: Dict[str, Any]
 

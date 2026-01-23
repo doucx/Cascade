@@ -17,58 +17,24 @@ class SignatureBinder:
         self.context = context
 
     def bind_and_resolve(
-        self, raw_inputs: Dict[str, Any], stack: ExitStack
+        self, args: List[Any], kwargs: Dict[str, Any], stack: ExitStack
     ) -> Tuple[List[Any], Dict[str, Any]]:
-        # 1. Input Separation
-        pos_inputs = {int(k): v for k, v in raw_inputs.items() if k.isdigit()}
-        kw_inputs = {k: v for k, v in raw_inputs.items() if not k.isdigit()}
+        # With the new IR spec, the caller is responsible for providing
+        # clean args and kwargs. This binder's role is simplified.
 
-        # 2. System Parameter Injection
-        # Ensure 'params_context' is available if requested by signature
-        if "params_context" in self.sig.parameters and "params_context" not in kw_inputs:
-            kw_inputs["params_context"] = self.context.params
+        # 1. System Parameter Injection
+        if "params_context" in self.sig.parameters and "params_context" not in kwargs:
+            kwargs["params_context"] = self.context.params
 
-        # 3. Reconstruct args_list based on signature consumption
-        # This is critical to handle cases where positional args are sparse or skipped
-        # because an earlier parameter was supplied via kwargs.
-        args_list = []
-        next_pos_idx = 0
-
-        for param in self.sig.parameters.values():
-            if param.kind in (
-                inspect.Parameter.POSITIONAL_ONLY,
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            ):
-                # If this parameter is already satisfied by kwargs, it consumes no positional index.
-                if param.name in kw_inputs:
-                    continue
-
-                # Otherwise, try to satisfy it from pos_inputs.
-                if next_pos_idx in pos_inputs:
-                    args_list.append(pos_inputs[next_pos_idx])
-                    next_pos_idx += 1
-                else:
-                    # Missing positional argument. Let 'bind' handle the error or default value.
-                    pass
-
-            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-                # *args consumes ALL remaining positional inputs, even if sparse.
-                # We sort them to ensure deterministic order.
-                remaining_keys = sorted([k for k in pos_inputs.keys() if k >= next_pos_idx])
-                for k in remaining_keys:
-                    args_list.append(pos_inputs[k])
-                # No more positional consumption possible after *args
-                break
-
-        # 4. Bind
+        # 2. Bind
         try:
-            bound = self.sig.bind(*args_list, **kw_inputs)
+            bound = self.sig.bind(*args, **kwargs)
         except TypeError as e:
             raise TypeError(
                 f"Failed to bind arguments for function '{self.func.__name__}': {e}"
             ) from e
 
-        # Apply defaults (including Inject defaults)
+        # 3. Apply defaults (including Inject defaults)
         bound.apply_defaults()
 
         # 5. Recursive Resolution

@@ -17,28 +17,34 @@ logger = logging.getLogger(__name__)
 @implements(LauncherSpec)
 def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -> None:
     # 1. Prepare Inputs & Trace
-    input_refs: Dict[str, Ref] = {}
+    pos_args: Dict[int, Any] = {}
+    input_kwargs: Dict[str, Any] = {}
     trace_payload: Dict[str, Any] = {}
     held_resources: List[str] = []
 
-    # Iterate over dynamic args
+    # Iterate over all connected input ports
     for port_name, input_token in io.args.items():
-        # Check port definition in node for role
+        if not input_token:
+            continue
+
         port_def = node.input_ports[port_name]
+        trace_payload.update(input_token.trace)
 
         if port_def.role == PortRole.DATA:
-            # Launcher expects inputs to be Refs (for compute) or values.
-            # The Bleacher logic assumed payload was the value/ref.
-            input_refs[port_name] = input_token.payload
+            if port_name.isdigit():
+                pos_args[int(port_name)] = input_token.payload
+            else:
+                input_kwargs[port_name] = input_token.payload
         elif port_def.role == PortRole.RESOURCE:
             held_resources.append(port_name)
             if "resource_amounts" not in trace_payload:
                 trace_payload["resource_amounts"] = {}
             trace_payload["resource_amounts"][port_name] = input_token.payload
 
-        trace_payload.update(input_token.trace)
+    # Reconstruct the final positional args list from the sparse map.
+    # We sort by the integer key to preserve the original argument order.
+    input_args = [value for key, value in sorted(pos_args.items())]
 
-    # 2. Capture Metadata
     start_ts = time.time()  # Wall clock for IR
     mono_ts = time.monotonic()  # Monotonic for internal duration
 
@@ -92,7 +98,8 @@ def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -
 
     request = ComputeRequest(
         code_hash=node.canonical_code_structure_hash,
-        input_refs=input_refs,
+        input_args=input_args,
+        input_kwargs=input_kwargs,
         reply_to_nid=node.reply_to_nid,
         trace=trace_payload,  # Trace Tunneling happens here
     )

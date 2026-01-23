@@ -30,7 +30,14 @@ class Expander:
             launcher_inputs[arg.name] = PortDef(arg.name, PortRole.DATA, "Any")
 
         # 2.2 Dynamic Args from Inputs
-        for input_key in node_ir.inputs.keys():
+        # Positional args are represented by their index as a string
+        for i in range(len(node_ir.args)):
+            input_key = str(i)
+            if input_key not in launcher_inputs:
+                launcher_inputs[input_key] = PortDef(input_key, PortRole.DATA, "Any")
+
+        # Keyword args
+        for input_key in node_ir.kwargs.keys():
             if input_key not in launcher_inputs:
                 launcher_inputs[input_key] = PortDef(input_key, PortRole.DATA, "Any")
 

@@ -76,8 +76,10 @@ class BridgedComputeService:
         try:
             with ExitStack() as stack:
                 # 1. Resolve Inputs (Dereference Refs)
-                raw_inputs: Dict[str, Any] = {
-                    key: self.store.get(ref) for key, ref in request.input_refs.items()
+                # The request now carries pre-separated args and kwargs
+                resolved_args = [self.store.get(ref) for ref in request.input_args]
+                resolved_kwargs = {
+                    key: self.store.get(ref) for key, ref in request.input_kwargs.items()
                 }
 
                 # 2. Resolve Code
@@ -85,7 +87,9 @@ class BridgedComputeService:
 
                 # 3. Smart Binding & Injection
                 binder = SignatureBinder(func, self.context)
-                args, kwargs = binder.bind_and_resolve(raw_inputs, stack)
+                args, kwargs = binder.bind_and_resolve(
+                    resolved_args, resolved_kwargs, stack
+                )
 
                 # 4. Construct Proxy Node
                 is_async = inspect.iscoroutinefunction(func)

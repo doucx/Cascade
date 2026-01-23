@@ -12,21 +12,13 @@ class ParameterWiringPolicy(WiringPolicy):
     def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:
         assert subgraph.launcher is not None
 
-        for input_key, source_ref in node_ir.inputs.items():
-            # Resolve the actual port name on the Launcher.
-            if input_key.isdigit():
-                idx = int(input_key)
-                arg_def = (
-                    node_ir.task.args[idx] if idx < len(node_ir.task.args) else None
-                )
+        all_inputs = {str(i): val for i, val in enumerate(node_ir.args)}
+        all_inputs.update(node_ir.kwargs)
 
-                # For *args, the port name is the index itself, not the arg name (e.g. 'args')
-                if arg_def and arg_def.kind != ArgumentKind.VAR_POSITIONAL:
-                    port_name = arg_def.name
-                else:
-                    port_name = input_key
-            else:
-                port_name = input_key
+        for input_key, source_ref in all_inputs.items():
+            # The physical port name MUST be the input key itself (either digit for args or string for kwargs)
+            # to ensure a direct mapping from IR to the physical graph.
+            port_name = input_key
 
             # Case A: Reference to another node (Dependency)
             if isinstance(source_ref, str) and source_ref in ctx.subgraphs:

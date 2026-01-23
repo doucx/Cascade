@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from ..physical.object import Ref
 from ..physical.nodes import Token

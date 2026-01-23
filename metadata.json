@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(vm): 修复 SignatureBinder 中混合参数的绑定错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769188639.449845, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(vm): 修复 SignatureBinder 对 *args 的处理逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769188819.7938225, "duration_ms": 0}}

@@ -1,225 +1,69 @@
-## [WIP] 增强 `SignatureBinder` 引入参数消费模拟逻辑
+我完全理解并赞同这份路线图。分析一针见血，直指问题的核心——`NodeIR.inputs` 字段的有损语义压缩。这种“打地鼠”式的修复不仅效率低下，而且极具风险，是时候从根本上解决这个问题了。
 
-好的，基于详细的错误分析，我将执行以下修复计划：
-1.  **增强 `SignatureBinder`**: 引入参数消费模拟逻辑，使其能正确处理“关键字参数优先”和“稀疏位置参数归入 `*args`”的混合场景，从而解决 `test_helpers.py` 中的 `TypeError`。
-2.  **更新测试**: 修改 `test_compute_adapters.py` 中的断言，以适应 `inspect` 库将参数归一化为位置参数的标准行为。
+我们将严格遵循您制定的路线图，从重塑规约（Spec）开始，确保信息在整个编译和执行链路中无损传递。这不仅是为了修复当前的 77 个失败测试，更是为了构建一个健壮、可靠且具有本体论正确性的系统。
+
+现在，我将立即开始执行**阶段一：奠定基石**。
+
+## [WIP] refactor(spec): 使用 args/kwargs 替换 NodeIR.inputs 以实现无损表示
+
+### 用户需求
+
+根据“修复基础”路线图的第一阶段，需要重塑 `NodeIR` 的规约，用 `args: List[Any]` 和 `kwargs: Dict[str, Any]` 两个新字段来替换掉有损的 `inputs: Dict[str, Any]` 字段，从而能够无损地表示任何 Python 函数的调用签名。
+
+### 评论
+
+这是整个重构计划中最关键的一步。通过在 IR 规约层面确保信息的无损性，我们为后续所有阶段的修复工作提供了坚实、可靠的“真理之源”。这个改动将复杂性前移，使得下游组件的实现可以大幅简化，从而变得更加健壮。
+
+### 目标
+
+1.  修改 `packages/cascade-spec/src/cascade/spec/ir/graph.py` 文件中的 `NodeIR` 数据类。
+2.  移除 `inputs` 字段。
+3.  添加 `args` 和 `kwargs` 字段。
+
+### 基本原理
+
+Python 的函数调用由位置参数 (`*args`) 和关键字参数 (`**kwargs`) 唯一确定。当前 `inputs` 字典通过将位置参数的索引字符串化作为键（`"0"`, `"1"`...），强行将两种不同语义的参数压缩进一个扁平结构，导致了不可逆的信息丢失。例如，我们无法区分一个名为 `"0"` 的关键字参数和一个位置为 0 的参数。
+
+通过引入独立的 `args` 和 `kwargs` 字段，我们创建了与 Python 调用语义完美镜像的 IR 结构。这使得 `IRGenerator` (生产者) 可以明确地分离两种参数类型，也使得下游消费者（如 `Expander` 和 `SignatureBinder`）可以无歧义地接收它们，彻底消除了所有基于猜测的绑定逻辑。
+
+### 标签
+
+#intent/refine #flow/ready #priority/critical #comp/spec #concept/state #scope/api #ai/instruct #task/domain/compiler #task/object/ir-spec #task/action/refactor #task/state/begin
+
+---
 
 ### Script
 
-#### Acts 1: 增强 SignatureBinder 逻辑
+#### Acts 1: 修改 NodeIR 数据类
 
-我们将重写 `binding.py` 中的 `bind_and_resolve` 方法，添加对函数签名的预扫描，以智能地构建 `args_list`。
-
-~~~~~act
-write_file
-packages/cascade-vm/src/cascade/vm/compute/binding.py
-~~~~~
-~~~~~python
-import inspect
-import logging
-from contextlib import ExitStack
-from typing import Any, Dict, List, Tuple, Callable
-
-from cascade.spec.dsl.resources import Inject
-from cascade.spec.runtime import ExecutionContext
-from cascade.bus.events import ResourceAcquired, ResourceReleased
-
-logger = logging.getLogger(__name__)
-
-
-class SignatureBinder:
-    def __init__(self, func: Callable, context: ExecutionContext):
-        self.func = func
-        self.sig = inspect.signature(func)
-        self.context = context
-
-    def bind_and_resolve(
-        self, raw_inputs: Dict[str, Any], stack: ExitStack
-    ) -> Tuple[List[Any], Dict[str, Any]]:
-        # 1. Input Separation
-        pos_inputs = {int(k): v for k, v in raw_inputs.items() if k.isdigit()}
-        kw_inputs = {k: v for k, v in raw_inputs.items() if not k.isdigit()}
-
-        # 2. System Parameter Injection
-        # Ensure 'params_context' is available if requested by signature
-        if "params_context" in self.sig.parameters and "params_context" not in kw_inputs:
-            kw_inputs["params_context"] = self.context.params
-
-        # 3. Reconstruct args_list based on signature consumption
-        # This is critical to handle cases where positional args are sparse or skipped
-        # because an earlier parameter was supplied via kwargs.
-        args_list = []
-        next_pos_idx = 0
-
-        for param in self.sig.parameters.values():
-            if param.kind in (
-                inspect.Parameter.POSITIONAL_ONLY,
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            ):
-                # If this parameter is already satisfied by kwargs, it consumes no positional index.
-                if param.name in kw_inputs:
-                    continue
-
-                # Otherwise, try to satisfy it from pos_inputs.
-                if next_pos_idx in pos_inputs:
-                    args_list.append(pos_inputs[next_pos_idx])
-                    next_pos_idx += 1
-                else:
-                    # Missing positional argument. Let 'bind' handle the error or default value.
-                    pass
-
-            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-                # *args consumes ALL remaining positional inputs, even if sparse.
-                # We sort them to ensure deterministic order.
-                remaining_keys = sorted([k for k in pos_inputs.keys() if k >= next_pos_idx])
-                for k in remaining_keys:
-                    args_list.append(pos_inputs[k])
-                # No more positional consumption possible after *args
-                break
-
-        # 4. Bind
-        try:
-            bound = self.sig.bind(*args_list, **kw_inputs)
-        except TypeError as e:
-            raise TypeError(
-                f"Failed to bind arguments for function '{self.func.__name__}': {e}"
-            ) from e
-
-        # Apply defaults (including Inject defaults)
-        bound.apply_defaults()
-
-        # 5. Recursive Resolution
-        for name, value in bound.arguments.items():
-            resolved = self._resolve_value(value, stack)
-            if resolved is not value:
-                bound.arguments[name] = resolved
-
-        # Return the normalized arguments
-        return bound.args, bound.kwargs
-
-    def _resolve_value(self, value: Any, stack: ExitStack) -> Any:
-        if isinstance(value, Inject):
-            return self._resolve_resource(value, stack)
-        return value
-
-    def _resolve_resource(self, inject_def: Inject, stack: ExitStack) -> Any:
-        name = inject_def.resource_name
-
-        # 1. Check Active Resources (Run Scope)
-        if name in self.context.active_resources:
-            return self.context.active_resources[name]
-
-        # 2. Create Ephemeral Resource (Task Scope)
-        # Assuming resource_container is available on context
-        if not hasattr(self.context, "resource_container"):
-            raise RuntimeError(
-                "Context missing 'resource_container', cannot resolve resources."
-            )
-
-        provider = self.context.resource_container.get_provider(name)
-
-        # 3. Recursively Resolve Dependencies for the Provider
-        sig = inspect.signature(provider)
-        deps = {}
-        for param_name, param in sig.parameters.items():
-            if isinstance(param.default, Inject):
-                deps[param_name] = self._resolve_resource(param.default, stack)
-
-        # Access bus for event publishing
-        bus = getattr(self.context.resource_container, "bus", None)
-        run_id = self.context.run_id
-
-        # 4. Instantiate
-        resource = None
-        if inspect.isgeneratorfunction(provider):
-            gen = provider(**deps)
-            try:
-                resource = next(gen)
-            except StopIteration:
-                raise RuntimeError(f"Resource provider '{name}' yielded nothing.")
-
-            if bus:
-                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-
-            # Register cleanup
-            def cleanup():
-                try:
-                    next(gen)
-                except StopIteration:
-                    pass
-                except Exception as e:
-                    logger.warning(f"Error during teardown of resource '{name}': {e}")
-
-                if bus:
-                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
-
-            stack.callback(cleanup)
-            return resource
-        else:
-            resource = provider(**deps)
-
-            if bus:
-                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-
-            def cleanup_event():
-                if bus:
-                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
-
-            stack.callback(cleanup_event)
-            return resource
-~~~~~
-
-#### Acts 2: 更新 Adapter 测试
-
-由于 `SignatureBinder` 使用 `inspect.bind`，它会将通过 `kwargs` 传入但签名中定义为位置参数的参数归一化到 `args` 元组中。我们需要更新测试断言以接受这种标准行为。
+我将修改 `NodeIR` 的定义，用 `args` 和 `kwargs` 替换 `inputs` 字段。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/integration/test_compute_adapters.py
+packages/cascade-spec/src/cascade/spec/ir/graph.py
 ~~~~~
 ~~~~~python.old
-    func = mock_executor.execute.await_args.args[1]
-    assert func == sync_add
+    # The logical UUID from the high-level DSL (LazyResult), if available.
+    logical_id: Optional[str] = None
 
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    assert args == [1, 2]
-    assert kwargs == {}
+    inputs: Dict[str, Any] = field(default_factory=dict)
+
+    constraints: Dict[str, Any] = field(default_factory=dict)
 ~~~~~
 ~~~~~python.new
-    func = mock_executor.execute.await_args.args[1]
-    assert func == sync_add
+    # The logical UUID from the high-level DSL (LazyResult), if available.
+    logical_id: Optional[str] = None
 
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    # SignatureBinder normalizes args to a tuple
-    assert tuple(args) == (1, 2)
-    assert kwargs == {}
-~~~~~
+    args: List[Any] = field(default_factory=list)
+    kwargs: Dict[str, Any] = field(default_factory=dict)
 
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_compute_adapters.py
-~~~~~
-~~~~~python.old
-    func = mock_executor.execute.await_args.args[1]
-    assert func == async_add
-
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    assert args == []
-    assert kwargs == {"a": 2, "b": 3}
-~~~~~
-~~~~~python.new
-    func = mock_executor.execute.await_args.args[1]
-    assert func == async_add
-
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    # inspect.bind normalizes named arguments to positional if they match positional parameters
-    assert tuple(args) == (2, 3)
-    assert kwargs == {}
+    constraints: Dict[str, Any] = field(default_factory=dict)
 ~~~~~
 
 ### 下一步建议
-运行 `pytest` 验证所有测试通过，特别是 `test_helpers.py`（验证参数混合处理）和 `test_compute_adapters.py`（验证资源解析和绑定）。这将确认计算适配层已经修复并更加健壮。
+
+我们已经成功地修正了核心规约。下一步是进入**阶段二：重铸生产者**。
+
+我将准备一个计划来更新 `cascade-compiler` 包，使其严格遵守这个新的、无损的 `NodeIR` 规约。这主要涉及修改 `IRGenerator` 以正确生成 `args` 和 `kwargs`，并更新所有消费 `NodeIR` 的后端组件（如 `Expander` 和 `ParameterWiringPolicy`）以从新字段中读取数据。
+
+如果您同意，我将立即着手生成第二阶段的计划。

@@ -10,7 +10,11 @@ class ParameterExpansionPolicy(ExpansionPolicy):
     def expand(
         self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph
     ) -> None:
-        for input_key, source_ref in node_ir.inputs.items():
+        # Combine args and kwargs for unified processing
+        all_inputs = {str(i): val for i, val in enumerate(node_ir.args)}
+        all_inputs.update(node_ir.kwargs)
+
+        for input_key, source_ref in all_inputs.items():
             # Resolve port name
             if input_key.isdigit():
                 idx = int(input_key)

@@ -18,7 +18,8 @@ class PulseExpansionPolicy(ExpansionPolicy):
 
         # 2. Check Data Dependencies (inputs referencing other nodes)
         has_data_dependency = False
-        for value in node_ir.inputs.values():
+        all_input_values = list(node_ir.args) + list(node_ir.kwargs.values())
+        for value in all_input_values:
             # IRGenerator stores upstream references as strings (Logical UUIDs).
             # We check if this string corresponds to a known SubGraph ID in the current graph.
             if isinstance(value, str) and value in ctx.subgraphs:

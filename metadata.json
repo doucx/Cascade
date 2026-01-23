@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M contracts.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769189535.8721726, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 更新 expander 以适应新的 NodeIR 规约", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769189536.9385593, "duration_ms": 0}}

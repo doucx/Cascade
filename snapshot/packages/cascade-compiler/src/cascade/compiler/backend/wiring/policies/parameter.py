@@ -12,7 +12,10 @@ class ParameterWiringPolicy(WiringPolicy):
     def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:
         assert subgraph.launcher is not None
 
-        for input_key, source_ref in node_ir.inputs.items():
+        all_inputs = {str(i): val for i, val in enumerate(node_ir.args)}
+        all_inputs.update(node_ir.kwargs)
+
+        for input_key, source_ref in all_inputs.items():
             # Resolve the actual port name on the Launcher.
             if input_key.isdigit():
                 idx = int(input_key)

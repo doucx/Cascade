@@ -20,19 +20,28 @@ def create_mock_launcher_node(input_ports_config):
 
 
 def test_standard_launcher_dispatches_request():
-    # Setup Inputs
-    inputs = {
-        "arg1": Token(payload="hello"),
-        "arg2": Token(payload=123),
+    # Use IO capture wrapper to simulate reactor behavior
+    from cascade.spec.physics.binding import IOWrapper
+    from cascade.spec.specs.dyad import LauncherSpec
+
+    # Setup Inputs for the IO Wrapper
+    io_inputs = {
+        "0": Token(payload="hello"),  # Positional
+        "kwarg": Token(payload=123),  # Keyword
     }
-    node = create_mock_launcher_node({"arg1": PortRole.DATA, "arg2": PortRole.DATA})
+    node = create_mock_launcher_node(
+        {"0": PortRole.DATA, "kwarg": PortRole.DATA, "obs_output": PortRole.OBSERVABILITY}
+    )
+    io = IOWrapper(io_inputs, {}, LauncherSpec)
 
     # Mock Resources
     mock_queue = MagicMock()
     resources = {"system.compute_queue": mock_queue}
 
-    # Execute
-    standard_launcher(inputs, node, resources)
+    # Execute the raw function logic
+    from cascade.std.dyad.launcher import standard_launcher as raw_launcher
+
+    raw_launcher(io, node, resources)
 
     # Verify Queue Interaction
     mock_queue.put_nowait.assert_called_once()
@@ -41,7 +50,8 @@ def test_standard_launcher_dispatches_request():
     assert isinstance(request, ComputeRequest)
     assert request.code_hash == "abc-123"
     assert request.reply_to_nid == "test_node.result"
-    assert request.input_refs == {"arg1": "hello", "arg2": 123}
+    assert request.input_args == ["hello"]
+    assert request.input_kwargs == {"kwarg": 123}
     assert "start_ts" in request.trace
 
 
@@ -50,13 +60,13 @@ def test_standard_launcher_emits_observability_event():
     mock_queue = MagicMock()
     resources = {"system.compute_queue": mock_queue}
 
-    # Use IO capture (simulated by return value in test harness,
-    # but strictly standard_launcher uses @implements which returns dict)
-    # The @implements decorator logic wraps it, but for unit testing the inner function logic:
-    # We need to simulate the IO wrapper if we were testing the inner logic directly,
-    # OR we invoke the decorated function. standard_launcher IS the decorated function.
+    from cascade.spec.physics.binding import implements
+    from cascade.std.dyad.launcher import standard_launcher as raw_launcher
 
-    outputs = standard_launcher({}, node, resources)
+    # The decorated function is what we should test
+    decorated_launcher = implements(LauncherSpec)(raw_launcher)
+
+    outputs = decorated_launcher({}, node, resources)
 
     assert "obs_output" in outputs
     obs_token = outputs["obs_output"]

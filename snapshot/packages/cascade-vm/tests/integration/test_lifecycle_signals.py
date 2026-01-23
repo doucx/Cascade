@@ -41,7 +41,8 @@ def mock_dispatcher_kernel(inputs, node, resources):
     # We construct a request that simulates what a real dispatcher would do
     req = ComputeRequest(
         code_hash="slow_task",
-        input_refs={"n": input_ref},  # Pass the argument correctly
+        input_args=[],
+        input_kwargs={"n": input_ref},  # Pass the argument correctly
         reply_to_nid="D_out",
         trace={},
     )

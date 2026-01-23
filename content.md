@@ -1,56 +1,39 @@
-## [WIP] 增强 `SignatureBinder` 引入参数消费模拟逻辑
+## [WIP] fix(vm): 修复参数绑定逻辑以支持混合参数传递，并更新集成测试
 
-好的，基于详细的错误分析，我将执行以下修复计划：
-1.  **增强 `SignatureBinder`**: 引入参数消费模拟逻辑，使其能正确处理“关键字参数优先”和“稀疏位置参数归入 `*args`”的混合场景，从而解决 `test_helpers.py` 中的 `TypeError`。
-2.  **更新测试**: 修改 `test_compute_adapters.py` 中的断言，以适应 `inspect` 库将参数归一化为位置参数的标准行为。
+### 错误分析
+1.  **参数绑定失效**: `SignatureBinder` 在处理混合了关键字参数（如 `template`）和后续位置参数（如 `*args`）的情况时，直接将前者保留在 `kwargs` 中，导致 `inspect.bind` 无法正确匹配后续的位置参数（`*args` 必须紧跟在位置参数之后）。这导致了 `TypeError: multiple values for argument 'template'`。
+2.  **测试用例缺陷**: `test_compute_adapters.py` 中的 `test_is_idle_state_changes` 注册了一个需要参数的函数 `sync_add`，但在构造请求时未提供参数，导致绑定失败。
+3.  **资源注入疑似失效**: SQL 测试中的 `AttributeError: 'Inject' object has no attribute 'execute'` 表明 `Inject` 对象未被解析。这可能是由于 `binding.py` 中 `_resolve_value` 的递归逻辑未正确覆盖所有情况，或者 `Inject` 类型检查存在问题。
+
+### 用户需求
+修复参数绑定逻辑，使其能智能地将必要的关键字参数“提升”为位置参数，以满足 `*args` 的连续性要求。修复相关测试用例。
+
+### 评论
+参数绑定是 VM 稳定性的基石。当前的修复方案通过检测后续是否存在位置参数，来决定是否将当前的关键字参数提升为位置参数，这是一种符合 Python 参数解析规则的健壮策略。
+
+### 目标
+1.  修改 `packages/cascade-vm/src/cascade/vm/compute/binding.py`，实现“参数提升”逻辑。
+2.  修改 `packages/cascade-vm/tests/integration/test_compute_adapters.py`，修复空参数调用的测试错误。
+
+### 基本原理
+Python 的函数调用机制要求位置参数必须在关键字参数之前。当底层数据结构（`raw_inputs`）将原本应为位置参数的值存储为关键字（如 `template`）时，如果后续还有位置参数（如传给 `*args` 的值），我们必须在传递给 `bind` 之前，将那个关键字参数还原为位置参数，否则 `bind` 会因为位置参数序列中断而报错或产生歧义。
+
+### 标签
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/compute-adapter #task/action/bug-fix #task/state/continue
+
+---
 
 ### Script
 
-#### Acts 1: 增强 SignatureBinder 逻辑
+#### Acts 1: 修复 SignatureBinder 的绑定逻辑
 
-我们将重写 `binding.py` 中的 `bind_and_resolve` 方法，添加对函数签名的预扫描，以智能地构建 `args_list`。
+我们将增强 `binding.py`，使其在检测到后续有剩余位置参数时，强制将当前的关键字参数提升为位置参数。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-vm/src/cascade/vm/compute/binding.py
 ~~~~~
-~~~~~python
-import inspect
-import logging
-from contextlib import ExitStack
-from typing import Any, Dict, List, Tuple, Callable
-
-from cascade.spec.dsl.resources import Inject
-from cascade.spec.runtime import ExecutionContext
-from cascade.bus.events import ResourceAcquired, ResourceReleased
-
-logger = logging.getLogger(__name__)
-
-
-class SignatureBinder:
-    def __init__(self, func: Callable, context: ExecutionContext):
-        self.func = func
-        self.sig = inspect.signature(func)
-        self.context = context
-
-    def bind_and_resolve(
-        self, raw_inputs: Dict[str, Any], stack: ExitStack
-    ) -> Tuple[List[Any], Dict[str, Any]]:
-        # 1. Input Separation
-        pos_inputs = {int(k): v for k, v in raw_inputs.items() if k.isdigit()}
-        kw_inputs = {k: v for k, v in raw_inputs.items() if not k.isdigit()}
-
-        # 2. System Parameter Injection
-        # Ensure 'params_context' is available if requested by signature
-        if "params_context" in self.sig.parameters and "params_context" not in kw_inputs:
-            kw_inputs["params_context"] = self.context.params
-
-        # 3. Reconstruct args_list based on signature consumption
-        # This is critical to handle cases where positional args are sparse or skipped
-        # because an earlier parameter was supplied via kwargs.
-        args_list = []
-        next_pos_idx = 0
-
+~~~~~python.old
         for param in self.sig.parameters.values():
             if param.kind in (
                 inspect.Parameter.POSITIONAL_ONLY,
@@ -69,157 +52,74 @@ class SignatureBinder:
                     pass
 
             elif param.kind == inspect.Parameter.VAR_POSITIONAL:
-                # *args consumes ALL remaining positional inputs, even if sparse.
-                # We sort them to ensure deterministic order.
-                remaining_keys = sorted([k for k in pos_inputs.keys() if k >= next_pos_idx])
-                for k in remaining_keys:
-                    args_list.append(pos_inputs[k])
-                # No more positional consumption possible after *args
-                break
-
-        # 4. Bind
-        try:
-            bound = self.sig.bind(*args_list, **kw_inputs)
-        except TypeError as e:
-            raise TypeError(
-                f"Failed to bind arguments for function '{self.func.__name__}': {e}"
-            ) from e
-
-        # Apply defaults (including Inject defaults)
-        bound.apply_defaults()
-
-        # 5. Recursive Resolution
-        for name, value in bound.arguments.items():
-            resolved = self._resolve_value(value, stack)
-            if resolved is not value:
-                bound.arguments[name] = resolved
-
-        # Return the normalized arguments
-        return bound.args, bound.kwargs
-
-    def _resolve_value(self, value: Any, stack: ExitStack) -> Any:
-        if isinstance(value, Inject):
-            return self._resolve_resource(value, stack)
-        return value
-
-    def _resolve_resource(self, inject_def: Inject, stack: ExitStack) -> Any:
-        name = inject_def.resource_name
-
-        # 1. Check Active Resources (Run Scope)
-        if name in self.context.active_resources:
-            return self.context.active_resources[name]
-
-        # 2. Create Ephemeral Resource (Task Scope)
-        # Assuming resource_container is available on context
-        if not hasattr(self.context, "resource_container"):
-            raise RuntimeError(
-                "Context missing 'resource_container', cannot resolve resources."
-            )
-
-        provider = self.context.resource_container.get_provider(name)
-
-        # 3. Recursively Resolve Dependencies for the Provider
-        sig = inspect.signature(provider)
-        deps = {}
-        for param_name, param in sig.parameters.items():
-            if isinstance(param.default, Inject):
-                deps[param_name] = self._resolve_resource(param.default, stack)
-
-        # Access bus for event publishing
-        bus = getattr(self.context.resource_container, "bus", None)
-        run_id = self.context.run_id
-
-        # 4. Instantiate
-        resource = None
-        if inspect.isgeneratorfunction(provider):
-            gen = provider(**deps)
-            try:
-                resource = next(gen)
-            except StopIteration:
-                raise RuntimeError(f"Resource provider '{name}' yielded nothing.")
-
-            if bus:
-                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-
-            # Register cleanup
-            def cleanup():
-                try:
-                    next(gen)
-                except StopIteration:
+~~~~~
+~~~~~python.new
+        for param in self.sig.parameters.values():
+            if param.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ):
+                # 1. Try to satisfy from positional inputs first
+                if next_pos_idx in pos_inputs:
+                    args_list.append(pos_inputs[next_pos_idx])
+                    next_pos_idx += 1
+                    
+                # 2. Try to satisfy from keyword inputs
+                elif param.name in kw_inputs:
+                    # CRITICAL FIX: If we have pending positional inputs (e.g. for *args later),
+                    # we MUST promote this kwarg to a positional arg to maintain the sequence.
+                    # Check if there are any positional inputs with index >= next_pos_idx
+                    has_pending_pos = any(k >= next_pos_idx for k in pos_inputs)
+                    
+                    if has_pending_pos:
+                         # Promote!
+                         val = kw_inputs.pop(param.name)
+                         args_list.append(val)
+                    else:
+                         # Safe to leave in kwargs
+                         pass
+                else:
+                    # Missing argument. Let 'bind' handle the error or default value.
                     pass
-                except Exception as e:
-                    logger.warning(f"Error during teardown of resource '{name}': {e}")
 
-                if bus:
-                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
-
-            stack.callback(cleanup)
-            return resource
-        else:
-            resource = provider(**deps)
-
-            if bus:
-                bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-
-            def cleanup_event():
-                if bus:
-                    bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
-
-            stack.callback(cleanup_event)
-            return resource
+            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
 ~~~~~
 
-#### Acts 2: 更新 Adapter 测试
+#### Acts 2: 修复 Compute Adapter 测试
 
-由于 `SignatureBinder` 使用 `inspect.bind`，它会将通过 `kwargs` 传入但签名中定义为位置参数的参数归一化到 `args` 元组中。我们需要更新测试断言以接受这种标准行为。
+我们将修复 `test_is_idle_state_changes`，为其提供合法的参数，并顺便更新断言以反映 `inspect.bind` 的规范化行为（将参数转为 tuple）。
 
 ~~~~~act
 patch_file
 packages/cascade-vm/tests/integration/test_compute_adapters.py
 ~~~~~
 ~~~~~python.old
-    func = mock_executor.execute.await_args.args[1]
-    assert func == sync_add
+    service.executor.execute = blocking_executor
+    service.registry.register("idle_test_hash", sync_add)
 
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    assert args == [1, 2]
-    assert kwargs == {}
+    request = ComputeRequest(
+        code_hash="idle_test_hash",
+        input_refs={},
+        reply_to_nid="d_out",
+        trace={},
+    )
+    await inbound_queue.put(request)
+    assert service.is_idle() is False
 ~~~~~
 ~~~~~python.new
-    func = mock_executor.execute.await_args.args[1]
-    assert func == sync_add
+    service.executor.execute = blocking_executor
+    service.registry.register("idle_test_hash", sync_add)
 
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    # SignatureBinder normalizes args to a tuple
-    assert tuple(args) == (1, 2)
-    assert kwargs == {}
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_compute_adapters.py
-~~~~~
-~~~~~python.old
-    func = mock_executor.execute.await_args.args[1]
-    assert func == async_add
-
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    assert args == []
-    assert kwargs == {"a": 2, "b": 3}
-~~~~~
-~~~~~python.new
-    func = mock_executor.execute.await_args.args[1]
-    assert func == async_add
-
-    args = mock_executor.execute.await_args.args[2]
-    kwargs = mock_executor.execute.await_args.args[3]
-    # inspect.bind normalizes named arguments to positional if they match positional parameters
-    assert tuple(args) == (2, 3)
-    assert kwargs == {}
+    # Fix: Provide required arguments for sync_add(a, b)
+    request = ComputeRequest(
+        code_hash="idle_test_hash",
+        input_refs={"0": 1, "1": 2},
+        reply_to_nid="d_out",
+        trace={},
+    )
+    await inbound_queue.put(request)
+    assert service.is_idle() is False
 ~~~~~
 
 ### 下一步建议
-运行 `pytest` 验证所有测试通过，特别是 `test_helpers.py`（验证参数混合处理）和 `test_compute_adapters.py`（验证资源解析和绑定）。这将确认计算适配层已经修复并更加健壮。
+执行测试。如果 `test_helpers.py` 通过，说明参数提升逻辑生效。如果 `test_sql.py` 依然失败，我们需要进一步检查 `Inject` 对象的传递路径，或者检查是否 `cascade-vm` 和 `cascade-library` 引用了不同的 `Inject` 类定义。作为防御性编程，我建议下一步在 `binding.py` 中增加对 `Inject` 解析的日志记录，以便确切知道它是否被触发。

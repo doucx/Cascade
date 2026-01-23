@@ -257,9 +257,10 @@ async def test_is_idle_state_changes(
     service.executor.execute = blocking_executor
     service.registry.register("idle_test_hash", sync_add)
 
+    # Fix: Provide required arguments for sync_add(a, b)
     request = ComputeRequest(
         code_hash="idle_test_hash",
-        input_refs={},
+        input_refs={"0": 1, "1": 2},
         reply_to_nid="d_out",
         trace={},
     )

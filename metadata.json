@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] 增强 `SignatureBinder` 引入参数消费模拟逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769187320.6084707, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(vm): 修复参数绑定逻辑以支持混合参数传递，并更新集成测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769188027.2495637, "duration_ms": 0}}

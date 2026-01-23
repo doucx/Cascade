@@ -39,16 +39,27 @@ class SignatureBinder:
                 inspect.Parameter.POSITIONAL_ONLY,
                 inspect.Parameter.POSITIONAL_OR_KEYWORD,
             ):
-                # If this parameter is already satisfied by kwargs, it consumes no positional index.
-                if param.name in kw_inputs:
-                    continue
-
-                # Otherwise, try to satisfy it from pos_inputs.
+                # 1. Try to satisfy from positional inputs first
                 if next_pos_idx in pos_inputs:
                     args_list.append(pos_inputs[next_pos_idx])
                     next_pos_idx += 1
+                    
+                # 2. Try to satisfy from keyword inputs
+                elif param.name in kw_inputs:
+                    # CRITICAL FIX: If we have pending positional inputs (e.g. for *args later),
+                    # we MUST promote this kwarg to a positional arg to maintain the sequence.
+                    # Check if there are any positional inputs with index >= next_pos_idx
+                    has_pending_pos = any(k >= next_pos_idx for k in pos_inputs)
+                    
+                    if has_pending_pos:
+                         # Promote!
+                         val = kw_inputs.pop(param.name)
+                         args_list.append(val)
+                    else:
+                         # Safe to leave in kwargs
+                         pass
                 else:
-                    # Missing positional argument. Let 'bind' handle the error or default value.
+                    # Missing argument. Let 'bind' handle the error or default value.
                     pass
 
             elif param.kind == inspect.Parameter.VAR_POSITIONAL:

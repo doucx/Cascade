@@ -6,7 +6,6 @@ from cascade.spec import EventIR, EventType, EventState, EventContext
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.dyad import LauncherNode
 from cascade.spec.physical.ports import PortRole
-from cascade.spec.physical.object import Ref
 from cascade.spec.specs.dyad import LauncherSpec
 from cascade.spec.physics.binding import implements
 from cascade.spec.runtime import ComputeRequest

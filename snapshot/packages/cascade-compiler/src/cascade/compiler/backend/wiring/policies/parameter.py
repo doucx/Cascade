@@ -1,4 +1,4 @@
-from cascade.spec.ir.graph import NodeIR, ArgumentKind
+from cascade.spec.ir.graph import NodeIR
 from cascade.spec.specs.dyad import LanderSpec
 from ...expander import SubGraph
 from ..context import WiringContext

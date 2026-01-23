@@ -19,7 +19,6 @@ def create_mock_launcher_node(input_ports_config):
     return node
 
 
-from cascade.spec.specs.dyad import LauncherSpec
 
 
 def test_standard_launcher_dispatches_request():
@@ -29,7 +28,11 @@ def test_standard_launcher_dispatches_request():
         "kwarg": Token(payload=123),  # Keyword
     }
     node = create_mock_launcher_node(
-        {"0": PortRole.DATA, "kwarg": PortRole.DATA, "obs_output": PortRole.OBSERVABILITY}
+        {
+            "0": PortRole.DATA,
+            "kwarg": PortRole.DATA,
+            "obs_output": PortRole.OBSERVABILITY,
+        }
     )
 
     # Mock Resources

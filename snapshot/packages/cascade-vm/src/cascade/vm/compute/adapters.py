@@ -3,15 +3,13 @@ import inspect
 import logging
 from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Tuple, Optional
 
-from cascade.spec.dsl.resources import Inject
 from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime.storage import ObjectStore
 from cascade.spec.runtime.interfaces import Executor
 from ..registry import CodeRegistry
 from cascade.spec.runtime import ComputeRequest, ExecutionContext
-from cascade.bus.events import ResourceAcquired, ResourceReleased
 from .binding import SignatureBinder
 
 logger = logging.getLogger(__name__)
@@ -79,7 +77,8 @@ class BridgedComputeService:
                 # The request now carries pre-separated args and kwargs
                 resolved_args = [self.store.get(ref) for ref in request.input_args]
                 resolved_kwargs = {
-                    key: self.store.get(ref) for key, ref in request.input_kwargs.items()
+                    key: self.store.get(ref)
+                    for key, ref in request.input_kwargs.items()
                 }
 
                 # 2. Resolve Code

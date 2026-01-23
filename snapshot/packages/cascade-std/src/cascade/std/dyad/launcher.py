@@ -41,11 +41,9 @@ def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -
                 trace_payload["resource_amounts"] = {}
             trace_payload["resource_amounts"][port_name] = input_token.payload
 
-    # Reconstruct the final positional args list from the sparse map
-    input_args = []
-    if pos_args:
-        for i in range(max(pos_args.keys()) + 1):
-            input_args.append(pos_args.get(i))
+    # Reconstruct the final positional args list from the sparse map.
+    # We sort by the integer key to preserve the original argument order.
+    input_args = [value for key, value in sorted(pos_args.items())]
 
 
     start_ts = time.time()  # Wall clock for IR

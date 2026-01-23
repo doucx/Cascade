@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "ruff Capture: M adapters.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769185449.4753687, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(vm): 重构计算适配层的参数绑定与资源注入逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769186802.923205, "duration_ms": 0}}

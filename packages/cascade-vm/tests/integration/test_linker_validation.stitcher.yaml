@@ -1,7 +1,5 @@
-"test_blind_optimism_without_linker": |-
+test_blind_optimism_without_linker: |-
   Demonstrates that without the Linker, the VM starts even if code is missing,
   leading to a runtime failure (or "blind optimism").
-"test_linker_enforces_integrity": |-
+test_linker_enforces_integrity: |-
   Demonstrates that the Linker correctly identifies missing code and prevents startup.
-"test_runner_from_assembly_enforces_linker": |-
-  Demonstrates that using EventDrivenRunner.from_assembly() creates a safe, validated runtime.

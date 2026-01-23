@@ -317,7 +317,8 @@
     },
     "py://packages/cascade-std/tests/unit/dyad/test_observer.py#mock_resources": {
       "baseline_code_signature_text": "def mock_resources(mock_bus: MagicMock) -> MagicMock:",
-      "baseline_code_structure_hash": "7889110c5ec7317ed9410f326c82bf405eac395c3462101c471331bc450771e3"
+      "baseline_code_structure_hash": "7889110c5ec7317ed9410f326c82bf405eac395c3462101c471331bc450771e3",
+      "baseline_yaml_content_hash": "f8abf2bbe55c0b0eaf767751e08349be5f6b711b98755567539440db74bdbbfb"
     },
     "py://packages/cascade-std/tests/unit/dyad/test_observer.py#test_observer_handles_no_bus": {
       "baseline_code_signature_text": "def test_observer_handles_no_bus(mock_resources: MagicMock):",

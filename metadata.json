@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(vm): 实现智能参数绑定与依赖注入", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769183549.6871495, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(vm): 修复参数绑定逻辑以支持变长参数(*args, **kwargs)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769183679.202291, "duration_ms": 0}}

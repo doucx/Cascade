@@ -147,7 +147,8 @@ async def test_process_sync_task(
 
     args = mock_executor.execute.await_args.args[2]
     kwargs = mock_executor.execute.await_args.args[3]
-    assert args == [1, 2]
+    # SignatureBinder normalizes args to a tuple
+    assert tuple(args) == (1, 2)
     assert kwargs == {}
 
 
@@ -185,8 +186,9 @@ async def test_process_async_task(
 
     args = mock_executor.execute.await_args.args[2]
     kwargs = mock_executor.execute.await_args.args[3]
-    assert args == []
-    assert kwargs == {"a": 2, "b": 3}
+    # inspect.bind normalizes named arguments to positional if they match positional parameters
+    assert tuple(args) == (2, 3)
+    assert kwargs == {}
 
 
 @pytest.mark.asyncio

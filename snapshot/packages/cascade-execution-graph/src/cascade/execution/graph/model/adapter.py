@@ -101,7 +101,11 @@ class IRToRuntimeAdapter:
                 return any(check_complexity(x) for x in obj.values())
             return False
 
-        for k, v in node_ir.inputs.items():
+        # Create a unified view of all inputs
+        all_inputs = {str(i): v for i, v in enumerate(node_ir.args)}
+        all_inputs.update(node_ir.kwargs)
+
+        for k, v in all_inputs.items():
             if isinstance(v, dict) and v.get("$router"):
                 continue
 
@@ -163,8 +167,12 @@ class IRToRuntimeAdapter:
         return node
 
     def _create_edges(self, node_ir: NodeIR, target_node: Node):
+        # Create a unified view of all inputs
+        all_inputs = {str(i): v for i, v in enumerate(node_ir.args)}
+        all_inputs.update(node_ir.kwargs)
+
         # 1. Data Edges & Routers
-        for arg_name, value in node_ir.inputs.items():
+        for arg_name, value in all_inputs.items():
             if self._is_dependency(value):
                 # Simple Data Dependency (Node ID ref)
                 source_node = self.node_map[value]

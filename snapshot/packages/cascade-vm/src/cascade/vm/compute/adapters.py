@@ -245,7 +245,7 @@ class BridgedComputeService:
                     pass
                 except Exception as e:
                     logger.warning(f"Error during teardown of resource '{name}': {e}")
-                
+
                 if bus:
                     bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
 
@@ -253,7 +253,7 @@ class BridgedComputeService:
             return resource
         else:
             resource = provider(**deps)
-            
+
             if bus:
                 bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
 
@@ -262,6 +262,6 @@ class BridgedComputeService:
             def cleanup_event():
                 if bus:
                     bus.publish(ResourceReleased(run_id=run_id, resource_name=name))
-            
+
             stack.callback(cleanup_event)
             return resource

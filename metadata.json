@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): Final corrections to test harnesses for VM and Stdlib", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769192241.962861, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(core): 实现从编译器到运行时的无损参数流 (args/kwargs)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769192325.9050531, "duration_ms": 0}}

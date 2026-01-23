@@ -1,60 +1,148 @@
-简要回答
-好的，我们已经完成了计算适配层 (BridgedComputeService) 的核心重构，解决了包括依赖注入失效、参数绑定冲突以及系统上下文缺失在内的多个关键架构问题。测试结果显示，失败用例已从 40 个减少至 35 个，且 `test_engine_inputs.py` 和 `test_signal_provider.py` 等关键路径已恢复正常。
+Plan 1:
+1. 读取相关文件内容。
+2. 根据路线图生成修复的 `patch_file` 指令。
+3. 提交修改。
 
-## [COMMIT] refactor(vm): 修复计算适配层断裂 (Adapter Gap)
+先读取文件。简要回答
+我们将执行修复物理布线策略的路线图。首先，我们将修改 Expander 以确保 Launcher 始终具有 Pulse 端口，然后我们将更新 PulseExpansionPolicy 以更智能地检测“源节点”，即使它们具有静态输入或资源注入。
+
+## [WIP] fix(compiler): standardize pulse port and refine source detection logic
 
 ### 用户需求
-修复 `BridgedComputeService` 无法正确处理 `Inject` 对象、`params_context` 系统参数以及复杂函数签名绑定的问题。
+修复编译器中的一个缺陷：当任务具有静态参数或资源注入（通过 `Inject`）但没有上游任务依赖时，编译器未能正确识别其为“源节点”（需要 Pulse 触发），或者因为 Expander 未创建 Pulse 端口导致 Wiring 阶段失败。
 
 ### 评论
-这是一个重大的架构修复。通过打通 `ExecutionContext` 到 VM 适配层的链路，并引入基于 `inspect.Signature` 的智能绑定机制，我们使 VM 能够真正理解并注入 Cascade 的运行时资源。这解决了之前在 SQL 集成、信号处理和参数传递中出现的各类 `AttributeError` 和 `TypeError`。
+这是一个关键的修复，对于支持依赖注入（DI）和参数化任务至关重要。目前的逻辑假设“任何输入都意味着有上游依赖”，这在引入 DI 和常量输入后不再成立。通过解耦“物理端口存在性”与“触发逻辑”，架构将变得更加健壮。
 
 ### 目标
-1.  **基础设施贯通**: 在 `ExecutionContext` 中引入 `resource_container`，并确保其从 `Engine` 传递至 `BridgedComputeService`。
-2.  **智能参数绑定**: 实现完整的 Python 参数绑定状态机，支持 `POSITIONAL_ONLY`、`VAR_POSITIONAL` (*args) 和 `VAR_KEYWORD` (**kwargs)。
-3.  **依赖注入支持**: 在适配层实现 `_resolve_resource` 逻辑，支持按需解析 `Inject` 声明并管理任务级资源的生命周期。
-4.  **系统上下文感知**: 自动识别并注入 `params_context` 到任务函数中。
+1.  修改 `Expander`，使 `LauncherNode` 总是包含 `__pulse__` 端口，无论是否有其他输入。
+2.  修改 `PulseExpansionPolicy`，使其能够区分“上游节点引用”和“静态/注入输入”，从而正确地为孤立的参数化任务创建 Pulse 源。
 
 ### 基本原理
-修复的核心在于将适配层从“哑调用器”升级为“语义感知调用器”。它现在会预先分析目标函数的签名，根据参数名称、类型和位置，结合从 VM 传入的物理输入和从引擎持有的逻辑资源，计算出最终的调用参数。
+1.  **物理层 (Expander)**: 物理节点应具备接收所有可能信号的能力。端口的存在不应取决于当前的连接逻辑，而应由 Spec 定义。未连接的端口在 Reactor 中是无害的。
+2.  **逻辑层 (Policy)**: 只有当一个节点确实依赖于另一个节点的**执行结果**（显式依赖、数据流、条件）时，它才不需要自举脉冲。静态参数和资源注入是在节点启动前准备好的，不构成执行流的阻塞依赖。
 
 ### 标签
-#intent/refine #flow/done #priority/high #comp/vm #comp/runtime #comp/spec #concept/di #scope/core #ai/brainstorm #task/domain/compute #task/object/adapter-gap #task/action/refactor #task/state/end #task/status/completed
+#intent/fix #flow/ready #priority/high #comp/build #concept/executor #scope/core #ai/instruct #task/domain/compiler #task/object/wiring-policy #task/action/fix #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交变更
-
-我们将所有涉及基础设施贯通和适配层重构的修改提交到 Git。
+#### Acts 1: 读取相关文件
+首先，我们需要读取 `Expander` 和 `PulseExpansionPolicy` 的源代码，以确定修改的精确上下文。
 
 ~~~~~act
-git_add
-packages/cascade-spec/src/cascade/spec/runtime/strategies.py
-packages/cascade-vm/src/cascade/vm/compute/adapters.py
-packages/cascade-runtime/src/cascade/runtime/host/instance.py
-packages/cascade-runtime/src/cascade/runtime/strategies/vm.py
+read_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
 ~~~~~
 
 ~~~~~act
-git_commit
+read_file
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/pulse.py
 ~~~~~
-~~~~~text
-refactor(vm): bridge the "Adapter Gap" in BridgedComputeService
 
-This commit fixes a critical disconnect between the VM's physics engine and the Python runtime's logical requirements (DI, params_context, complex signatures).
+#### Acts 2: 实施修复 - Expander
+现在我们将修改 `Expander`，使其总是添加 `__pulse__` 端口。
 
-Key Changes:
-- Extended ExecutionContext to carry the ResourceContainer.
-- Injected the ResourceContainer from Engine through VMExecutionStrategy into BridgedComputeService.
-- Implemented a robust `_bind_execution_arguments` using `inspect.Signature` that supports all Python parameter kinds including *args and **kwargs.
-- Added automatic resolution of `Inject` objects and `params_context` within the adapter layer.
-- Added ExitStack management to handle the lifecycle of task-scoped resources (e.g., ephemeral DB connections).
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+~~~~~
+~~~~~python.old
+        # 2.6 Pulse (if pure source)
+        if not launcher_inputs:
+            pulse_name = LauncherSpec.pulse.name
+            launcher_inputs[pulse_name] = PortDef(pulse_name, PortRole.SIGNAL)
 
-These changes fix 5 major integration test failures related to SQL execution, parameter injection, and signal handling.
+        canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]
+~~~~~
+~~~~~python.new
+        # 2.6 Pulse (Always Available)
+        # We always expose the pulse port. If this is an intermediate node, this port
+        # might remain unwired. The Reactor will decide which ports to wait for based
+        # on actual connections.
+        pulse_name = LauncherSpec.pulse.name
+        if pulse_name not in launcher_inputs:
+            launcher_inputs[pulse_name] = PortDef(pulse_name, PortRole.SIGNAL)
+
+        canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]
+~~~~~
+
+#### Acts 3: 实施修复 - PulseExpansionPolicy
+接下来，我们更新 `PulseExpansionPolicy` 的判定逻辑，使其不再因为存在静态输入或约束而拒绝创建 Pulse 源。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expansion/policies/pulse.py
+~~~~~
+~~~~~python.old
+    def expand(
+        self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph
+    ) -> None:
+        # A true source has no inputs, dependencies, conditions, or constraints.
+        is_true_source = (
+            not node_ir.inputs
+            and not node_ir.dependencies
+            and not node_ir.condition
+            and not node_ir.constraints
+        )
+
+        if is_true_source:
+            d_pulse_id = PhysicalIdGenerator.pulse_source(
+                node_ir.current_node_instance_hash
+            )
+            d_pulse = PhysicsDataNode(
+                id=d_pulse_id,
+                name=f"Pulse({node_ir.current_node_instance_hash})",
+                capacity=1,
+                initial_tokens=1,
+            )
+            ctx.wire.add_node(d_pulse)
+            subgraph.nodes[d_pulse.id] = d_pulse
+            subgraph.controls["pulse_source"] = d_pulse
+~~~~~
+~~~~~python.new
+    def expand(
+        self, ctx: ExpansionContext, node_ir: NodeIR, subgraph: SubGraph
+    ) -> None:
+        # Determine if the node needs a self-bootstrapping pulse.
+        # It needs a pulse if it has NO upstream execution dependencies.
+
+        # 1. Check Explicit Sequence Dependencies (.after())
+        has_dependencies = len(node_ir.dependencies) > 0
+
+        # 2. Check Data Dependencies (inputs referencing other nodes)
+        has_data_dependency = False
+        for value in node_ir.inputs.values():
+            # IRGenerator stores upstream references as strings (Logical UUIDs).
+            # We check if this string corresponds to a known SubGraph ID in the current graph.
+            if isinstance(value, str) and value in ctx.subgraphs:
+                has_data_dependency = True
+                break
+
+        # 3. Check Condition (.run_if())
+        has_condition = node_ir.condition is not None
+
+        # Decision: If there are no upstream triggers, we must provide a pulse.
+        # Note: Static inputs (constants) and Resource Constraints do not count as
+        # execution dependencies; they are pre-requisites but not triggers.
+        needs_pulse = not (has_dependencies or has_data_dependency or has_condition)
+
+        if needs_pulse:
+            d_pulse_id = PhysicalIdGenerator.pulse_source(
+                node_ir.current_node_instance_hash
+            )
+            d_pulse = PhysicsDataNode(
+                id=d_pulse_id,
+                name=f"Pulse({node_ir.current_node_instance_hash})",
+                capacity=1,
+                initial_tokens=1,
+            )
+            ctx.wire.add_node(d_pulse)
+            subgraph.nodes[d_pulse.id] = d_pulse
+            subgraph.controls["pulse_source"] = d_pulse
 ~~~~~
 
 ### 下一步建议
-- **修复变长参数冲突**: 当前 `test_format_provider_with_positional_args` 仍然失败并提示 `multiple values for argument 'template'`，这通常是因为编译器生成的 IR 将第一个位置参数同时标记为了索引 `"0"` 和名称 `"template"`。建议下一步调查 `IRGenerator` 在处理标准库 Helper 时的输入生成逻辑。
-- **清理其他测试失败**: 剩下的 35 个失败中，有相当一部分与 `__pulse__` 端口缺失有关，这涉及到 `Builder` 的 `PulseExpansionPolicy` 逻辑，建议随后进行专项修复。
+我们已经完成了编译器核心逻辑的修复。建议进行全面的集成测试，特别是针对 `Inject` 功能和带有参数的根任务，以验证修复的有效性。由于无法直接运行测试，建议将这些更改提交到代码库。

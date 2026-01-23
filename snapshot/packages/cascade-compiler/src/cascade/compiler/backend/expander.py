@@ -53,9 +53,12 @@ class Expander:
             port_name = "condition"
             launcher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
 
-        # 2.6 Pulse (if pure source)
-        if not launcher_inputs:
-            pulse_name = LauncherSpec.pulse.name
+        # 2.6 Pulse (Always Available)
+        # We always expose the pulse port. If this is an intermediate node, this port
+        # might remain unwired. The Reactor will decide which ports to wait for based
+        # on actual connections.
+        pulse_name = LauncherSpec.pulse.name
+        if pulse_name not in launcher_inputs:
             launcher_inputs[pulse_name] = PortDef(pulse_name, PortRole.SIGNAL)
 
         canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]

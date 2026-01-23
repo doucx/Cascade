@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(vm): 修复计算适配层断裂 (Adapter Gap)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769184474.5416105, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(compiler): standardize pulse port and refine source detection logic", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769184806.578191, "duration_ms": 0}}

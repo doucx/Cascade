@@ -8,7 +8,7 @@ from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime.storage import ObjectStore
 from cascade.spec.runtime.interfaces import Executor
 from ..registry import CodeRegistry
-from cascade.spec.runtime import ComputeRequest
+from cascade.spec.runtime import ComputeRequest, ExecutionContext
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ class BridgedComputeService:
         registry: CodeRegistry,
         inbound_queue: "asyncio.Queue[ComputeRequest]",
         outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
+        context: ExecutionContext,
         wakeup_event: Optional[asyncio.Event] = None,
     ):
         self.executor = executor
@@ -41,6 +42,7 @@ class BridgedComputeService:
         self.registry = registry
         self.inbound_queue = inbound_queue
         self.outbound_queue = outbound_queue
+        self.context = context
         self._wakeup_event = wakeup_event
         self._running = False
         self._active_count = 0

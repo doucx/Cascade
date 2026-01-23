@@ -13,6 +13,7 @@ class ExecutionContext:
     run_stack: ExitStack
     active_resources: Dict[str, Any] = field(default_factory=dict)
     params: Dict[str, Any] = field(default_factory=dict)
+    resource_container: Any = None
 
 
 class ExecutionStrategy(Protocol):

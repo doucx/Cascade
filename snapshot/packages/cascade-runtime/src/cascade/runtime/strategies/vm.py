@@ -61,6 +61,7 @@ class RuntimeHarness:
             registry=code_registry,
             inbound_queue=self.compute_queue,
             outbound_queue=self.ingress_queue,
+            context=context,
             wakeup_event=self.wakeup_event,
         )
 

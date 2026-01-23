@@ -1,52 +1,197 @@
-好的，任务已完成。我们将这次对测试用例的更新作为一个完整的工作单元提交到 Git 仓库。
+简要回答
+好的，我将执行第一阶段的基础设施贯通工作。这将涉及打通 `ExecutionContext` 以携带 `ResourceContainer`，并更新 `Engine`、`RuntimeHarness` 和 `BridgedComputeService` 的初始化逻辑，从而为后续的依赖注入修复建立数据通路。
 
-## [COMMIT] test: 更新 visualizer 测试以适配 Dyad 架构
+## [WIP] refactor(compute): 贯通 ResourceContainer 至计算适配层
 
 ### 用户需求
-将修复后的 `test_visualizer.py` 提交到版本控制系统。
+用户希望修复计算适配层无法处理 `Inject` 和 `params_context` 的问题。第一步是建立基础设施连接，确保 `BridgedComputeService` 能够访问到 `ResourceContainer` 和 `ExecutionContext`。
 
 ### 评论
-这次提交确保了编译器组件的可视化测试套件能够正确反映当前的 Dyad（二连体）架构。这是保持测试作为系统“真理来源”的重要步骤。
+这是一个必要的架构调整。目前计算服务 (`BridgedComputeService`) 是作为孤岛运行的，只知道如何执行代码，却不知道代码运行的上下文环境。通过注入 `ExecutionContext`（其中包含 `ResourceContainer`），我们为适配层赋予了“上下文感知”能力。
 
 ### 目标
-1.  将 `packages/cascade-compiler/tests/unit/utils/test_visualizer.py` 的更改添加到暂存区。
-2.  创建一个清晰、符合规范的提交记录。
+1.  修改 `cascade-spec` 中的 `ExecutionContext`，使其包含 `resource_container` 字段。
+2.  修改 `cascade-vm` 中的 `BridgedComputeService`，使其构造函数接收并存储 `ExecutionContext`。
+3.  修改 `cascade-runtime` 中的 `Engine`，在创建 `ExecutionContext` 时注入资源容器。
+4.  修改 `cascade-runtime` 中的 `RuntimeHarness`，在初始化计算服务时传递上下文。
 
 ### 基本原理
-通过同步测试和实现，我们消除了因架构演进带来的虚假失败，保证了 CI/CD 流程的顺畅。使用 `[COMMIT]` 计划来执行 Git 操作是 Quipu 协议的标准流程。
+依赖注入解析需要在运行时查找资源提供者，而这些提供者存储在 `ResourceContainer` 中。`BridgedComputeService` 是实际执行任务逻辑的地方，因此它必须持有对 `ResourceContainer` 的引用。最自然的传递路径是通过 `ExecutionContext`，因为它已经封装了每次运行的特定状态。
 
 ### 标签
-#intent/tooling #flow/ready #priority/medium #comp/tests #comp/compiler #scope/dx #ai/instruct #task/domain/testing #task/object/visualizer #task/action/bug-fix #task/state/end #task/status/completed
+#intent/refine #flow/ready #priority/high #comp/spec #comp/runtime #comp/vm #scope/core #task/domain/compute #task/object/adapter-layer #task/action/wiring #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交变更
+#### Acts 1: 更新 ExecutionContext 定义
 
-我们将修改后的测试文件添加到 Git 暂存区，并创建一个内容详尽的提交。
+首先，我们在规范中扩展执行上下文，增加 `resource_container` 字段。使用 `Any` 类型以避免规范层对运行时实现的循环依赖。
 
 ~~~~~act
-git_add
-packages/cascade-compiler/tests/unit/utils/test_visualizer.py
+patch_file
+packages/cascade-spec/src/cascade/spec/runtime/strategies.py
+~~~~~
+~~~~~python.old
+@dataclass
+class ExecutionContext:
+    run_id: str
+    state_backend: StateBackend
+    object_store: ObjectStore
+    run_stack: ExitStack
+    active_resources: Dict[str, Any] = field(default_factory=dict)
+    params: Dict[str, Any] = field(default_factory=dict)
+~~~~~
+~~~~~python.new
+@dataclass
+class ExecutionContext:
+    run_id: str
+    state_backend: StateBackend
+    object_store: ObjectStore
+    run_stack: ExitStack
+    active_resources: Dict[str, Any] = field(default_factory=dict)
+    params: Dict[str, Any] = field(default_factory=dict)
+    resource_container: Any = None
+~~~~~
+
+#### Acts 2: 更新 BridgedComputeService 签名
+
+接着，修改 VM 层的计算服务适配器，使其能够接收并保存上下文对象。这是后续实现依赖注入逻辑的基础。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/compute/adapters.py
+~~~~~
+~~~~~python.old
+from cascade.spec.runtime.interfaces import Executor
+from ..registry import CodeRegistry
+from cascade.spec.runtime import ComputeRequest
+
+logger = logging.getLogger(__name__)
+~~~~~
+~~~~~python.new
+from cascade.spec.runtime.interfaces import Executor
+from ..registry import CodeRegistry
+from cascade.spec.runtime import ComputeRequest, ExecutionContext
+
+logger = logging.getLogger(__name__)
 ~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-vm/src/cascade/vm/compute/adapters.py
 ~~~~~
-~~~~~text
-test(compiler): update visualizer tests to match Dyad architecture
+~~~~~python.old
+    def __init__(
+        self,
+        executor: Executor,
+        store: ObjectStore,
+        registry: CodeRegistry,
+        inbound_queue: "asyncio.Queue[ComputeRequest]",
+        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
+        wakeup_event: Optional[asyncio.Event] = None,
+    ):
+        self.executor = executor
+        self.store = store
+        self.registry = registry
+        self.inbound_queue = inbound_queue
+        self.outbound_queue = outbound_queue
+        self._wakeup_event = wakeup_event
+        self._running = False
+        self._active_count = 0
+~~~~~
+~~~~~python.new
+    def __init__(
+        self,
+        executor: Executor,
+        store: ObjectStore,
+        registry: CodeRegistry,
+        inbound_queue: "asyncio.Queue[ComputeRequest]",
+        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
+        context: ExecutionContext,
+        wakeup_event: Optional[asyncio.Event] = None,
+    ):
+        self.executor = executor
+        self.store = store
+        self.registry = registry
+        self.inbound_queue = inbound_queue
+        self.outbound_queue = outbound_queue
+        self.context = context
+        self._wakeup_event = wakeup_event
+        self._running = False
+        self._active_count = 0
+~~~~~
 
-The 'test_visualizer.py' was failing because it was using outdated 'Triad' node definitions (Bleacher/Worker/Stainer) and asserting against incorrect colors.
+#### Acts 3: 更新 Engine 初始化逻辑
 
-- Rewrote the test to use 'Dyad' nodes (LauncherNode/LanderNode).
-- Added assertions for the correct heuristic colors defined in 'GraphDumper':
-  - LauncherNode (The Starter): #c8e6c9
-  - Result DataNode (Landing Pad): #f3e5f5
-  - LanderNode (The Finisher): #ffccbc
-- Verified that observability channels correctly render as dashed lines.
+在 Runtime 层，我们需要在 `Engine` 启动运行时将 `resource_container` 注入到上下文中。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/host/instance.py
+~~~~~
+~~~~~python.old
+                context = ExecutionContext(
+                    run_id=run_id,
+                    state_backend=state_backend,
+                    object_store=self.object_store,
+                    run_stack=run_stack,
+                    active_resources=active_resources,
+                    params=params or {},
+                )
+
+                final_result = await strategy.execute(
+~~~~~
+~~~~~python.new
+                context = ExecutionContext(
+                    run_id=run_id,
+                    state_backend=state_backend,
+                    object_store=self.object_store,
+                    run_stack=run_stack,
+                    active_resources=active_resources,
+                    params=params or {},
+                    resource_container=self.resource_container,
+                )
+
+                final_result = await strategy.execute(
+~~~~~
+
+#### Acts 4: 更新 RuntimeHarness 传递逻辑
+
+最后，在 VM 策略的 `RuntimeHarness` 中，将准备好的 `context` 传递给 `BridgedComputeService`。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/strategies/vm.py
+~~~~~
+~~~~~python.old
+        self.compute_service = BridgedComputeService(
+            executor=executor,
+            store=context.object_store,
+            registry=code_registry,
+            inbound_queue=self.compute_queue,
+            outbound_queue=self.ingress_queue,
+            wakeup_event=self.wakeup_event,
+        )
+~~~~~
+~~~~~python.new
+        self.compute_service = BridgedComputeService(
+            executor=executor,
+            store=context.object_store,
+            registry=code_registry,
+            inbound_queue=self.compute_queue,
+            outbound_queue=self.ingress_queue,
+            context=context,
+            wakeup_event=self.wakeup_event,
+        )
 ~~~~~
 
 ### 下一步建议
-- **回归测试**: 建议在提交后运行整个 `packages/cascade-compiler/` 的测试套件，确保没有其他由于架构变动导致的隐性失败。
-- **架构文档同步**: 如果有相关的架构设计 Markdown 文档，可能也需要同步更新其中的拓扑图示例。
+
+基础设施已经打通。下一步应该进入**第二阶段：核心解析逻辑重构 (Core Resolution Logic)**。
+
+你需要实现智能参数绑定逻辑：
+1.  在 `BridgedComputeService` 中实现 `_bind_execution_arguments` 方法。
+2.  使用 `inspect.Signature` 智能匹配输入参数、`Inject` 声明和系统上下文 (`params_context`)。
+3.  实现资源解析逻辑，从 `context.resource_container` 中获取实际对象。

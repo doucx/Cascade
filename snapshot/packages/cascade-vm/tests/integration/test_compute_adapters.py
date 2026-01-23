@@ -1,9 +1,11 @@
 import asyncio
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
+from contextlib import ExitStack
 
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.object import Ref
+from cascade.spec.runtime import ExecutionContext
 from cascade.runtime.storage import InMemoryObjectStore
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.compute import ComputeRequest, BridgedComputeService
@@ -58,8 +60,25 @@ def wakeup_event():
 
 
 @pytest.fixture
+def mock_context(store):
+    return ExecutionContext(
+        run_id="test-run",
+        state_backend=Mock(),
+        object_store=store,
+        run_stack=ExitStack(),
+        resource_container=Mock(),
+    )
+
+
+@pytest.fixture
 def service(
-    mock_executor, store, registry, inbound_queue, outbound_queue, wakeup_event
+    mock_executor,
+    store,
+    registry,
+    inbound_queue,
+    outbound_queue,
+    wakeup_event,
+    mock_context,
 ):
     return BridgedComputeService(
         executor=mock_executor,
@@ -67,6 +86,7 @@ def service(
         registry=registry,
         inbound_queue=inbound_queue,
         outbound_queue=outbound_queue,
+        context=mock_context,
         wakeup_event=wakeup_event,
     )
 

@@ -1,197 +1,212 @@
-简要回答
-好的，我将执行第一阶段的基础设施贯通工作。这将涉及打通 `ExecutionContext` 以携带 `ResourceContainer`，并更新 `Engine`、`RuntimeHarness` 和 `BridgedComputeService` 的初始化逻辑，从而为后续的依赖注入修复建立数据通路。
+当然，这是一个预料之中的错误。我们在前一个步骤中修改了 `BridgedComputeService` 的构造函数签名，要求传入一个 `context` 对象，但没有更新用于测试的 Fixture。
 
-## [WIP] refactor(compute): 贯通 ResourceContainer 至计算适配层
+我将立即修复这些测试，为 `BridgedComputeService` 提供一个模拟的 `ExecutionContext`。
+
+## [WIP] fix: 修复因缺少执行上下文而失败的 VM 测试
+
+### 错误分析
+在 `BridgedComputeService.__init__` 中添加了 `context: ExecutionContext` 参数后，`packages/cascade-vm/tests/integration/test_compute_adapters.py` 中用于实例化该服务的 `service` fixture 未能提供此必需参数，导致 `TypeError` 并使整个测试套件失败。
 
 ### 用户需求
-用户希望修复计算适配层无法处理 `Inject` 和 `params_context` 的问题。第一步是建立基础设施连接，确保 `BridgedComputeService` 能够访问到 `ResourceContainer` 和 `ExecutionContext`。
+用户需要修复因 `TypeError: ... missing 1 required positional argument: 'context'` 导致的测试失败。
 
 ### 评论
-这是一个必要的架构调整。目前计算服务 (`BridgedComputeService`) 是作为孤岛运行的，只知道如何执行代码，却不知道代码运行的上下文环境。通过注入 `ExecutionContext`（其中包含 `ResourceContainer`），我们为适配层赋予了“上下文感知”能力。
+这是一个简单的、由 API 变更引起的测试代码同步问题。修复它很简单，只需创建一个合适的 `ExecutionContext` 模拟实例并将其注入到测试 fixture 中即可。这也验证了我们第一阶段的基础设施变更已在类型系统层面正确生效。
 
 ### 目标
-1.  修改 `cascade-spec` 中的 `ExecutionContext`，使其包含 `resource_container` 字段。
-2.  修改 `cascade-vm` 中的 `BridgedComputeService`，使其构造函数接收并存储 `ExecutionContext`。
-3.  修改 `cascade-runtime` 中的 `Engine`，在创建 `ExecutionContext` 时注入资源容器。
-4.  修改 `cascade-runtime` 中的 `RuntimeHarness`，在初始化计算服务时传递上下文。
+1.  在 `test_compute_adapters.py` 中导入 `ExecutionContext` 和其他必要的辅助类。
+2.  创建一个新的 `pytest` fixture (`mock_context`)，用于构造一个适用于测试的 `ExecutionContext` 实例。
+3.  更新 `service` fixture，使其依赖于 `mock_context` 并将该上下文传递给 `BridgedComputeService` 的构造函数。
 
 ### 基本原理
-依赖注入解析需要在运行时查找资源提供者，而这些提供者存储在 `ResourceContainer` 中。`BridgedComputeService` 是实际执行任务逻辑的地方，因此它必须持有对 `ResourceContainer` 的引用。最自然的传递路径是通过 `ExecutionContext`，因为它已经封装了每次运行的特定状态。
+测试应该隔离被测单元。通过创建一个包含模拟依赖项（如 `state_backend` 和 `resource_container`）的 `ExecutionContext`，我们可以测试 `BridgedComputeService` 的核心逻辑，而无需启动完整的运行时环境。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/spec #comp/runtime #comp/vm #scope/core #task/domain/compute #task/object/adapter-layer #task/action/wiring #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/vm #comp/tests #scope/dx #task/domain/compute #task/object/adapter-layer #task/action/wiring #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 ExecutionContext 定义
+#### Acts 1: 更新测试 Fixture 以注入执行上下文
 
-首先，我们在规范中扩展执行上下文，增加 `resource_container` 字段。使用 `Any` 类型以避免规范层对运行时实现的循环依赖。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/runtime/strategies.py
-~~~~~
-~~~~~python.old
-@dataclass
-class ExecutionContext:
-    run_id: str
-    state_backend: StateBackend
-    object_store: ObjectStore
-    run_stack: ExitStack
-    active_resources: Dict[str, Any] = field(default_factory=dict)
-    params: Dict[str, Any] = field(default_factory=dict)
-~~~~~
-~~~~~python.new
-@dataclass
-class ExecutionContext:
-    run_id: str
-    state_backend: StateBackend
-    object_store: ObjectStore
-    run_stack: ExitStack
-    active_resources: Dict[str, Any] = field(default_factory=dict)
-    params: Dict[str, Any] = field(default_factory=dict)
-    resource_container: Any = None
-~~~~~
-
-#### Acts 2: 更新 BridgedComputeService 签名
-
-接着，修改 VM 层的计算服务适配器，使其能够接收并保存上下文对象。这是后续实现依赖注入逻辑的基础。
+我们将修改 `test_compute_adapters.py`，添加必要的导入，创建一个 `mock_context` fixture，并更新 `service` fixture 以使用它。这将解决所有 `TypeError` 问题。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/compute/adapters.py
+packages/cascade-vm/tests/integration/test_compute_adapters.py
 ~~~~~
 ~~~~~python.old
-from cascade.spec.runtime.interfaces import Executor
-from ..registry import CodeRegistry
-from cascade.spec.runtime import ComputeRequest
+import asyncio
+import pytest
+from unittest.mock import AsyncMock
 
-logger = logging.getLogger(__name__)
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.object import Ref
+from cascade.runtime.storage import InMemoryObjectStore
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.compute import ComputeRequest, BridgedComputeService
+from cascade.spec.dsl.task import task
+
+
+# --- Test Functions ---
+def sync_add(a, b):
+    return a + b
+
+
+async def async_add(a, b):
+    return a + b
+
+
+@task(mode="compute")
+def sync_compute_task(x):
+    return x * x
+
+
+# --- Fixtures ---
+
+
+@pytest.fixture
+def store():
+    return InMemoryObjectStore()
+
+
+@pytest.fixture
+def registry():
+    return CodeRegistry()
+
+
+@pytest.fixture
+def mock_executor():
+    return AsyncMock()
+
+
+@pytest.fixture
+def inbound_queue():
+    return asyncio.Queue()
+
+
+@pytest.fixture
+def outbound_queue():
+    return asyncio.Queue()
+
+
+@pytest.fixture
+def wakeup_event():
+    return asyncio.Event()
+
+
+@pytest.fixture
+def service(
+    mock_executor, store, registry, inbound_queue, outbound_queue, wakeup_event
+):
+    return BridgedComputeService(
+        executor=mock_executor,
+        store=store,
+        registry=registry,
+        inbound_queue=inbound_queue,
+        outbound_queue=outbound_queue,
+        wakeup_event=wakeup_event,
+    )
 ~~~~~
 ~~~~~python.new
-from cascade.spec.runtime.interfaces import Executor
-from ..registry import CodeRegistry
-from cascade.spec.runtime import ComputeRequest, ExecutionContext
+import asyncio
+import pytest
+from unittest.mock import AsyncMock, Mock
+from contextlib import ExitStack
 
-logger = logging.getLogger(__name__)
-~~~~~
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.object import Ref
+from cascade.spec.runtime import ExecutionContext
+from cascade.runtime.storage import InMemoryObjectStore
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.compute import ComputeRequest, BridgedComputeService
+from cascade.spec.dsl.task import task
 
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/compute/adapters.py
-~~~~~
-~~~~~python.old
-    def __init__(
-        self,
-        executor: Executor,
-        store: ObjectStore,
-        registry: CodeRegistry,
-        inbound_queue: "asyncio.Queue[ComputeRequest]",
-        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
-        wakeup_event: Optional[asyncio.Event] = None,
-    ):
-        self.executor = executor
-        self.store = store
-        self.registry = registry
-        self.inbound_queue = inbound_queue
-        self.outbound_queue = outbound_queue
-        self._wakeup_event = wakeup_event
-        self._running = False
-        self._active_count = 0
-~~~~~
-~~~~~python.new
-    def __init__(
-        self,
-        executor: Executor,
-        store: ObjectStore,
-        registry: CodeRegistry,
-        inbound_queue: "asyncio.Queue[ComputeRequest]",
-        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
-        context: ExecutionContext,
-        wakeup_event: Optional[asyncio.Event] = None,
-    ):
-        self.executor = executor
-        self.store = store
-        self.registry = registry
-        self.inbound_queue = inbound_queue
-        self.outbound_queue = outbound_queue
-        self.context = context
-        self._wakeup_event = wakeup_event
-        self._running = False
-        self._active_count = 0
-~~~~~
 
-#### Acts 3: 更新 Engine 初始化逻辑
+# --- Test Functions ---
+def sync_add(a, b):
+    return a + b
 
-在 Runtime 层，我们需要在 `Engine` 启动运行时将 `resource_container` 注入到上下文中。
 
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/host/instance.py
-~~~~~
-~~~~~python.old
-                context = ExecutionContext(
-                    run_id=run_id,
-                    state_backend=state_backend,
-                    object_store=self.object_store,
-                    run_stack=run_stack,
-                    active_resources=active_resources,
-                    params=params or {},
-                )
+async def async_add(a, b):
+    return a + b
 
-                final_result = await strategy.execute(
-~~~~~
-~~~~~python.new
-                context = ExecutionContext(
-                    run_id=run_id,
-                    state_backend=state_backend,
-                    object_store=self.object_store,
-                    run_stack=run_stack,
-                    active_resources=active_resources,
-                    params=params or {},
-                    resource_container=self.resource_container,
-                )
 
-                final_result = await strategy.execute(
-~~~~~
+@task(mode="compute")
+def sync_compute_task(x):
+    return x * x
 
-#### Acts 4: 更新 RuntimeHarness 传递逻辑
 
-最后，在 VM 策略的 `RuntimeHarness` 中，将准备好的 `context` 传递给 `BridgedComputeService`。
+# --- Fixtures ---
 
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/strategies/vm.py
-~~~~~
-~~~~~python.old
-        self.compute_service = BridgedComputeService(
-            executor=executor,
-            store=context.object_store,
-            registry=code_registry,
-            inbound_queue=self.compute_queue,
-            outbound_queue=self.ingress_queue,
-            wakeup_event=self.wakeup_event,
-        )
-~~~~~
-~~~~~python.new
-        self.compute_service = BridgedComputeService(
-            executor=executor,
-            store=context.object_store,
-            registry=code_registry,
-            inbound_queue=self.compute_queue,
-            outbound_queue=self.ingress_queue,
-            context=context,
-            wakeup_event=self.wakeup_event,
-        )
+
+@pytest.fixture
+def store():
+    return InMemoryObjectStore()
+
+
+@pytest.fixture
+def registry():
+    return CodeRegistry()
+
+
+@pytest.fixture
+def mock_executor():
+    return AsyncMock()
+
+
+@pytest.fixture
+def inbound_queue():
+    return asyncio.Queue()
+
+
+@pytest.fixture
+def outbound_queue():
+    return asyncio.Queue()
+
+
+@pytest.fixture
+def wakeup_event():
+    return asyncio.Event()
+
+
+@pytest.fixture
+def mock_context(store):
+    return ExecutionContext(
+        run_id="test-run",
+        state_backend=Mock(),
+        object_store=store,
+        run_stack=ExitStack(),
+        resource_container=Mock(),
+    )
+
+
+@pytest.fixture
+def service(
+    mock_executor,
+    store,
+    registry,
+    inbound_queue,
+    outbound_queue,
+    wakeup_event,
+    mock_context,
+):
+    return BridgedComputeService(
+        executor=mock_executor,
+        store=store,
+        registry=registry,
+        inbound_queue=inbound_queue,
+        outbound_queue=outbound_queue,
+        context=mock_context,
+        wakeup_event=wakeup_event,
+    )
 ~~~~~
 
 ### 下一步建议
 
-基础设施已经打通。下一步应该进入**第二阶段：核心解析逻辑重构 (Core Resolution Logic)**。
+测试已修复，基础设施已就绪。现在是时候实施此修复路线图的核心部分了。
 
-你需要实现智能参数绑定逻辑：
-1.  在 `BridgedComputeService` 中实现 `_bind_execution_arguments` 方法。
-2.  使用 `inspect.Signature` 智能匹配输入参数、`Inject` 声明和系统上下文 (`params_context`)。
-3.  实现资源解析逻辑，从 `context.resource_container` 中获取实际对象。
+我将开始**第二阶段和第三阶段：核心解析逻辑重构**。这包括：
+1.  在 `BridgedComputeService` 中实现新的 `_bind_execution_arguments` 方法。
+2.  重写 `_process_request` 以使用这个新方法，彻底解决参数绑定、依赖注入和上下文感知的问题。

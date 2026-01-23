@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(std): 确保 Launcher 正确处理稀疏参数", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769190046.0197055, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 纠正编译器中端口命名的根本性错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1769190415.101142, "duration_ms": 0}}

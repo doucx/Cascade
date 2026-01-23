@@ -15,16 +15,8 @@ class ParameterExpansionPolicy(ExpansionPolicy):
         all_inputs.update(node_ir.kwargs)
 
         for input_key, source_ref in all_inputs.items():
-            # Resolve port name
-            if input_key.isdigit():
-                idx = int(input_key)
-                port_name = (
-                    node_ir.task.args[idx].name
-                    if idx < len(node_ir.task.args)
-                    else input_key
-                )
-            else:
-                port_name = input_key
+            # The port name is the key itself. We use it for naming debug nodes.
+            port_name = input_key
 
             # Case A: Dependency - Create intermediate D_dep node
             if isinstance(source_ref, str) and source_ref in ctx.subgraphs:

@@ -20,28 +20,23 @@ def create_mock_launcher_node(input_ports_config):
 
 
 def test_standard_launcher_dispatches_request():
-    # Use IO capture wrapper to simulate reactor behavior
-    from cascade.spec.physics.binding import IOWrapper
     from cascade.spec.specs.dyad import LauncherSpec
 
-    # Setup Inputs for the IO Wrapper
-    io_inputs = {
+    # Setup Inputs as a simple dictionary, as the @implements decorator expects.
+    inputs = {
         "0": Token(payload="hello"),  # Positional
         "kwarg": Token(payload=123),  # Keyword
     }
     node = create_mock_launcher_node(
         {"0": PortRole.DATA, "kwarg": PortRole.DATA, "obs_output": PortRole.OBSERVABILITY}
     )
-    io = IOWrapper(io_inputs, {}, LauncherSpec)
 
     # Mock Resources
     mock_queue = MagicMock()
     resources = {"system.compute_queue": mock_queue}
 
-    # Execute the raw function logic
-    from cascade.std.dyad.launcher import standard_launcher as raw_launcher
-
-    raw_launcher(io, node, resources)
+    # Execute the decorated function directly
+    standard_launcher(inputs, node, resources)
 
     # Verify Queue Interaction
     mock_queue.put_nowait.assert_called_once()
@@ -56,7 +51,9 @@ def test_standard_launcher_dispatches_request():
 
 
 def test_standard_launcher_emits_observability_event():
-    node = create_mock_launcher_node({})
+    from cascade.spec.specs.dyad import LauncherSpec
+
+    node = create_mock_launcher_node({"obs_output": PortRole.OBSERVABILITY})
     mock_queue = MagicMock()
     resources = {"system.compute_queue": mock_queue}
 

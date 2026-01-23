@@ -261,9 +261,11 @@ async def test_is_idle_state_changes(
     service.executor.execute = blocking_executor
     service.registry.register("idle_test_hash", sync_add)
 
+    # Provide valid arguments to pass the signature binding stage
+    store = service.store
     request = ComputeRequest(
         code_hash="idle_test_hash",
-        input_args=[],
+        input_args=[store.put(1), store.put(2)],
         input_kwargs={},
         reply_to_nid="d_out",
         trace={},

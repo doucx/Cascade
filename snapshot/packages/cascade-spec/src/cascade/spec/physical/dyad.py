@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List, Set
 from .nodes import PhysicsFuncNode
 
 
@@ -10,6 +11,10 @@ class LauncherNode(PhysicsFuncNode):
     # The explicit ID of the DataNode where the result should be deposited.
     # This eliminates the need for topological guessing.
     reply_to_nid: str = ""
+
+    # Metadata to reconstruct arguments correctly
+    arg_port_names: List[str] = field(default_factory=list)
+    kwarg_port_names: Set[str] = field(default_factory=set)
 
 
 @dataclass

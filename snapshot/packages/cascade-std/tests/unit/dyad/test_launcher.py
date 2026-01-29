@@ -19,8 +19,6 @@ def create_mock_launcher_node(input_ports_config):
     return node
 
 
-
-
 def test_standard_launcher_dispatches_request():
     # Setup Inputs as a simple dictionary, as the @implements decorator expects.
     inputs = {

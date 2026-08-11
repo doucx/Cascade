@@ -64,15 +64,18 @@
     },
     "py://packages/cascade-spec/src/cascade/spec/components/resource.py#DiscreteAllocatorSpec": {
       "baseline_code_signature_text": "class DiscreteAllocatorSpec(PhysicsSpec):",
-      "baseline_code_structure_hash": "545d4119c6fd5c2e9f2a9c78045b08cd9bcdfc959f7b5a81bf54b81cb1cafc0b"
+      "baseline_code_structure_hash": "545d4119c6fd5c2e9f2a9c78045b08cd9bcdfc959f7b5a81bf54b81cb1cafc0b",
+      "baseline_yaml_content_hash": "9d9542e3226f705e7930ca976c17afba323d455379d7d74d1c0135d25f64d8c4"
     },
     "py://packages/cascade-spec/src/cascade/spec/components/resource.py#DiscreteReclaimerSpec": {
       "baseline_code_signature_text": "class DiscreteReclaimerSpec(PhysicsSpec):",
-      "baseline_code_structure_hash": "74774bcb6c70b4ae71e40b76ff06b4ba6d675b96f0967d0760f77932ecce73b5"
+      "baseline_code_structure_hash": "74774bcb6c70b4ae71e40b76ff06b4ba6d675b96f0967d0760f77932ecce73b5",
+      "baseline_yaml_content_hash": "959ab38c6ea9e65fff9343987309f5466df0c3f8f52f8103b39210dbede9512c"
     },
     "py://packages/cascade-spec/src/cascade/spec/components/resource.py#ResourceRequestorSpec": {
       "baseline_code_signature_text": "class ResourceRequestorSpec(PhysicsSpec):",
-      "baseline_code_structure_hash": "2cdc1c7120c6ae9032043f2fbdfa06ae449272279ee9b98755349f6f93a1e6b5"
+      "baseline_code_structure_hash": "2cdc1c7120c6ae9032043f2fbdfa06ae449272279ee9b98755349f6f93a1e6b5",
+      "baseline_yaml_content_hash": "b0348347ffc7b338888df478eeffe3aba9e023653ef83cbbad67e69bfb5c07a3"
     },
     "py://packages/cascade-spec/src/cascade/spec/components/system.py#DrainerSpec": {
       "baseline_code_signature_text": "class DrainerSpec(PhysicsSpec):",
@@ -80,11 +83,13 @@
     },
     "py://packages/cascade-spec/src/cascade/spec/components/system.py#EgressSpec": {
       "baseline_code_signature_text": "class EgressSpec(PhysicsSpec):",
-      "baseline_code_structure_hash": "702da3d1c7772e4789a2c2a3d1ce718f6b63a700538bc35a92c867ac69889f0e"
+      "baseline_code_structure_hash": "702da3d1c7772e4789a2c2a3d1ce718f6b63a700538bc35a92c867ac69889f0e",
+      "baseline_yaml_content_hash": "2a822a3678a88bcc9887c0bf1c0c74e6e838b08780f9559ddc690a62a11a5c8d"
     },
     "py://packages/cascade-spec/src/cascade/spec/components/system.py#GateSpec": {
       "baseline_code_signature_text": "class GateSpec(PhysicsSpec):",
-      "baseline_code_structure_hash": "9f6529fae894567e7a462cfd47a98f3ee95da60f4ce30932363bedccd6f700c8"
+      "baseline_code_structure_hash": "9f6529fae894567e7a462cfd47a98f3ee95da60f4ce30932363bedccd6f700c8",
+      "baseline_yaml_content_hash": "9e2c9e3b67451450f1eae71c7b35b538fbca85ad8c0bdecb24ce0422d74dd0ed"
     },
     "py://packages/cascade-spec/src/cascade/spec/components/system.py#ObservabilitySpec": {
       "baseline_code_signature_text": "class ObservabilitySpec(PhysicsSpec):",
@@ -96,7 +101,8 @@
     },
     "py://packages/cascade-spec/src/cascade/spec/components/system.py#SleepSpec": {
       "baseline_code_signature_text": "class SleepSpec(PhysicsSpec):",
-      "baseline_code_structure_hash": "9ff1657adf9c2c18ab9e7acc9ffa83d4b63fdf364cc324b475e3eb4ec5641ef0"
+      "baseline_code_structure_hash": "9ff1657adf9c2c18ab9e7acc9ffa83d4b63fdf364cc324b475e3eb4ec5641ef0",
+      "baseline_yaml_content_hash": "3b25e457ff0bb092791493d81ac83772226f443439e01318bee0960bb4a66b5c"
     },
     "py://packages/cascade-spec/src/cascade/spec/components/system.py#TerminatorSpec": {
       "baseline_code_signature_text": "class TerminatorSpec(PhysicsSpec):",
@@ -449,9 +455,6 @@
     },
     "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.flow_control": {
       "baseline_yaml_content_hash": "4833a88eab22bfe756abbdd37e6e1963f40d4b9a4df6dab281f3a304f51ccf51"
-    },
-    "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.inputs": {
-      "baseline_yaml_content_hash": "ee41dff677fd94bce3cd72de90c95f6cb57ad6d134de23327367185d0ceb1a1f"
     },
     "py://packages/cascade-spec/src/cascade/spec/ir/graph.py#NodeIR.logical_id": {
       "baseline_yaml_content_hash": "3fc3e3790188b657177b931ddd0ae2b7568ef95736bd072c49242fc42954f778"

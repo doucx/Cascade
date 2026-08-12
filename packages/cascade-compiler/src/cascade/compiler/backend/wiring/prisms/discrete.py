@@ -1,21 +1,22 @@
 from typing import Any
 
-from cascade.spec.physical.environment import ResourceDef
-from cascade.spec.ir.graph import NodeIR
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.compiler.interfaces import ResourcePrism
 from cascade.spec.components import (
     DiscreteAllocatorSpec,
     DiscreteReclaimerSpec,
-    ResourceRequestorSpec,
     GateSpec,
+    ResourceRequestorSpec,
 )
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.environment import ResourceDef
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.std.resource.discrete import DiscreteLedger
+
 from ...expander import SubGraph
-from cascade.reflection import PhysicalIdGenerator
-from ..context import WiringContext
 from ...expansion.context import ExpansionContext
-from cascade.spec.compiler.interfaces import ResourcePrism
+from ..context import WiringContext
 
 
 class DiscreteResourcePrism(ResourcePrism):

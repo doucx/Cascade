@@ -1,8 +1,8 @@
 import asyncio
 import time
-import pytest
-import cascade.sdk as cs
 
+import cascade.sdk as cs
+import pytest
 from cascade.connectors.local import LocalBusConnector
 
 

@@ -1,6 +1,8 @@
-from typing import TypeVar, Generic, Callable, Any, Optional
-from dataclasses import dataclass
+from __future__ import annotations
+
 import inspect
+from dataclasses import dataclass
+from typing import Any, Callable, Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -27,9 +29,9 @@ class Inject:
 
 
 def resource(
-    func: Optional[Callable[..., T]] = None,
+    func: Callable[..., T] | None = None,
     *,
-    name: Optional[str] = None,
+    name: str | None = None,
     scope: str = "run",
 ):
     def wrapper(f: Callable[..., T]) -> ResourceDefinition[T]:

@@ -1,4 +1,6 @@
-from typing import Any, List, Dict, Optional
+from __future__ import annotations
+
+from typing import Any
 
 try:
     import sqlalchemy
@@ -27,8 +29,8 @@ class SqlProvider(Provider):
 def _sql_task(
     query: str,
     conn: Any,  # The connection object is now an explicit, injectable argument
-    params: Optional[Dict[str, Any]] = None,
-) -> List[Dict[str, Any]]:
+    params: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     if sqlalchemy is None:
         # This check is redundant if create_factory is called, but good for safety
         raise ImportError("SQLAlchemy is not installed.")

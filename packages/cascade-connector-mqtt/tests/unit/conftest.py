@@ -1,6 +1,7 @@
 import sys
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 
 @pytest.fixture(autouse=True)

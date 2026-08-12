@@ -1,18 +1,19 @@
-from typing import Any, Dict, List, Tuple, Optional, Callable
-
-from cascade.execution.graph.model.model import Node, Graph, Edge, EdgeType, ParamNode
-from cascade.spec.dsl.resources import Inject
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.execution.graph.errors import DependencyMissingError, ResourceNotFoundError
-from cascade.spec.runtime.interfaces import StateBackend
+from __future__ import annotations
 
 import inspect
+from typing import Any, Callable
+
+from cascade.execution.graph.errors import DependencyMissingError, ResourceNotFoundError
+from cascade.execution.graph.model.model import Edge, EdgeType, Graph, Node, ParamNode
+from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+from cascade.spec.dsl.resources import Inject
+from cascade.spec.runtime.interfaces import StateBackend
 
 
 class ArgumentResolver:
     async def resolve_cache_inputs(
         self, node: Node, graph: Graph, state_backend: StateBackend
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         # TODO: This needs to be smarter for caching.
         # It should probably include data from input_bindings too?
         # For now, keeping legacy behavior (edge results only).
@@ -36,12 +37,12 @@ class ArgumentResolver:
         node: Node,
         graph: Graph,
         state_backend: StateBackend,
-        resource_context: Dict[str, Any],
-        instance_map: Dict[str, Node],
-        callable_obj: Optional[Callable],
-        user_params: Optional[Dict[str, Any]] = None,
-        input_overrides: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[List[Any], Dict[str, Any]]:
+        resource_context: dict[str, Any],
+        instance_map: dict[str, Node],
+        callable_obj: Callable | None,
+        user_params: dict[str, Any] | None = None,
+        input_overrides: dict[str, Any] | None = None,
+    ) -> tuple[list[Any], dict[str, Any]]:
         # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
         if not node.has_complex_inputs:
             # Reconstruct args/kwargs from Bindings (Literals) and Overrides
@@ -51,8 +52,8 @@ class ArgumentResolver:
                 bindings.update(input_overrides)
 
             # 1. Fill from bindings
-            f_args: List[Any] = []
-            f_kwargs: Dict[str, Any] = {}
+            f_args: list[Any] = []
+            f_kwargs: dict[str, Any] = {}
             for k, v in bindings.items():
                 if k.isdigit():
                     idx = int(k)
@@ -78,8 +79,8 @@ class ArgumentResolver:
             return f_args, f_kwargs
 
         # --- COMPLEX PATH ---
-        args: List[Any] = []
-        kwargs: Dict[str, Any] = {}
+        args: list[Any] = []
+        kwargs: dict[str, Any] = {}
 
         # 1. Reconstruct initial args/kwargs from Bindings (Literals)
         bindings = node.input_bindings
@@ -150,9 +151,9 @@ class ArgumentResolver:
         node: Node,
         graph: Graph,
         state_backend: StateBackend,
-        instance_map: Dict[str, Node],
-        input_overrides: Optional[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        instance_map: dict[str, Node],
+        input_overrides: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         resolved_values = {}
         incoming_edges = [
             e
@@ -186,7 +187,7 @@ class ArgumentResolver:
         obj: Any,
         consumer_id: str,
         state_backend: StateBackend,
-        resource_context: Dict[str, Any],
+        resource_context: dict[str, Any],
         graph: Graph,
     ) -> Any:
         if isinstance(obj, Inject):
@@ -220,7 +221,7 @@ class ArgumentResolver:
         consumer_id: str,
         state_backend: StateBackend,
         graph: Graph,
-        instance_map: Dict[str, Node],
+        instance_map: dict[str, Node],
     ) -> Any:
         # ** CORE ROUTER LOGIC FIX **
         if edge.router:
@@ -295,7 +296,7 @@ class ArgumentResolver:
         raise DependencyMissingError(consumer_id, arg_name, f"{node_id}{skip_info}")
 
     def _resolve_inject(
-        self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]
+        self, inject: Inject, consumer_id: str, resource_context: dict[str, Any]
     ) -> Any:
         if inject.resource_name in resource_context:
             return resource_context[inject.resource_name]
@@ -309,8 +310,8 @@ class ConstraintResolver:
         graph: Graph,
         state_backend: StateBackend,
         constraint_manager: Any,
-        instance_map: Dict[str, Node],
-    ) -> Dict[str, Any]:
+        instance_map: dict[str, Node],
+    ) -> dict[str, Any]:
         resolved = {}
 
         # 1. Resolve Node-level constraints

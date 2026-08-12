@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import os
-from typing import Any, Dict, Optional
+from typing import Any
+
 from cascade.spec.dsl.task import task
 
 
 # 这个任务的职责是从 Engine 提供的参数上下文中获取值。
 # 'params_context' 将由 Engine 的参数解析器在运行时注入。
 @task(name="_get_param_value")
-def _get_param_value(name: str, params_context: Dict[str, Any]) -> Any:
+def _get_param_value(name: str, params_context: dict[str, Any]) -> Any:
     # 注意：Engine 负责确保 params_context 存在。
     # 如果参数缺失且无默认值，应该在解析阶段或这里报错。
     # 但由于默认值逻辑在 InputSpec 中，这里只负责简单的提取。
@@ -23,7 +26,7 @@ def _get_param_value(name: str, params_context: Dict[str, Any]) -> Any:
 
 # 这个任务的职责是从 OS 环境中获取值。
 @task(name="_get_env_var")
-def _get_env_var(name: str) -> Optional[str]:
+def _get_env_var(name: str) -> str | None:
     return os.getenv(name)
 
 

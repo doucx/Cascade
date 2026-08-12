@@ -8,14 +8,16 @@ It uses `TailCall` to perform zero-overhead recursion, bypassing the
 graph construction and solving phases for each step.
 """
 
+from __future__ import annotations
+
 import asyncio
 import random
 import time
-from typing import List
 
 import cascade.sdk as cs
-from cascade.spec.runtime.interfaces import Connector
 from cascade.spec.blueprint import TailCall
+from cascade.spec.runtime.interfaces import Connector
+
 from observatory.networking.direct_channel import DirectChannel
 
 
@@ -25,7 +27,7 @@ async def firefly_agent(
     initial_phase: float,
     period: float,
     nudge: float,
-    neighbors: List[DirectChannel],
+    neighbors: list[DirectChannel],
     my_channel: DirectChannel,
     connector: Connector,
     refractory_period: float = 2.0,

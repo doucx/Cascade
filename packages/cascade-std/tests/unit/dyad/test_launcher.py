@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock
 
+from cascade.spec.physical.dyad import LauncherNode
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.dyad import LauncherNode
-from cascade.std.dyad.launcher import standard_launcher
 from cascade.spec.runtime import ComputeRequest
+from cascade.std.dyad.launcher import standard_launcher
 
 
 def create_mock_launcher_node(input_ports_config):

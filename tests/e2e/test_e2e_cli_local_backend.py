@@ -1,15 +1,14 @@
-import pytest
-from typer.testing import CliRunner
 from pathlib import Path
+
+import pytest
+from cascade.bus.feedback import bus
 
 # Apps to test
 from cascade.cli.controller.app import app as controller_app
 from cascade.cli.observer.app import app as observer_app
-from cascade.connectors.local import LocalConnector
-
-
-from cascade.bus.feedback import bus
 from cascade.common.renderers import CliRenderer
+from cascade.connectors.local import LocalConnector
+from typer.testing import CliRunner
 
 
 @pytest.fixture

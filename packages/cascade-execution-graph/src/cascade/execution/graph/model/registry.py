@@ -1,11 +1,14 @@
-from typing import Dict, Callable
+from __future__ import annotations
+
+from typing import Callable
+
 from cascade.execution.graph.model.model import Node
 
 
 class NodeRegistry:
     def __init__(self):
         # Maps a node's shallow structural hash to the Node object
-        self._registry: Dict[str, Node] = {}
+        self._registry: dict[str, Node] = {}
 
     def get(self, key: str) -> Node | None:
         return self._registry.get(key)

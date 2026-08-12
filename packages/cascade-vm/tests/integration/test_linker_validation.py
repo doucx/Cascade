@@ -1,17 +1,17 @@
 import pytest
-from cascade.spec.dsl.task import task
-from cascade.compiler.frontend import IRGenerator
 from cascade.compiler.backend import Builder
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.test_utils import EventDrivenRunner
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.linker import Linker, LinkerError
+from cascade.compiler.frontend import IRGenerator
+from cascade.spec.dsl.task import task
 from cascade.spec.physical.constants import NodePrefix
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.std.dyad.lander import standard_lander
 
 # Standard library function imports
 from cascade.std.dyad.launcher import standard_launcher
-from cascade.std.dyad.lander import standard_lander
 from cascade.std.system.observer import standard_observer
+from cascade.test_utils import EventDrivenRunner
+from cascade.vm.linker import Linker, LinkerError
+from cascade.vm.registry import CodeRegistry
 
 
 @task

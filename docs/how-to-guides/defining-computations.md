@@ -9,20 +9,22 @@
 ```python
 import cascade as cs
 
+
 @cs.task
 def analyze_data(data: list) -> dict:
     """这是一个标准的 Python 函数，用于执行分析。"""
     if not data:
         return {}
-    
+
     mean = sum(data) / len(data)
     # ... 其他复杂的分析逻辑 ...
-    
+
     return {"mean": mean}
+
 
 # 调用这个被装饰的函数并不会立即执行它
 # 而是返回一个代表未来结果的 LazyResult 对象
-analysis_result = analyze_data(data=[1, 2, 3, 4, 5]) 
+analysis_result = analyze_data(data=[1, 2, 3, 4, 5])
 ```
 
 `@cs.task` 是连接你现有 Python 代码与 `Cascade` 生态系统的桥梁。

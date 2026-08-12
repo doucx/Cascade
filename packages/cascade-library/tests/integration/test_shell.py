@@ -1,5 +1,7 @@
-import pytest
+from __future__ import annotations
+
 import cascade.sdk as cs
+import pytest
 
 
 def test_shell_task_success():

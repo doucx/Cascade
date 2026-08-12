@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import importlib.util
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
+from cascade.runtime.host import create_engine
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import LazyFactory, Provider
-from cascade.runtime.host import create_engine
 
 
 class SubflowProvider(Provider):
@@ -16,7 +18,7 @@ class SubflowProvider(Provider):
 
 @task(name="subflow")
 async def _subflow_task(
-    path: str, target: str, params: Optional[Dict[str, Any]] = None
+    path: str, target: str, params: dict[str, Any] | None = None
 ) -> Any:
     # 1. Validate and Load Module
     file_path = Path(path).resolve()

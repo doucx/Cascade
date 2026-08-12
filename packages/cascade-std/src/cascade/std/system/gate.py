@@ -1,6 +1,7 @@
 from typing import Any
-from cascade.spec.physical.nodes import PhysicsNode
+
 from cascade.spec.components import GateSpec
+from cascade.spec.physical.nodes import PhysicsNode
 from cascade.spec.physics.binding import implements
 
 

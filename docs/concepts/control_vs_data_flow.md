@@ -16,10 +16,12 @@
 def get_user_id():
     return 101
 
+
 @cs.task
 def fetch_user_data(user_id: int):
-    # ... 
+    # ...
     return {"name": "Alice"}
+
 
 # `fetch_user_data` 对 `get_user_id` 存在数据流依赖
 user_data = fetch_user_data(get_user_id())
@@ -48,9 +50,11 @@ user_data = fetch_user_data(get_user_id())
 def should_deploy():
     return True  # Or False based on some logic
 
+
 @cs.task
 def deploy():
     print("Deploying!")
+
 
 # `deploy` 任务的执行受 `should_deploy` 控制
 deployment = deploy().run_if(should_deploy())
@@ -69,10 +73,12 @@ deployment = deploy().run_if(should_deploy())
 def get_required_cpu():
     return 4  # e.g., calculated based on input data size
 
+
 @cs.task
 def data_processing():
     # ...
     pass
+
 
 # `data_processing` 的资源需求由 `get_required_cpu` 决定
 job = data_processing().with_constraints(cpu=get_required_cpu())

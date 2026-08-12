@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import asyncio
 import functools
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Callable
+from typing import Any, Callable
+
+from cascade.execution.graph.model.exceptions import StaticGraphError
 from cascade.execution.graph.model.model import Node
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.execution.graph.model.exceptions import StaticGraphError
 
 
 class LocalExecutor:
@@ -23,8 +26,8 @@ class LocalExecutor:
         self,
         node: Node,
         callable_obj: Callable,
-        args: List[Any],
-        kwargs: Dict[str, Any],
+        args: list[Any],
+        kwargs: dict[str, Any],
     ) -> Any:
         if callable_obj is None:
             raise TypeError(

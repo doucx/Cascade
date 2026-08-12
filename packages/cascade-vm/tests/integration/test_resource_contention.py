@@ -1,19 +1,19 @@
-import pytest
-from typing import Dict, List
+from __future__ import annotations
 
-from cascade.spec.dsl.task import task
-from cascade.compiler.frontend.generator import IRGenerator
+import pytest
+from cascade.bus.events import (
+    Event,
+    TaskExecutionFinished,
+    TaskExecutionStarted,
+)
 from cascade.compiler.backend.builder import Builder
+from cascade.compiler.frontend.generator import IRGenerator
+from cascade.compiler.utils.inspector import GraphInspector
+from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.dsl.task import task
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.spec.physical.ports import PortRole
 from cascade.test_utils import EventDrivenRunner
-from cascade.bus.events import (
-    Event,
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-)
-from cascade.compiler.utils.inspector import GraphInspector
-from cascade.reflection import PhysicalIdGenerator
 from cascade.vm.registry import CodeRegistry
 
 
@@ -124,7 +124,7 @@ async def test_resource_scarcity_topology_and_execution():
 
     try:
         # Collect all events
-        events: List[Event] = []
+        events: list[Event] = []
 
         def collection_predicate(e: Event):
             events.append(e)
@@ -141,7 +141,7 @@ async def test_resource_scarcity_topology_and_execution():
         await runner.wait_for_event(collection_predicate, timeout=10.0)
 
         # Analyze Concurrency from the rich event stream
-        intervals: Dict[str, Dict[str, float]] = {}
+        intervals: dict[str, dict[str, float]] = {}
 
         start_events = {
             e.task_id: e.timestamp
@@ -154,10 +154,10 @@ async def test_resource_scarcity_topology_and_execution():
             if isinstance(e, TaskExecutionFinished)
         }
 
-        for task_id in start_events:
+        for task_id, start_ts in start_events.items():
             if task_id in end_events:
                 intervals[task_id] = {
-                    "start": start_events[task_id],
+                    "start": start_ts,
                     "end": end_events[task_id],
                 }
 

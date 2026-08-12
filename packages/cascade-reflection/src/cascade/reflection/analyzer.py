@@ -1,9 +1,12 @@
-import inspect
-import hashlib
-from typing import Any, List, Optional
+from __future__ import annotations
 
-from cascade.spec.ir.graph import TaskDef, ArgumentDef, ArgumentKind
+import hashlib
+import inspect
+from typing import Any
+
 from cascade.spec.ir.fingerprint import Fingerprint
+from cascade.spec.ir.graph import ArgumentDef, ArgumentKind, TaskDef
+
 from .protocols import TaskAnalyzer
 
 # Type hint for the Cascade Task wrapper
@@ -71,7 +74,7 @@ class ReflectionAnalyzer(TaskAnalyzer):
             mode=mode,
         )
 
-    def _analyze_arguments(self, sig: inspect.Signature) -> List[ArgumentDef]:
+    def _analyze_arguments(self, sig: inspect.Signature) -> list[ArgumentDef]:
         args = []
         for param in sig.parameters.values():
             kind = ArgumentKind[param.kind.name]
@@ -103,9 +106,9 @@ class ReflectionAnalyzer(TaskAnalyzer):
     def _compute_structure_hash(
         self,
         name: str,
-        args: List[ArgumentDef],
-        return_annotation: Optional[str],
-        docstring: Optional[str],
+        args: list[ArgumentDef],
+        return_annotation: str | None,
+        docstring: str | None,
         is_async: bool,
         mode: str,
     ) -> str:

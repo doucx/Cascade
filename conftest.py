@@ -1,14 +1,15 @@
+from __future__ import annotations
+
+from typing import Callable
+
 import pytest
-from typing import Type
-from cascade.vm.reactor import Reactor
-from cascade.spec.vm.interfaces import ReactorProtocol
 
 # Imports for new global fixtures
 from cascade.runtime import EventBus
-from cascade.test_utils.helpers import SpySubscriber
-
-from typing import Callable
 from cascade.runtime.host.instance import Engine
+from cascade.spec.vm.interfaces import ReactorProtocol
+from cascade.test_utils.helpers import SpySubscriber
+from cascade.vm.reactor import Reactor
 
 # Attempt to import LocalBusConnector for global cleanup
 try:
@@ -30,7 +31,7 @@ def pytest_addoption(parser):
 @pytest.fixture(scope="session")
 def reactor_backend_factory(
     request,
-) -> Type[ReactorProtocol]:
+) -> type[ReactorProtocol]:
     """
     A session-scoped fixture that provides the Reactor class
     based on the --reactor-backend command-line option.

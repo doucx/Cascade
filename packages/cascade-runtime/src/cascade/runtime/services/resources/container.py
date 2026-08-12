@@ -1,22 +1,22 @@
-import inspect
-from contextlib import ExitStack
-from typing import Any, Dict, Callable, Union, Generator, Set
+from __future__ import annotations
 
-from cascade.execution.graph.model.model import Graph
-from cascade.spec.dsl.resources import ResourceDefinition, Inject
-from contextlib import contextmanager
+import inspect
+from contextlib import ExitStack, contextmanager
+from typing import Any, Callable, Generator
 
 from cascade.bus.core import EventBus
 from cascade.bus.events import (
     ResourceAcquired,
     ResourceReleased,
 )
+from cascade.execution.graph.model.model import Graph
+from cascade.spec.dsl.resources import Inject, ResourceDefinition
 
 
 class ResourceContainer:
     def __init__(self, bus: EventBus):
         self.bus = bus
-        self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
+        self._resource_providers: dict[str, Callable | ResourceDefinition] = {}
 
     def register(self, resource_def: ResourceDefinition):
         self._resource_providers[resource_def.name] = resource_def
@@ -45,7 +45,7 @@ class ResourceContainer:
             else:
                 self._resource_providers.pop(name, None)
 
-    def scan(self, graph: Graph, executable_registry: Dict[str, Callable]) -> Set[str]:
+    def scan(self, graph: Graph, executable_registry: dict[str, Callable]) -> set[str]:
         required = set()
 
         # 1. Scan Node Input Bindings for explicit Inject objects
@@ -68,7 +68,7 @@ class ResourceContainer:
                     pass
         return required
 
-    def _scan_item(self, item: Any, required: Set[str]):
+    def _scan_item(self, item: Any, required: set[str]):
         if isinstance(item, Inject):
             required.add(item.resource_name)
         elif isinstance(item, (list, tuple)):
@@ -80,8 +80,8 @@ class ResourceContainer:
 
     def setup(
         self,
-        required_names: Set[str],
-        active_resources: Dict[str, Any],
+        required_names: set[str],
+        active_resources: dict[str, Any],
         run_stack: ExitStack,
         step_stack: ExitStack,
         run_id: str,

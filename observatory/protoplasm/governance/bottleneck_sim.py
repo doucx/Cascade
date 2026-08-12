@@ -5,16 +5,17 @@ from typing import Any
 import cascade.sdk as cs
 from cascade.runtime.events import (
     TaskBlocked,
-    TaskExecutionStarted,
     TaskExecutionFinished,
+    TaskExecutionStarted,
 )
 from cascade.spec.constraint import GlobalConstraint
 
+from observatory.visualization.grid import GridView
+from observatory.visualization.palette import Palettes
+
 # New Renderer Imports
 from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
-from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
-from observatory.visualization.palette import Palettes
 
 # --- Configuration ---
 NUM_AGENTS = 500

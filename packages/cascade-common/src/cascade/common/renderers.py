@@ -1,7 +1,9 @@
-import sys
+from __future__ import annotations
+
 import json
-from typing import TextIO, Optional
+import sys
 from datetime import datetime, timezone
+from typing import TextIO
 
 from cascade.bus.messages import MessageStore
 from cascade.bus.protocols import Renderer
@@ -18,7 +20,7 @@ class CliRenderer(Renderer):
     def __init__(
         self,
         store: MessageStore,
-        stream: Optional[TextIO] = None,
+        stream: TextIO | None = None,
         min_level: str = "INFO",
     ):
         self._store = store
@@ -34,7 +36,7 @@ class CliRenderer(Renderer):
 class JsonRenderer(Renderer):
     def __init__(
         self,
-        stream: Optional[TextIO] = None,
+        stream: TextIO | None = None,
         min_level: str = "INFO",
     ):
         self._stream = stream if stream is not None else sys.stderr

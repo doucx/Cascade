@@ -1,10 +1,12 @@
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-import time
+from __future__ import annotations
+
 import itertools
 import logging
+import time
+from dataclasses import dataclass, field
+from typing import Any
 
-from cascade.spec import EventIR, EventType, EventState
+from cascade.spec import EventIR, EventState, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +20,10 @@ class Event:
     timestamp: float = field(default_factory=time.time)
 
     # In a real run, this would be injected by the Engine context
-    run_id: Optional[str] = None
+    run_id: str | None = None
 
     @staticmethod
-    def from_ir(ir: "EventIR") -> "Event":
+    def from_ir(ir: EventIR) -> Event:
         # This is a stub for the type checker. The real implementation is assigned later
         # at the end of the file to break a circular dependency while keeping pyright happy.
         raise NotImplementedError
@@ -29,15 +31,15 @@ class Event:
 
 @dataclass(frozen=True)
 class RunStarted(Event):
-    target_tasks: List[str] = field(default_factory=list)
-    params: Dict[str, Any] = field(default_factory=dict)
+    target_tasks: list[str] = field(default_factory=list)
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class RunFinished(Event):
     status: EventState = EventState.SUCCEEDED
     duration: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,8 +57,8 @@ class TaskExecutionStarted(TaskEvent):
 class TaskExecutionFinished(TaskEvent):
     status: EventState = EventState.SUCCEEDED
     duration: float = 0.0
-    result_preview: Optional[str] = None
-    error: Optional[str] = None
+    result_preview: str | None = None
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,7 +71,7 @@ class TaskRetrying(TaskEvent):
     attempt: int = 0
     max_attempts: int = 0
     delay: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -120,7 +122,7 @@ class ToolEvent(Event):
 class PlanAnalysisStarted(ToolEvent):
     target_node_id: str = ""
 
-    def _get_payload(self) -> Dict[str, Any]:
+    def _get_payload(self) -> dict[str, Any]:
         return {"target_node_id": self.target_node_id}
 
 
@@ -130,9 +132,9 @@ class PlanNodeInspected(ToolEvent):
     total_nodes: int = 0
     node_id: str = ""
     node_name: str = ""
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
+    input_bindings: dict[str, Any] = field(default_factory=dict)
 
-    def _get_payload(self) -> Dict[str, Any]:
+    def _get_payload(self) -> dict[str, Any]:
         return {
             "index": self.index,
             "total_nodes": self.total_nodes,
@@ -146,14 +148,14 @@ class PlanNodeInspected(ToolEvent):
 class PlanAnalysisFinished(ToolEvent):
     total_steps: int = 0
 
-    def _get_payload(self) -> Dict[str, Any]:
+    def _get_payload(self) -> dict[str, Any]:
         return {"total_steps": self.total_steps}
 
 
 # --- Event Hydration Logic (Late Binding) ---
 
 
-def _from_ir(ir: EventIR) -> "Event":
+def _from_ir(ir: EventIR) -> Event:
     try:
         # Extract Common Metadata
         ctx = ir.get("ctx", {})
@@ -172,9 +174,7 @@ def _from_ir(ir: EventIR) -> "Event":
         return Event()
 
 
-def _hydrate_lifecycle(
-    ir: EventIR, run_id: Optional[str], timestamp: float
-) -> "TaskEvent":
+def _hydrate_lifecycle(ir: EventIR, run_id: str | None, timestamp: float) -> TaskEvent:
     data = ir["data"]
     phy = ir.get("phy", {})
 

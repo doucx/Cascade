@@ -37,7 +37,7 @@ file_count = cs.shell("ls -1 | wc -l")
 greeting = cs.format(
     "Hello, {name}! There are {count} files in this directory.",
     name=user_name,
-    count=file_count
+    count=file_count,
 )
 
 # 4. 运行工作流并请求最终结果。
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     print("开始运行 Cascade 工作流...")
     # 调用 run() 时，Cascade 会自动构建依赖图并按正确顺序执行所有任务。
     final_message = cs.run(greeting, params={"name": "Developer"})
-    
+
     print("\n工作流完成！")
     print(final_message)
 ```

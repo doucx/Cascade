@@ -1,8 +1,9 @@
 import asyncio
 import time
+
 import cascade.sdk as cs
-from cascade.runtime import Engine, EventBus
 from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.runtime import Engine, EventBus
 from cascade.runtime.io.executors.local import LocalExecutor
 
 # --- Task Definitions ---

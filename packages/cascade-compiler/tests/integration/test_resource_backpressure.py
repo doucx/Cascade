@@ -1,30 +1,30 @@
-import pytest
-from typing import Dict
+from __future__ import annotations
 
-from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef, ArgumentDef
-from cascade.spec.ir.fingerprint import Fingerprint
-from cascade.spec.physical.nodes import Token
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
+import asyncio
+
+import pytest
 from cascade.compiler.backend.builder import Builder
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.kernel import PhysicsKernel
 from cascade.runtime.storage import InMemoryObjectStore
+from cascade.spec.ir.fingerprint import Fingerprint
+from cascade.spec.ir.graph import ArgumentDef, GraphIR, NodeIR, TaskDef
+from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.object import Ref
+from cascade.std.dyad.lander import standard_lander
 
 # Import new ICs
 from cascade.std.dyad.launcher import standard_launcher
-from cascade.std.dyad.lander import standard_lander
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
-from cascade.spec.physical.object import Ref
-import asyncio
-
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.reactor import Reactor
+from cascade.vm.resource_registry import ResourceRegistry
 
 # --- Mocks ---
 
 
-def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
+def mock_worker(inputs: dict[str, Token], node, resources) -> dict[str, Token]:
     worker_input_token = inputs["worker_input"]
     worker_payload = worker_input_token.payload
 
@@ -43,7 +43,7 @@ def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     return {"worker_result": Token(payload=val + 1)}
 
 
-def noop_observer(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
+def noop_observer(inputs: dict[str, Token], node, resources) -> dict[str, Token]:
     return {}
 
 

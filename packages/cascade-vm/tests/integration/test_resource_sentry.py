@@ -1,20 +1,20 @@
 import asyncio
-import pytest
 
-from cascade.compiler.backend import Builder
-from cascade.compiler.frontend import IRGenerator
-from cascade.reflection import ReflectionAnalyzer
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
-from cascade.spec.dsl.task import task
-from cascade.test_utils import EventDrivenRunner
-from cascade.vm.registry import CodeRegistry
-from cascade.compiler.utils.inspector import GraphInspector
+import pytest
 from cascade.bus.events import (
     Event,
-    TaskExecutionStarted,
     TaskExecutionFinished,
+    TaskExecutionStarted,
 )
+from cascade.compiler.backend import Builder
+from cascade.compiler.frontend import IRGenerator
+from cascade.compiler.utils.inspector import GraphInspector
+from cascade.reflection import ReflectionAnalyzer
+from cascade.spec.dsl.task import task
+from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.spec.runtime.observability import EventState
+from cascade.test_utils import EventDrivenRunner
+from cascade.vm.registry import CodeRegistry
 
 
 @task

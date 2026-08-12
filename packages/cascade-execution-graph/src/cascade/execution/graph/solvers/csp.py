@@ -1,8 +1,10 @@
-from typing import Dict, Optional
+from __future__ import annotations
+
 from collections import defaultdict
+
 from cascade.execution.graph.model.model import Graph
-from cascade.spec.runtime.interfaces import ExecutionPlan
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+from cascade.spec.runtime.interfaces import ExecutionPlan
 
 try:
     import constraint
@@ -11,7 +13,7 @@ except ImportError:
 
 
 class CSPSolver:
-    def __init__(self, system_resources: Dict[str, float]):
+    def __init__(self, system_resources: dict[str, float]):
         if constraint is None:
             raise ImportError(
                 "The 'python-constraint' library is required to use the CSPSolver. "
@@ -28,7 +30,7 @@ class CSPSolver:
 
         # 1. Preprocessing: Extract static resource requirements
         # node_id -> {resource_name: amount}
-        node_resources: Dict[str, Dict[str, float]] = {}
+        node_resources: dict[str, dict[str, float]] = {}
         for node in active_nodes:
             reqs = {}
             if node.constraints:
@@ -87,9 +89,9 @@ class CSPSolver:
         self,
         graph: Graph,
         active_nodes: list,
-        node_resources: Dict[str, Dict[str, float]],
+        node_resources: dict[str, dict[str, float]],
         max_stages: int,
-    ) -> Optional[Dict[str, int]]:
+    ) -> dict[str, int] | None:
         from cascade.execution.graph.model.model import EdgeType
 
         if constraint is None:

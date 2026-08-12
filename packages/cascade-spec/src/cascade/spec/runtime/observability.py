@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from enum import StrEnum
-from typing import TypedDict, Dict, Any
+from typing import Any, TypedDict
 
 
 class EventType(StrEnum):
@@ -37,4 +39,4 @@ class EventIR(TypedDict):
     ctx: EventContext
     phy: PhysicalAnchor
 
-    data: Dict[str, Any]
+    data: dict[str, Any]

@@ -1,11 +1,14 @@
-from typing import Dict, Any
+from __future__ import annotations
+
+from typing import Any
+
 from cascade.spec import EventIR
-from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.physical.nodes import PhysicsNode, Token
 
 
 def standard_observer(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
+    inputs: dict[str, Token], node: PhysicsNode, resources: Any
+) -> dict[str, Token]:
     # The Observer is now a "Dumb Relay".
     # It blindly forwards the IR payload to the system EventBus.
 

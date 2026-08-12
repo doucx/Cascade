@@ -1,10 +1,10 @@
 import time
-import pytest
+
 import cascade.sdk as cs
+import pytest
 from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime import EventBus
 from cascade.test_utils.helpers import MockConnector, TimedMockExecutor
-
 
 # --- Fixtures ---
 

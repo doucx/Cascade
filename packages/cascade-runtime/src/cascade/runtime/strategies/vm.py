@@ -1,29 +1,29 @@
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Any, Optional, Dict, Set
+from typing import Any
 
-from cascade.spec.runtime.strategies import ExecutionStrategy, ExecutionContext
-from cascade.spec.runtime.interfaces import Executor
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
-from cascade.spec.physical.assembly import CompilationArtifact
-from cascade.spec.physical.object import Ref
-from cascade.spec.ir.graph import GraphIR
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-
-from cascade.vm.compute import BridgedComputeService
-from cascade.vm.services.chronos import ChronosService
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.kernel import PhysicsKernel
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.linker import Linker
 from cascade.bus.core import EventBus
-
-from cascade.compiler.frontend import IRGenerator, GenerationResult
 from cascade.compiler.backend import Builder
+from cascade.compiler.frontend import GenerationResult, IRGenerator
+from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+from cascade.spec.ir.graph import GraphIR
+from cascade.spec.physical.assembly import CompilationArtifact
+from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.object import Ref
+from cascade.spec.runtime.interfaces import Executor
+from cascade.spec.runtime.strategies import ExecutionContext, ExecutionStrategy
+from cascade.vm.compute import BridgedComputeService
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.linker import Linker
+from cascade.vm.machine import Machine
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.reactor import Reactor
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.services.chronos import ChronosService
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ class VMExecutionStrategy(ExecutionStrategy):
                     pass
 
     def _scan_resources(self, graph_ir: GraphIR) -> EnvironmentDef:
-        required_resources: Set[str] = set()
+        required_resources: set[str] = set()
         for node in graph_ir.nodes:
             if node.constraints:
                 required_resources.update(node.constraints.keys())
@@ -236,7 +236,7 @@ class VMExecutionStrategy(ExecutionStrategy):
         # Map: Logical UUID -> (Physical Egress ID, Placeholder Setter)
         # But here we just need to collect them.
 
-        target_map: Dict[str, str] = {}  # UUID -> Egress Node ID
+        target_map: dict[str, str] = {}  # UUID -> Egress Node ID
 
         def _register_target(obj):
             if isinstance(obj, (LazyResult, MappedLazyResult)):
@@ -263,7 +263,7 @@ class VMExecutionStrategy(ExecutionStrategy):
             return target
 
         # 2. Harvesting Loop
-        collected_results: Dict[str, Any] = {}  # UUID -> Result Value
+        collected_results: dict[str, Any] = {}  # UUID -> Result Value
         pending_uuids = set(target_map.keys())
 
         # Reverse map for quick lookup: Egress ID -> UUID
@@ -271,7 +271,7 @@ class VMExecutionStrategy(ExecutionStrategy):
 
         # Task management: We hold the egress reading task across loop iterations
         # if it hasn't completed yet.
-        egress_task: Optional[asyncio.Task] = None
+        egress_task: asyncio.Task | None = None
 
         try:
             while pending_uuids:
@@ -279,7 +279,7 @@ class VMExecutionStrategy(ExecutionStrategy):
                     egress_task = asyncio.create_task(harness.egress_queue.get())
 
                 # Wait for either a result OR the machine stopping
-                done, pending = await asyncio.wait(
+                done, _pending = await asyncio.wait(
                     [egress_task, machine_task], return_when=asyncio.FIRST_COMPLETED
                 )
 
@@ -314,8 +314,7 @@ class VMExecutionStrategy(ExecutionStrategy):
                             raise val
 
                         collected_results[uuid] = val
-                        if uuid in pending_uuids:
-                            pending_uuids.remove(uuid)
+                        pending_uuids.discard(uuid)
         finally:
             # Cleanup: Cancel pending egress read if we are exiting (e.g. on error)
             if egress_task and not egress_task.done():

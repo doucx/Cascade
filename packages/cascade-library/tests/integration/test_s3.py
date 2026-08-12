@@ -1,5 +1,5 @@
-import pytest
 import cascade.sdk as cs
+import pytest
 
 # Skip if dependencies are missing
 pytest.importorskip("aiobotocore")

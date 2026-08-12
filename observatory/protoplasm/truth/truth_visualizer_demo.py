@@ -16,14 +16,15 @@ Scenarios:
 """
 
 import asyncio
+
 import numpy as np
 
 from observatory.protoplasm.truth.golden_ca import GoldenLife
 from observatory.protoplasm.truth.validator import StateValidator
-from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 from observatory.visualization.grid import GridView
-from observatory.visualization.status import StatusBar
 from observatory.visualization.palette import Palettes
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.status import StatusBar
 
 # --- Test Configuration ---
 GRID_WIDTH = 50

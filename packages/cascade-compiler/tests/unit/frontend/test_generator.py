@@ -1,7 +1,6 @@
+from cascade.compiler.frontend.generator import IRGenerator
 from cascade.spec.dsl.task import task
 from cascade.spec.ir.graph import GraphIR
-from cascade.compiler.frontend.generator import IRGenerator
-
 
 # --- Test Fixtures ---
 

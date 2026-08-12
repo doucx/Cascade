@@ -1,9 +1,9 @@
-import cProfile
-import pstats
 import asyncio
+import cProfile
 import io
-import sys
 import os
+import pstats
+import sys
 
 try:
     from pyinstrument import Profiler
@@ -28,15 +28,16 @@ sys.path.append(
     )
 )
 
+from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.runtime import Engine, EventBus
+from cascade.runtime.io.executors.local import LocalExecutor
+
 from observatory.benchmarks.tco_performance import (
     create_explicit_loop,
     create_heavy_explicit_loop,
-    vm_countdown,
     run_benchmark,
+    vm_countdown,
 )
-from cascade.runtime import Engine, EventBus
-from cascade.execution.graph.solvers.native import NativeSolver
-from cascade.runtime.io.executors.local import LocalExecutor
 
 
 async def profile_target(name: str, iterations: int):

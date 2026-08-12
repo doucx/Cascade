@@ -1,8 +1,8 @@
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+from cascade.spec import EventIR, EventState, EventType
 from cascade.spec.physical.nodes import Token
-from cascade.spec import EventIR, EventType, EventState
 from cascade.std.system.observer import standard_observer
 
 

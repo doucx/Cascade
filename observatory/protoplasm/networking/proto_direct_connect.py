@@ -1,6 +1,8 @@
 import asyncio
 import time
+
 from cascade.connectors.local import LocalBusConnector
+
 from .direct_channel import DirectChannel
 
 # --- Configuration ---

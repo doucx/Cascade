@@ -1,10 +1,12 @@
-import cascade.sdk as cs
+from __future__ import annotations
+
 import re
-from typing import List
+
+import cascade.sdk as cs
 
 
 @cs.task
-def parse_git_diff(git_diff_output: str) -> List[str]:
+def parse_git_diff(git_diff_output: str) -> list[str]:
     """
     Parses the output of 'git diff --name-only' and extracts changed package names.
     This is a pure logic task with no I/O.
@@ -21,7 +23,7 @@ def parse_git_diff(git_diff_output: str) -> List[str]:
         print("No package changes detected.")
         return []
 
-    sorted_packages = sorted(list(changed_packages))
+    sorted_packages = sorted(changed_packages)
     print(f"Detected changed packages: {sorted_packages}")
     return sorted_packages
 
@@ -35,7 +37,7 @@ def get_lint_command(package_name: str) -> str:
 
 
 @cs.task
-def get_aggregated_test_command(package_names: List[str]) -> str:
+def get_aggregated_test_command(package_names: list[str]) -> str:
     """
     Generates a single pytest command to run tests for multiple packages.
     """

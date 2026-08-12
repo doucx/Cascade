@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 from .fingerprint import Fingerprint
 
@@ -17,19 +19,19 @@ class ArgumentKind(str, Enum):
 class ArgumentDef:
     name: str
     kind: ArgumentKind
-    annotation: Optional[str] = None
-    default_value_repr: Optional[str] = None
+    annotation: str | None = None
+    default_value_repr: str | None = None
 
 
 @dataclass(frozen=True)
 class TaskDef:
     name: str
-    args: List[ArgumentDef]
+    args: list[ArgumentDef]
     # The stable semantic identity of this task definition.
     # Must contain keys like 'canonical_code_structure_hash'.
     fingerprint: Fingerprint
-    return_annotation: Optional[str] = None
-    docstring: Optional[str] = None
+    return_annotation: str | None = None
+    docstring: str | None = None
     is_async: bool = False
     # Execution mode (e.g. "blocking", "compute") derived from the task definition
     mode: str = "blocking"
@@ -47,32 +49,32 @@ class NodeIR:
     type: str = "task"
 
     # The logical UUID from the high-level DSL (LazyResult), if available.
-    logical_id: Optional[str] = None
+    logical_id: str | None = None
 
     # V2 Argument Specification: Separated for clarity and determinism
-    args: List[Any] = field(default_factory=list)
-    kwargs: Dict[str, Any] = field(default_factory=dict)
+    args: list[Any] = field(default_factory=list)
+    kwargs: dict[str, Any] = field(default_factory=dict)
 
-    constraints: Dict[str, Any] = field(default_factory=dict)
+    constraints: dict[str, Any] = field(default_factory=dict)
 
     # The ID of the node that determines if this node should run
-    condition: Optional[str] = None
+    condition: str | None = None
 
     # IDs of nodes that must complete before this node starts (Sequence dependency)
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
 
     # Configuration for iterative jumps (if any)
     # Format: {"target_key": "target_node_id", ...}
-    flow_control: Optional[Dict[str, Any]] = None
+    flow_control: dict[str, Any] | None = None
 
     # Metadata for retry policies, caching, etc.
-    retry_policy: Optional[Dict[str, Any]] = None
-    cache_policy: Optional[Any] = None
+    retry_policy: dict[str, Any] | None = None
+    cache_policy: Any | None = None
 
 
 @dataclass(frozen=True)
 class GraphIR:
-    nodes: List[NodeIR] = field(default_factory=list)
+    nodes: list[NodeIR] = field(default_factory=list)
 
     # The logical UUIDs of the LazyResults that were the entry points for generation.
-    root_logical_ids: List[str] = field(default_factory=list)
+    root_logical_ids: list[str] = field(default_factory=list)

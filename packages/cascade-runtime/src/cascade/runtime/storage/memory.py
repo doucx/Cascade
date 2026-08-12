@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import uuid
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from cascade.spec.physical.object import Ref
 
@@ -7,9 +9,9 @@ from cascade.spec.physical.object import Ref
 class InMemoryObjectStore:
     def __init__(self):
         # Storage: uri -> (obj, metadata)
-        self._store: Dict[str, Tuple[Any, Dict[str, Any]]] = {}
+        self._store: dict[str, tuple[Any, dict[str, Any]]] = {}
 
-    def put(self, obj: Any, metadata: Optional[Dict[str, Any]] = None) -> Ref:
+    def put(self, obj: Any, metadata: dict[str, Any] | None = None) -> Ref:
         # 1. Generate URI
         uid = str(uuid.uuid4())
         uri = f"mem://{uid}"

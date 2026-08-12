@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional
+from __future__ import annotations
+
+from typing import Any
 
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import LazyFactory
@@ -23,7 +25,7 @@ class TemplateProvider:
 
 @task(name="template")
 def render_template(
-    template_string: str, context: Optional[Dict[str, Any]] = None, **kwargs
+    template_string: str, context: dict[str, Any] | None = None, **kwargs
 ) -> str:
     template = jinja2.Template(template_string)
     final_context = {}

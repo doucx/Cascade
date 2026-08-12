@@ -1,8 +1,8 @@
-import pytest
-from typer.testing import CliRunner
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
+import pytest
 from cascade.cli.controller.app import app
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

@@ -1,15 +1,14 @@
-from typing import TYPE_CHECKING, Dict, Any, Optional
-import fnmatch
-from cascade.bus.feedback import bus
+from __future__ import annotations
 
-from .protocols import ConstraintHandler, HandlerContext
+import fnmatch
+from typing import Any
+
+from cascade.bus.feedback import bus
 from cascade.execution.graph.model.model import Node
 from cascade.spec.dsl.constraint import GlobalConstraint
+
+from .protocols import ConstraintHandler, HandlerContext
 from .rate_limiter import RateLimiter
-
-
-if TYPE_CHECKING:
-    pass
 
 
 def _matches(scope: str, task_name: str) -> bool:
@@ -63,28 +62,26 @@ class PauseConstraintHandler(ConstraintHandler):
         return "pause"
 
     def on_constraint_add(
-        self, constraint: GlobalConstraint, context: "HandlerContext"
+        self, constraint: GlobalConstraint, context: HandlerContext
     ) -> None:  # pragma: no cover
         pass
 
     def on_constraint_remove(
-        self, constraint: GlobalConstraint, context: "HandlerContext"
+        self, constraint: GlobalConstraint, context: HandlerContext
     ) -> None:  # pragma: no cover
         pass
 
     def check_permission(
-        self, task: Node, constraint: GlobalConstraint, context: "HandlerContext"
+        self, task: Node, constraint: GlobalConstraint, context: HandlerContext
     ) -> bool:
-        if _matches(constraint.scope, task.name):
-            return False
-        return True
+        return not _matches(constraint.scope, task.name)
 
     def append_requirements(
         self,
         task: Node,
         constraint: GlobalConstraint,
-        requirements: Dict[str, Any],
-        context: "HandlerContext",
+        requirements: dict[str, Any],
+        context: HandlerContext,
     ) -> None:  # pragma: no cover
         pass
 
@@ -97,14 +94,14 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
         return f"constraint:concurrency:{constraint.scope}"
 
     def on_constraint_add(
-        self, constraint: GlobalConstraint, context: "HandlerContext"
+        self, constraint: GlobalConstraint, context: HandlerContext
     ) -> None:
         limit = constraint.params.get("limit", 1)
         res_name = self._get_resource_name(constraint)
         context.get_resource_manager().update_resource(res_name, limit)
 
     def on_constraint_remove(
-        self, constraint: GlobalConstraint, context: "HandlerContext"
+        self, constraint: GlobalConstraint, context: HandlerContext
     ) -> None:  # pragma: no cover
         # We don't necessarily delete the resource, but we could set capacity to infinite?
         # Or just leave it. If the constraint is gone, tasks won't ask for it anymore.
@@ -112,7 +109,7 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
         pass
 
     def check_permission(
-        self, task: Node, constraint: GlobalConstraint, context: "HandlerContext"
+        self, task: Node, constraint: GlobalConstraint, context: HandlerContext
     ) -> bool:  # pragma: no cover
         # Concurrency is handled via resource acquisition, not boolean permission checks.
         return True
@@ -121,8 +118,8 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
         self,
         task: Node,
         constraint: GlobalConstraint,
-        requirements: Dict[str, Any],
-        context: "HandlerContext",
+        requirements: dict[str, Any],
+        context: HandlerContext,
     ) -> None:
         if _matches(constraint.scope, task.name):
             res_name = self._get_resource_name(constraint)
@@ -141,14 +138,14 @@ class RateLimitConstraintHandler(ConstraintHandler):
         return constraint.scope
 
     def on_constraint_add(
-        self, constraint: GlobalConstraint, context: "HandlerContext"
+        self, constraint: GlobalConstraint, context: HandlerContext
     ) -> None:
         rate_val = constraint.params.get("rate", "1/s")
         rate_hertz = _parse_rate_string(str(rate_val))
 
         # We can optionally allow users to set burst capacity via params
         # For now, default burst = rate (1 second worth)
-        capacity_val: Optional[float] = None
+        capacity_val: float | None = None
         raw_capacity = constraint.params.get("capacity")
         if raw_capacity is not None:
             capacity_val = float(raw_capacity)
@@ -158,14 +155,14 @@ class RateLimitConstraintHandler(ConstraintHandler):
         )
 
     def on_constraint_remove(
-        self, constraint: GlobalConstraint, context: "HandlerContext"
+        self, constraint: GlobalConstraint, context: HandlerContext
     ) -> None:  # pragma: no cover
         # Currently RateLimiter doesn't support deleting buckets, which is fine.
         # It just won't be used.
         pass
 
     def check_permission(
-        self, task: Node, constraint: GlobalConstraint, context: "HandlerContext"
+        self, task: Node, constraint: GlobalConstraint, context: HandlerContext
     ) -> bool:
         if not _matches(constraint.scope, task.name):
             return True
@@ -184,7 +181,7 @@ class RateLimitConstraintHandler(ConstraintHandler):
         self,
         task: Node,
         constraint: GlobalConstraint,
-        requirements: Dict[str, Any],
-        context: "HandlerContext",
+        requirements: dict[str, Any],
+        context: HandlerContext,
     ) -> None:  # pragma: no cover
         pass

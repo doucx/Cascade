@@ -1,6 +1,7 @@
-import pytest
-import cascade.sdk as cs
 import io
+
+import cascade.sdk as cs
+import pytest
 
 
 @pytest.mark.asyncio

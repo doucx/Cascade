@@ -1,8 +1,8 @@
 import pytest
-from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef
-from cascade.spec.ir.fingerprint import Fingerprint
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
+from cascade.spec.ir.fingerprint import Fingerprint
+from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef
+from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 
 
 @pytest.fixture

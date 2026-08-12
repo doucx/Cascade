@@ -1,12 +1,13 @@
 from cascade.spec.runtime.interfaces import LazyFactory, Provider
-from .manager import ProviderRegistry, ProviderNamespace
+
+from .manager import ProviderNamespace, ProviderRegistry
 
 __all__ = [
     "LazyFactory",
     "Provider",
-    "registry",
-    "ProviderRegistry",
     "ProviderNamespace",
+    "ProviderRegistry",
+    "registry",
 ]
 
 # Global registry accessor

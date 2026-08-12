@@ -1,18 +1,20 @@
-from typing import Any, Dict, Optional, Callable
-from dataclasses import dataclass, field
+from __future__ import annotations
 
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+from cascade.reflection import HashingService, ReflectionAnalyzer
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.spec.dsl.routing import Router
 from cascade.spec.dsl.jump import JumpSelector
+from cascade.spec.dsl.routing import Router
 from cascade.spec.ir.graph import GraphIR, NodeIR
-from cascade.reflection import ReflectionAnalyzer, HashingService
 
 
 @dataclass
 class GenerationResult:
     ir: GraphIR
     # Maps node_instance_hash -> Python Callable (the actual code to run)
-    executables: Dict[str, Callable] = field(default_factory=dict)
+    executables: dict[str, Callable] = field(default_factory=dict)
 
 
 class IRGenerator:
@@ -20,11 +22,11 @@ class IRGenerator:
         self.analyzer = ReflectionAnalyzer()
         self.hashing_service = HashingService()
         # id -> NodeIR
-        self.nodes: Dict[str, NodeIR] = {}
+        self.nodes: dict[str, NodeIR] = {}
         # id -> Callable
-        self.executables: Dict[str, Callable] = {}
+        self.executables: dict[str, Callable] = {}
         # Tracks visited LazyResult UUIDs to their generated Node IDs to handle DAGs
-        self._visited: Dict[str, str] = {}
+        self._visited: dict[str, str] = {}
 
     def generate(self, target: Any) -> GenerationResult:
         # If target is a list, treat all items as roots. Otherwise, wrap it.
@@ -57,7 +59,7 @@ class IRGenerator:
             # Literal value
             return obj
 
-    def _visit_router(self, router: Router) -> Dict[str, Any]:
+    def _visit_router(self, router: Router) -> dict[str, Any]:
         selector_id = self._visit(router.selector)
         routes = {k: self._visit(v) for k, v in router.routes.items()}
         # Encode Router as a special dictionary structure
@@ -67,7 +69,7 @@ class IRGenerator:
             "routes": routes,
         }
 
-    def _collect_deps_map(self, lr: Any) -> Dict[str, NodeIR]:
+    def _collect_deps_map(self, lr: Any) -> dict[str, NodeIR]:
         # We need a dictionary of dependency nodes for the hasher.
         # Since we visited children first, their NodeIRs are already in self.nodes.
         dep_map = {}
@@ -116,7 +118,7 @@ class IRGenerator:
 
         return dep_map
 
-    def _extract_retry_policy(self, lr: Any) -> Optional[Dict[str, Any]]:
+    def _extract_retry_policy(self, lr: Any) -> dict[str, Any] | None:
         if lr._retry_policy:
             return {
                 "max_attempts": lr._retry_policy.max_attempts,

@@ -1,14 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import json
 from pathlib import Path
-from typing import Set
 
 
 class UdsTelemetryServer:
     def __init__(self, uds_path: str):
         self.uds_path = Path(uds_path)
         self._server: asyncio.Server | None = None
-        self._clients: Set[asyncio.StreamWriter] = set()
+        self._clients: set[asyncio.StreamWriter] = set()
 
     async def _handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter

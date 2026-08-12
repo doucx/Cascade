@@ -1,8 +1,8 @@
-from cascade.spec.dsl.task import task
-from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.backend.builder import Builder
-from cascade.spec.physical.environment import EnvironmentDef
+from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.utils.inspector import GraphInspector
+from cascade.spec.dsl.task import task
+from cascade.spec.physical.environment import EnvironmentDef
 
 
 @task

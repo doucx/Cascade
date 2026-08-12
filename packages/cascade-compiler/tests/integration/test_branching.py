@@ -1,16 +1,16 @@
-import pytest
-from typing import Dict
+from __future__ import annotations
 
-from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
+import pytest
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
-from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.resource_registry import ResourceRegistry
 
 
-def switch_logic(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
+def switch_logic(inputs: dict[str, Token], node, resources) -> dict[str, Token]:
     in_token = inputs["in"]
     direction = in_token.payload
 

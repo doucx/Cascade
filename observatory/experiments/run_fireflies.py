@@ -1,26 +1,28 @@
+from __future__ import annotations
+
 import asyncio
-import random
-import time
 import math
 import multiprocessing as mp
-from typing import Dict, Any, List, Optional
-import typer
+import random
+import time
+from typing import Any
 
 import cascade.sdk as cs
+import typer
 from cascade.connectors.local import LocalBusConnector
-from cascade.spec.dsl.resources import resource
 from cascade.runtime.services.resources.manager import ResourceManager
+from cascade.spec.dsl.resources import resource
 
 from observatory.agents.kuramoto import firefly_agent
-from observatory.monitors.convergence import ConvergenceMonitor
 from observatory.monitors.aggregator import MetricsAggregator
+from observatory.monitors.convergence import ConvergenceMonitor
 from observatory.networking.direct_channel import DirectChannel
 from observatory.networking.ipc import IpcUplinkConnector
+from observatory.visualization.grid import GridView
 
 # Visualization
 from observatory.visualization.palette import Palettes
 from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
-from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 
 # --- Constants ---
@@ -31,7 +33,7 @@ PERIOD = 5.0
 app = typer.Typer()
 
 
-def get_neighbors(index: int, width: int, height: int) -> List[int]:
+def get_neighbors(index: int, width: int, height: int) -> list[int]:
     """Calculate 8-neighbors (Moore neighborhood) with wrap-around (toroidal)."""
     x, y = index % width, index // width
     neighbors = []
@@ -49,10 +51,10 @@ def get_neighbors(index: int, width: int, height: int) -> List[int]:
 
 def worker_main(
     worker_id: int,
-    agent_indices: List[int],
+    agent_indices: list[int],
     total_agents: int,
     uplink_queue: mp.Queue,
-    concurrency_limit: Optional[int],
+    concurrency_limit: int | None,
     grid_width: int,
     grid_height: int,
     period: float,
@@ -154,7 +156,7 @@ async def run_orchestrator(
     num_agents: int,
     grid_width: int,
     workers: int,
-    concurrency_limit: Optional[int],
+    concurrency_limit: int | None,
     visualize: bool,
     period: float,
     nudge: float,
@@ -218,7 +220,7 @@ async def run_orchestrator(
         )
 
         # Bridge Flash -> UI
-        async def on_flash_visual(topic: str, payload: Dict[str, Any]):
+        async def on_flash_visual(topic: str, payload: dict[str, Any]):
             aid = payload.get("agent_id")
             if aid is not None and app:
                 x = aid % grid_width
@@ -309,7 +311,7 @@ def main(
         GRID_SIDE, help="Side length of the square agent grid."
     ),
     workers: int = typer.Option(1, help="Number of worker processes"),
-    limit: Optional[int] = typer.Option(
+    limit: int | None = typer.Option(
         None, help="Global concurrency limit (per process)"
     ),
     period: float = typer.Option(PERIOD, help="Oscillation period for agents."),

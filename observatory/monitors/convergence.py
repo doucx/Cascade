@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 import time
-from typing import Dict, Any
+from typing import Any
 
 import numpy as np
 from cascade.connectors.local import LocalBusConnector
@@ -18,14 +20,14 @@ class ConvergenceMonitor:
         self.connector = connector
 
         # State: Store the phase reported at the last flash time for each agent
-        self.phases_at_flash: Dict[int, float] = {}
-        self.last_flash_time: Dict[int, float] = {}
+        self.phases_at_flash: dict[int, float] = {}
+        self.last_flash_time: dict[int, float] = {}
 
         self._is_running = False
         self._flash_count = 0
         self.pulse_count = 0
 
-    async def on_flash(self, topic: str, payload: Dict[str, Any]):
+    async def on_flash(self, topic: str, payload: dict[str, Any]):
         """Callback to update agent state when a flash is received."""
         agent_id = payload.get("agent_id")
         if agent_id is not None:

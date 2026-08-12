@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import random
-from typing import Any, Optional
+from typing import Any
+
 from cascade.spec.protocols import Connector
 
 
@@ -15,7 +18,7 @@ class DirectChannel:
         owner_id: str,
         capacity: int = 100,
         sampling_rate: float = 0.001,
-        telemetry_connector: Optional[Connector] = None,
+        telemetry_connector: Connector | None = None,
     ):
         self.owner_id = owner_id
         # The inbox is a simple asyncio Queue.

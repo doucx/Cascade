@@ -1,12 +1,14 @@
-import numpy as np
+from __future__ import annotations
+
 import shutil
 from typing import Callable
 
+import numpy as np
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.segment import Segment
 
 # Re-using the matrix logic from protoplasm as it's solid
-from .matrix import StateMatrix, GridConfig
+from .matrix import GridConfig, StateMatrix
 
 
 class GridView:
@@ -20,7 +22,7 @@ class GridView:
         self,
         width: int = 0,
         height: int = 0,
-        palette_func: Callable[[np.ndarray], np.ndarray] = None,
+        palette_func: Callable[[np.ndarray], np.ndarray] | None = None,
         decay_per_second: float = 4.0,
     ):
         cols, rows = shutil.get_terminal_size()

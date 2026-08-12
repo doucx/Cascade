@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import os
+
 import cascade.sdk as cs
-from typing import List
+
 from .tasks import (
-    parse_git_diff,
-    get_lint_command,
     get_aggregated_test_command,
     get_build_command,
+    get_lint_command,
     get_publish_command,
+    parse_git_diff,
 )
 
 # List of all packages in the monorepo for full runs.
@@ -27,7 +30,7 @@ ALL_PACKAGES = [
 
 
 @cs.task
-def _ci_success_marker(results: List[str]):
+def _ci_success_marker(results: list[str]):
     """A dummy task to act as a final success node in the graph."""
     print("CI checks completed successfully.")
     print("Results:", results)

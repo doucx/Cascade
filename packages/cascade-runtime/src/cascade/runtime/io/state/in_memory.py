@@ -1,16 +1,18 @@
-from typing import Any, Dict, Optional
+from __future__ import annotations
+
+from typing import Any
 
 
 class InMemoryStateBackend:
     def __init__(self, run_id: str):
         self._run_id = run_id
-        self._results: Dict[str, Any] = {}
-        self._skipped: Dict[str, str] = {}
+        self._results: dict[str, Any] = {}
+        self._skipped: dict[str, str] = {}
 
     async def put_result(self, node_id: str, result: Any) -> None:
         self._results[node_id] = result
 
-    async def get_result(self, node_id: str) -> Optional[Any]:
+    async def get_result(self, node_id: str) -> Any | None:
         return self._results.get(node_id)
 
     async def has_result(self, node_id: str) -> bool:
@@ -19,7 +21,7 @@ class InMemoryStateBackend:
     async def mark_skipped(self, node_id: str, reason: str) -> None:
         self._skipped[node_id] = reason
 
-    async def get_skip_reason(self, node_id: str) -> Optional[str]:
+    async def get_skip_reason(self, node_id: str) -> str | None:
         return self._skipped.get(node_id)
 
     async def clear(self) -> None:

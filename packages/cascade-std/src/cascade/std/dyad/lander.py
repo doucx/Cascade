@@ -1,11 +1,11 @@
-from typing import Any
 import time
+from typing import Any
 
-from cascade.spec import EventIR, EventType, EventState, EventContext
-from cascade.spec.physical.nodes import Token
+from cascade.spec import EventContext, EventIR, EventState, EventType
 from cascade.spec.physical.dyad import LanderNode
-from cascade.spec.specs.dyad import LanderSpec
+from cascade.spec.physical.nodes import Token
 from cascade.spec.physics.binding import implements
+from cascade.spec.specs.dyad import LanderSpec
 
 
 @implements(LanderSpec)

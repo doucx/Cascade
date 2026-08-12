@@ -28,7 +28,7 @@ python_version = cs.shell("python --version", check=True)
 import cascade as cs
 
 # 显式地加载配置文件，返回一个 LazyResult[dict]
-config_data = cs.load_yaml("config.yml") 
+config_data = cs.load_yaml("config.yml")
 ```
 
 ### `cs.lookup`: 从数据源中查找值
@@ -39,7 +39,7 @@ config_data = cs.load_yaml("config.yml")
 import cascade as cs
 
 # 假设 config_data 已经通过 cs.load_yaml 获得
-config_data = cs.load_yaml("config.yml") 
+config_data = cs.load_yaml("config.yml")
 
 # 声明对配置值的依赖
 project_name = cs.lookup(source=config_data, key="project.name")
@@ -68,10 +68,7 @@ import cascade as cs
 
 # 声明对 SQL 查询结果的依赖
 # 它会自动查找并使用一个名为 'analytics_db' 的资源
-active_users = cs.sql(
-    "SELECT * FROM users WHERE status = 'active'",
-    db="analytics_db"
-)
+active_users = cs.sql("SELECT * FROM users WHERE status = 'active'", db="analytics_db")
 ```
 
 ## `cs.http`: 调用 Web API

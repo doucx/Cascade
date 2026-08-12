@@ -1,17 +1,20 @@
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import Any
 
 try:
     import yaml
 except ImportError:
     yaml = None
 
+import asyncio
+
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import LazyFactory, Provider
-import asyncio
 
 
 @task(name="load_yaml")
-async def _read_yaml_task(path: str) -> Dict[str, Any]:
+async def _read_yaml_task(path: str) -> dict[str, Any]:
     if yaml is None:
         raise ImportError(
             "The 'PyYAML' library is required to use the YAML loader. "
@@ -27,7 +30,7 @@ async def _read_yaml_task(path: str) -> Dict[str, Any]:
 
 
 @task(name="lookup")
-def _lookup_task(source: Dict[str, Any], key: str) -> Any:
+def _lookup_task(source: dict[str, Any], key: str) -> Any:
     parts = key.split(".")
     current = source
 

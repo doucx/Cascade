@@ -1,8 +1,11 @@
-from typing import Any, Union
+from __future__ import annotations
+
 from dataclasses import dataclass
-from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.spec.physical.object import Ref
+from typing import Any
+
 from cascade.spec.components import DiscreteAllocatorSpec, DiscreteReclaimerSpec
+from cascade.spec.physical.nodes import PhysicsNode, Token
+from cascade.spec.physical.object import Ref
 from cascade.spec.physics.binding import implements
 
 
@@ -12,7 +15,7 @@ class DiscreteLedger:
     available: int
 
 
-def _extract_scalar(payload: Any) -> Union[int, float]:
+def _extract_scalar(payload: Any) -> int | float:
     if isinstance(payload, Ref):
         # v3.1: Try to get hoisted scalar
         if "scalar_value" in payload.meta:

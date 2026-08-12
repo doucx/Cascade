@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import sqlite3
-import time
 import sys
+import time
 from pathlib import Path
 
 import typer
@@ -10,10 +12,11 @@ from rich.console import Console
 from rich.table import Table
 
 from cascade.bus.feedback import bus
-from .rendering import RichCliRenderer
-from cascade.connectors.mqtt import MqttConnector
 from cascade.connectors.local.connector import DEFAULT_TELEMETRY_UDS_PATH
+from cascade.connectors.mqtt import MqttConnector
 from cascade.spec.dsl.constraint import GlobalConstraint
+
+from .rendering import RichCliRenderer
 
 app = typer.Typer()
 console = Console(stderr=True)
@@ -79,7 +82,7 @@ async def _run_uds_watcher():
 
     while True:
         try:
-            reader, writer = await asyncio.open_unix_connection(uds_path)
+            reader, _writer = await asyncio.open_unix_connection(uds_path)
             bus.info("observer.startup.connected_uds")
             while not reader.at_eof():
                 line = await reader.readline()

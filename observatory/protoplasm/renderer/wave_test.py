@@ -1,13 +1,13 @@
 import asyncio
-import time
 import math
 import shutil
+import time
 
-from observatory.visualization.raw_app import RawTerminalApp
-from observatory.visualization.grid import GridView
-from observatory.visualization.status import StatusBar
-from observatory.visualization.palette import Palettes
 from observatory.monitors.aggregator import MetricsAggregator
+from observatory.visualization.grid import GridView
+from observatory.visualization.palette import Palettes
+from observatory.visualization.raw_app import RawTerminalApp
+from observatory.visualization.status import StatusBar
 
 # --- Configuration ---
 SIMULATION_DURATION_S = 120.0

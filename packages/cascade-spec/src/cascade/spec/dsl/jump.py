@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import uuid4
+
 from .fluent import LazyResult
 
 
@@ -12,7 +15,7 @@ class Jump:
 
 @dataclass
 class JumpSelector:
-    routes: Dict[str, Optional[LazyResult]]
+    routes: dict[str, LazyResult | None]
     _uuid: str = field(default_factory=lambda: str(uuid4()))
 
     def __hash__(self):

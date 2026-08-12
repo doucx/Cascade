@@ -1,22 +1,24 @@
-from typing import Dict, Any, Optional, Tuple, Callable
-from dataclasses import dataclass
+from __future__ import annotations
 
-from cascade.spec.ir.graph import NodeIR
+from dataclasses import dataclass
+from typing import Any, Callable
+
 from cascade.compiler.frontend.generator import GenerationResult
 from cascade.execution.graph.model.model import (
-    Graph,
-    Node,
-    TaskNode,
-    MapNode,
-    ParamNode,
     Edge,
     EdgeType,
+    Graph,
+    MapNode,
+    Node,
+    ParamNode,
+    TaskNode,
 )
 from cascade.execution.graph.model.registry import NodeRegistry
-from cascade.spec.dsl.fluent import RetryPolicy
 from cascade.spec.dsl.constraint import ResourceConstraint
-from cascade.spec.dsl.routing import Router
+from cascade.spec.dsl.fluent import RetryPolicy
 from cascade.spec.dsl.jump import JumpSelector
+from cascade.spec.dsl.routing import Router
+from cascade.spec.ir.graph import NodeIR
 
 
 @dataclass
@@ -25,17 +27,17 @@ class _StubLazyResult:
 
 
 class IRToRuntimeAdapter:
-    def __init__(self, registry: Optional[NodeRegistry] = None):
+    def __init__(self, registry: NodeRegistry | None = None):
         self.registry = registry or NodeRegistry()
         self.graph = Graph()
         # Maps node_instance_hash -> Runtime Node Object
-        self.node_map: Dict[str, Node] = {}
+        self.node_map: dict[str, Node] = {}
         # Maps logical_uuid (from IR) -> Runtime Node Object (for router reconstruction)
-        self.logical_map: Dict[str, Node] = {}
+        self.logical_map: dict[str, Node] = {}
 
     def adapt(
         self, result: GenerationResult
-    ) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:
+    ) -> tuple[Graph, dict[str, Node], dict[str, Callable]]:
         ir = result.ir
         executables = result.executables
 
@@ -54,7 +56,7 @@ class IRToRuntimeAdapter:
 
         # 3. Create Instance Map (UUID -> Node) for FlowManager compatibility
         # Legacy runtime uses UUIDs for lookups in FlowManager
-        instance_map: Dict[str, Node] = {}
+        instance_map: dict[str, Node] = {}
         for node_ir in ir.nodes:
             runtime_node = self.node_map[node_ir.current_node_instance_hash]
 
@@ -68,11 +70,9 @@ class IRToRuntimeAdapter:
         return self.graph, instance_map, executables
 
     def _is_dependency(self, value: Any) -> bool:
-        if isinstance(value, str) and value in self.node_map:
-            return True
-        return False
+        return bool(isinstance(value, str) and value in self.node_map)
 
-    def _create_node(self, node_ir: NodeIR, executables: Dict[str, Callable]) -> Node:
+    def _create_node(self, node_ir: NodeIR, executables: dict[str, Callable]) -> Node:
         # Recover policies
         retry_policy = None
         if node_ir.retry_policy:
@@ -89,8 +89,9 @@ class IRToRuntimeAdapter:
         # Input bindings: filter out router definitions and dependencies
         input_bindings = {}
         has_complex_inputs = False
-        from cascade.spec.dsl.resources import Inject
         import inspect
+
+        from cascade.spec.dsl.resources import Inject
 
         def check_complexity(obj):
             if isinstance(obj, Inject):
@@ -225,17 +226,19 @@ class IRToRuntimeAdapter:
             from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 
             for key, val in node_ir.constraints.items():
-                if isinstance(val, (LazyResult, MappedLazyResult)):
-                    if val._uuid in self.logical_map:
-                        source_node = self.logical_map[val._uuid]
-                        self.graph.add_edge(
-                            Edge(
-                                source=source_node,
-                                target=target_node,
-                                arg_name=key,
-                                edge_type=EdgeType.CONSTRAINT,
-                            )
+                if (
+                    isinstance(val, (LazyResult, MappedLazyResult))
+                    and val._uuid in self.logical_map
+                ):
+                    source_node = self.logical_map[val._uuid]
+                    self.graph.add_edge(
+                        Edge(
+                            source=source_node,
+                            target=target_node,
+                            arg_name=key,
+                            edge_type=EdgeType.CONSTRAINT,
                         )
+                    )
 
     def _scan_and_create_nested_edges(self, obj: Any, arg_name: str, target_node: Node):
         if self._is_dependency(obj):
@@ -256,7 +259,7 @@ class IRToRuntimeAdapter:
                 self._scan_and_create_nested_edges(value, arg_name, target_node)
 
     def _reconstruct_router_edges(
-        self, router_def: Dict[str, Any], arg_name: str, target_node: Node
+        self, router_def: dict[str, Any], arg_name: str, target_node: Node
     ):
         selector_id = router_def["selector"]
         routes_def = router_def["routes"]
@@ -295,7 +298,7 @@ class IRToRuntimeAdapter:
                     )
                 )
 
-    def _reconstruct_jump_edges(self, flow_control: Dict[str, Any], source_node: Node):
+    def _reconstruct_jump_edges(self, flow_control: dict[str, Any], source_node: Node):
         routes_stubs = {
             k: (_StubLazyResult(v) if v else None) for k, v in flow_control.items()
         }

@@ -1,6 +1,7 @@
 import time
-import pytest
+
 import cascade.sdk as cs
+import pytest
 from cascade.test_utils.helpers import MockExecutor
 
 from .harness import InProcessConnector
@@ -14,9 +15,10 @@ async def test_e2e_ttl_expiration(engine_factory):
     connector = InProcessConnector()
 
     # Helper to avoid complex harness logic for now
-    from cascade.spec.dsl.constraint import GlobalConstraint
-    from dataclasses import asdict
     import uuid
+    from dataclasses import asdict
+
+    from cascade.spec.dsl.constraint import GlobalConstraint
 
     async def pause_with_ttl(scope: str, ttl: float):
         constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"

@@ -1,8 +1,9 @@
+from cascade.spec.compiler.interfaces import WiringPolicy
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.specs.dyad import LauncherSpec
+
 from ...expander import SubGraph
 from ..context import WiringContext
-from cascade.spec.compiler.interfaces import WiringPolicy
 
 
 class PulseWiringPolicy(WiringPolicy):

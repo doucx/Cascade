@@ -1,11 +1,14 @@
-import sys
+from __future__ import annotations
+
 import importlib.metadata
-from typing import Any, Dict
+import sys
+from typing import Any
+
 from cascade.spec.runtime.interfaces import LazyFactory
 
 
 class ProviderNamespace:
-    def __init__(self, registry: "ProviderRegistry", prefix: str):
+    def __init__(self, registry: ProviderRegistry, prefix: str):
         self._registry = registry
         self._prefix = prefix
 
@@ -16,7 +19,7 @@ class ProviderNamespace:
 
 class ProviderRegistry:
     def __init__(self):
-        self._providers: Dict[str, LazyFactory] = {}
+        self._providers: dict[str, LazyFactory] = {}
         self._loaded = False
 
     def get(self, name: str) -> Any:

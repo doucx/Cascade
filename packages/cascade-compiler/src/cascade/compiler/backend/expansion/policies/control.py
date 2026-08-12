@@ -1,11 +1,12 @@
+from cascade.spec.compiler.interfaces import ExpansionPolicy
+from cascade.spec.components import EgressSpec
 from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.constants import NodePrefix
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.components import EgressSpec
-from cascade.spec.physical.constants import NodePrefix
+
 from ...expander import SubGraph
 from ..context import ExpansionContext
-from cascade.spec.compiler.interfaces import ExpansionPolicy
 
 
 class ControlFlowExpansionPolicy(ExpansionPolicy):

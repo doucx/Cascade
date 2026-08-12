@@ -1,15 +1,15 @@
-from .core import Port, PortRole, PortType, PortDef, PortDirection
+from .binding import DynamicOutputMap, IOWrapper, implements
+from .core import Port, PortDef, PortDirection, PortRole, PortType
 from .spec import PhysicsSpec
-from .binding import implements, IOWrapper, DynamicOutputMap
 
 __all__ = [
+    "DynamicOutputMap",
+    "IOWrapper",
+    "PhysicsSpec",
     "Port",
-    "PortRole",
-    "PortType",
     "PortDef",
     "PortDirection",
-    "PhysicsSpec",
+    "PortRole",
+    "PortType",
     "implements",
-    "IOWrapper",
-    "DynamicOutputMap",
 ]

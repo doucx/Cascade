@@ -1,11 +1,11 @@
 import pickle
-import pytest
 
-from cascade.spec.dsl.task import task
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.assembly import Assembly
-from cascade.compiler.frontend import IRGenerator
+import pytest
 from cascade.compiler.backend import Builder
+from cascade.compiler.frontend import IRGenerator
+from cascade.spec.dsl.task import task
+from cascade.spec.physical.assembly import Assembly
+from cascade.spec.physical.environment import EnvironmentDef
 
 
 @task

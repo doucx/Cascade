@@ -1,11 +1,7 @@
-from typing import Protocol, Any, TYPE_CHECKING
+from typing import Any, Protocol
+
 from ..ir.graph import NodeIR
 from .model import SubGraph
-
-if TYPE_CHECKING:
-    # Avoid circular dependency with implementation-heavy contexts
-    # These will be passed as 'Any' or via Generic types in the implementation
-    pass
 
 
 class ExpansionPolicy(Protocol):

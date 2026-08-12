@@ -1,6 +1,9 @@
-from typing import Protocol, MutableMapping, Optional
-from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
+from __future__ import annotations
+
+from typing import MutableMapping, Protocol
+
 from cascade.spec.physical.nodes import Token
+from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
 
 
 class DiscreteAllocatorSpec(PhysicsSpec):
@@ -24,8 +27,8 @@ class DiscreteAllocatorSpec(PhysicsSpec):
 
     class IO(Protocol):
         # Inputs
-        ledger_in: Optional[Token]
-        req_in: Optional[Token]
+        ledger_in: Token | None
+        req_in: Token | None
 
         # Outputs
         ledger_out: Token
@@ -39,7 +42,7 @@ class ResourceRequestorSpec(PhysicsSpec):
     req_out = Port.Output("req_out", role=PortRole.DATA, type=PortType.Token)
 
     class IO(Protocol):
-        amount: Optional[Token]
+        amount: Token | None
         req_out: Token
 
 
@@ -55,8 +58,8 @@ class DiscreteReclaimerSpec(PhysicsSpec):
 
     class IO(Protocol):
         # Inputs
-        ledger_in: Optional[Token]
-        rel_in: Optional[Token]
+        ledger_in: Token | None
+        rel_in: Token | None
 
         # Outputs
         ledger_out: Token
@@ -72,8 +75,8 @@ class ContinuousAllocatorSpec(PhysicsSpec):
     req_out = Port.Output("req_out", role=PortRole.DATA)  # For failed/parked requests
 
     class IO(Protocol):
-        ledger_in: Optional[Token]
-        req_in: Optional[Token]
+        ledger_in: Token | None
+        req_in: Token | None
         ledger_out: Token
         gnt_out: Token
         req_out: Token
@@ -86,6 +89,6 @@ class ContinuousReclaimerSpec(PhysicsSpec):
     ledger_out = Port.Output("ledger_out", role=PortRole.DATA, type=PortType.Ledger)
 
     class IO(Protocol):
-        ledger_in: Optional[Token]
-        rel_in: Optional[Token]
+        ledger_in: Token | None
+        rel_in: Token | None
         ledger_out: Token

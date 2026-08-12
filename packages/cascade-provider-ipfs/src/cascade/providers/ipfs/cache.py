@@ -1,6 +1,9 @@
-import pickle
+from __future__ import annotations
+
 import logging
-from typing import Any, Optional
+import pickle
+from typing import Any
+
 import aiohttp
 
 from cascade.spec.runtime.interfaces import CacheBackend
@@ -17,7 +20,7 @@ class IpfsCacheBackend(CacheBackend):
         self._meta_db = metadata_backend
         self._api_base = ipfs_api_url.rstrip("/")
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         # 1. Resolve Key -> CID
         cid = await self._meta_db.get(key)
         if not cid:
@@ -42,7 +45,7 @@ class IpfsCacheBackend(CacheBackend):
             logger.error(f"Error reading from IPFS cache (key={key}, cid={cid}): {e}")
             return None
 
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         try:
             # 1. Serialize
             data = pickle.dumps(value)

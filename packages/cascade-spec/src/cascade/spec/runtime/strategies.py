@@ -1,6 +1,9 @@
-from typing import Protocol, Any, Dict
-from dataclasses import dataclass, field
+from __future__ import annotations
+
 from contextlib import ExitStack
+from dataclasses import dataclass, field
+from typing import Any, Protocol
+
 from .interfaces import StateBackend
 from .storage import ObjectStore
 
@@ -11,8 +14,8 @@ class ExecutionContext:
     state_backend: StateBackend
     object_store: ObjectStore
     run_stack: ExitStack
-    active_resources: Dict[str, Any] = field(default_factory=dict)
-    params: Dict[str, Any] = field(default_factory=dict)
+    active_resources: dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
     resource_container: Any = None
 
 

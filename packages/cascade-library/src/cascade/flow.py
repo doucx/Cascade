@@ -1,4 +1,7 @@
-from typing import Union, Callable, Any, Sequence
+from __future__ import annotations
+
+from typing import Any, Callable, Sequence
+
 from cascade.spec.dsl.fluent import LazyResult
 
 
@@ -14,7 +17,7 @@ def sequence(tasks: Sequence[LazyResult]) -> LazyResult:
 
 
 def pipeline(
-    initial: Any, steps: Sequence[Union[Callable[[Any], Any], LazyResult]]
+    initial: Any, steps: Sequence[Callable[[Any], Any] | LazyResult]
 ) -> LazyResult:
     current_result = initial
 

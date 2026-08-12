@@ -1,7 +1,7 @@
 import pickle
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from cascade.runtime.io.cache import redis as redis_cache_module
 
 

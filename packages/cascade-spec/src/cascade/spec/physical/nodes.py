@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any
+
 from .ports import PortDef
 
 
@@ -7,7 +10,7 @@ from .ports import PortDef
 class Token:
     payload: Any
 
-    trace: Dict[str, Any] = field(default_factory=dict)
+    trace: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -28,6 +31,6 @@ class PhysicsDataNode(PhysicsNode):
 
 @dataclass
 class PhysicsFuncNode(PhysicsNode):
-    input_ports: Dict[str, PortDef] = field(default_factory=dict)
+    input_ports: dict[str, PortDef] = field(default_factory=dict)
 
-    output_ports: Dict[str, PortDef] = field(default_factory=dict)
+    output_ports: dict[str, PortDef] = field(default_factory=dict)

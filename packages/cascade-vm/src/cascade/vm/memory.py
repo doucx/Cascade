@@ -1,7 +1,9 @@
-from typing import Dict
+from __future__ import annotations
+
 import asyncio
 from collections import deque
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
+
+from cascade.spec.physical.nodes import PhysicsDataNode, Token
 
 
 class MemoryError(Exception):
@@ -19,9 +21,9 @@ class MemoryEmptyError(MemoryError):
 class VolatileMemory:
     def __init__(self):
         # Maps node_id -> deque of Tokens
-        self._buffers: Dict[str, deque[Token]] = {}
+        self._buffers: dict[str, deque[Token]] = {}
         # Maps node_id -> capacity
-        self._capacities: Dict[str, int] = {}
+        self._capacities: dict[str, int] = {}
         self._mutation_event = asyncio.Event()
 
     async def wait_for_mutation(self) -> None:

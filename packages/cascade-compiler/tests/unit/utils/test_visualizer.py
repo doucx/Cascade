@@ -1,8 +1,8 @@
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.dyad import LauncherNode, LanderNode
-from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.compiler.utils.visualizer import GraphDumper
+from cascade.spec.physical.dyad import LanderNode, LauncherNode
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.physical.topology import BipartiteGraph, Channel
 
 
 def test_dumper_generates_valid_dot():

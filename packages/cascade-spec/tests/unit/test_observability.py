@@ -1,10 +1,11 @@
 import time
+
 from cascade.spec import (
-    EventIR,
-    EventType,
-    EventState,
-    PhysicalAnchor,
     EventContext,
+    EventIR,
+    EventState,
+    EventType,
+    PhysicalAnchor,
 )
 
 

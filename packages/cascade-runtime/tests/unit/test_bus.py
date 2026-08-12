@@ -1,14 +1,15 @@
 import io
+
 from cascade.bus.events import (
     RunStarted,
     TaskExecutionFinished,
 )
+from cascade.bus.feedback import bus as ui_bus
+from cascade.common.renderers import CliRenderer
+from cascade.runtime import EventBus
 from cascade.runtime.services.observability.subscribers import (
     HumanReadableLogSubscriber,
 )
-from cascade.runtime import EventBus as EventBus
-from cascade.bus.feedback import bus as ui_bus
-from cascade.common.renderers import CliRenderer
 
 
 def test_message_bus_dispatch(bus_and_spy):

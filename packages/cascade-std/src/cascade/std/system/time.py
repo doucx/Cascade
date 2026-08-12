@@ -1,16 +1,18 @@
-import logging
-from typing import Dict, Any
+from __future__ import annotations
 
-from cascade.spec.physical.nodes import Token, PhysicsFuncNode
-from cascade.spec.runtime import DelayRequest
+import logging
+from typing import Any
+
 from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.physical.nodes import PhysicsFuncNode, Token
+from cascade.spec.runtime import DelayRequest
 
 logger = logging.getLogger(__name__)
 
 
 def standard_sleep(
-    inputs: Dict[str, Token], node: PhysicsFuncNode, resources: Any
-) -> Dict[str, Token]:
+    inputs: dict[str, Token], node: PhysicsFuncNode, resources: Any
+) -> dict[str, Token]:
     try:
         chronos_queue = resources.get("system.chronos_queue")
 

@@ -1,6 +1,7 @@
-import pytest
-import cascade.sdk as cs
 from unittest.mock import MagicMock
+
+import cascade.sdk as cs
+import pytest
 from cascade.providers.http import HttpResponse
 
 # 模拟一个成功的 OpenAI API 响应

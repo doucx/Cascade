@@ -1,11 +1,11 @@
-from cascade.spec.ir.graph import NodeIR, ArgumentKind
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.dyad import LauncherNode, LanderNode
-from cascade.spec.physical.topology import Channel
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.compiler.model import SubGraph
-from cascade.spec.specs.dyad import LauncherSpec, LanderSpec
 from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.compiler.model import SubGraph
+from cascade.spec.ir.graph import ArgumentKind, NodeIR
+from cascade.spec.physical.dyad import LanderNode, LauncherNode
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.physical.topology import Channel
+from cascade.spec.specs.dyad import LanderSpec, LauncherSpec
 
 
 class Expander:
@@ -37,14 +37,14 @@ class Expander:
                 launcher_inputs[input_key] = PortDef(input_key, PortRole.DATA, "Any")
 
         # Keyword args
-        for input_key in node_ir.kwargs.keys():
+        for input_key in node_ir.kwargs:
             if input_key not in launcher_inputs:
                 launcher_inputs[input_key] = PortDef(input_key, PortRole.DATA, "Any")
 
         # 2.3 Resource Grants (RESOURCE_REQUEST role)
         # Note: The Launcher receives the grant token as DATA/RESOURCE to hold it.
         # In StdLib, we use PortRole.RESOURCE to identify held resources.
-        for res_name in node_ir.constraints.keys():
+        for res_name in node_ir.constraints:
             port_name = f"res_{res_name}"
             launcher_inputs[port_name] = PortDef(
                 port_name, PortRole.RESOURCE, "ResourceSlot"
@@ -95,7 +95,7 @@ class Expander:
         }
 
         # 4.1 Resource Returns
-        for res_name in node_ir.constraints.keys():
+        for res_name in node_ir.constraints:
             port_name = f"res_{res_name}"
             # Role RESOURCE indicates this is a return path
             lander_outputs[port_name] = PortDef(

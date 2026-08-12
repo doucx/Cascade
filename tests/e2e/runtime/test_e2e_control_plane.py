@@ -1,9 +1,10 @@
 import asyncio
-import pytest
+
 import cascade.sdk as cs
+import pytest
 from cascade.bus.events import TaskExecutionStarted
 
-from .harness import InProcessConnector, ControllerTestApp
+from .harness import ControllerTestApp, InProcessConnector
 
 
 @pytest.mark.asyncio

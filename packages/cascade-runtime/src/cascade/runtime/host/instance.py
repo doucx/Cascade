@@ -1,35 +1,38 @@
+from __future__ import annotations
+
+import asyncio
 import sys
 import time
-import asyncio
-from typing import Any, Dict, Optional, Callable
-from uuid import uuid4
 from contextlib import ExitStack
+from typing import Any, Callable
+from uuid import uuid4
 
-from cascade.spec.dsl.resources import ResourceDefinition
-from cascade.spec.dsl.constraint import GlobalConstraint
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.bus.core import EventBus
-from cascade.spec import EventState
 from cascade.bus.events import (
-    RunStarted,
-    RunFinished,
     ConnectorConnected,
     ConnectorDisconnected,
+    RunFinished,
+    RunStarted,
 )
+from cascade.spec import EventState
+from cascade.spec.dsl.constraint import GlobalConstraint
+from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+from cascade.spec.dsl.resources import ResourceDefinition
 from cascade.spec.runtime import (
-    Solver,
-    Executor,
-    StateBackend,
     Connector,
-    ExecutionStrategy,
     ExecutionContext,
+    ExecutionStrategy,
+    Executor,
     ObjectStore,
+    Solver,
+    StateBackend,
 )
-from ..storage import InMemoryObjectStore
-from ..services.resources.manager import ResourceManager
-from ..services.constraints import ConstraintManager
+
 from ..io.state import InMemoryStateBackend
+from ..services.constraints import ConstraintManager
 from ..services.resources.container import ResourceContainer
+from ..services.resources.manager import ResourceManager
+from ..storage import InMemoryObjectStore
 
 
 class Engine:
@@ -42,12 +45,12 @@ class Engine:
         constraint_manager: ConstraintManager,
         resource_container: ResourceContainer,
         wakeup_event: asyncio.Event,
-        state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
-        system_resources: Optional[Dict[str, Any]] = None,
-        connector: Optional[Connector] = None,
-        cache_backend: Optional[Any] = None,
-        resource_manager: Optional[ResourceManager] = None,
-        object_store: Optional[ObjectStore] = None,
+        state_backend_factory: Callable[[str], StateBackend] | None = None,
+        system_resources: dict[str, Any] | None = None,
+        connector: Connector | None = None,
+        cache_backend: Any | None = None,
+        resource_manager: ResourceManager | None = None,
+        object_store: ObjectStore | None = None,
     ):
         self.solver = solver
         self.executor = executor
@@ -115,7 +118,7 @@ class Engine:
     async def run(
         self,
         target: Any,
-        params: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ) -> Any:
         # Handle Auto-Gathering
         from cascade.reflection import _internal_gather
@@ -181,7 +184,7 @@ class Engine:
                     )
                     self.register(connector_res_def)
 
-                active_resources: Dict[str, Any] = {}
+                active_resources: dict[str, Any] = {}
 
                 context = ExecutionContext(
                     run_id=run_id,
@@ -226,7 +229,7 @@ class Engine:
                 await self.connector.disconnect()
                 self.bus.publish(ConnectorDisconnected(run_id=run_id))
 
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
+    async def _on_constraint_update(self, topic: str, payload: dict[str, Any]):
         try:
             # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
             if payload == {}:

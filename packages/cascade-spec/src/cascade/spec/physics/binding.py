@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 from functools import wraps
-from typing import Dict, Any, Type, TypeVar, MutableMapping
-from ..physical.nodes import Token, PhysicsNode
+from typing import Any, MutableMapping, TypeVar
+
+from ..physical.nodes import PhysicsNode, Token
 from .spec import PhysicsSpec
 
 T = TypeVar("T", bound=PhysicsSpec)
 
 
 class DynamicOutputMap(MutableMapping):
-    def __init__(self, target_dict: Dict[str, Token], prefix: str):
+    def __init__(self, target_dict: dict[str, Token], prefix: str):
         self._target = target_dict
         self._prefix = prefix
 
@@ -36,9 +39,9 @@ class IOWrapper:
 
     def __init__(
         self,
-        inputs: Dict[str, Token],
-        outputs: Dict[str, Token],
-        spec: Type[PhysicsSpec],
+        inputs: dict[str, Token],
+        outputs: dict[str, Token],
+        spec: type[PhysicsSpec],
     ):
         self._inputs = inputs
         self._outputs = outputs
@@ -101,13 +104,13 @@ class IOWrapper:
         )
 
 
-def implements(spec: Type[PhysicsSpec]):
+def implements(spec: type[PhysicsSpec]):
     def decorator(func):
         @wraps(func)
         def wrapper(
-            inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-        ) -> Dict[str, Token]:
-            outputs: Dict[str, Token] = {}
+            inputs: dict[str, Token], node: PhysicsNode, resources: Any
+        ) -> dict[str, Token]:
+            outputs: dict[str, Token] = {}
             io = IOWrapper(inputs, outputs, spec)
 
             # Call the inner function. It is expected to set attributes on 'io' (populating 'outputs')
@@ -117,7 +120,7 @@ def implements(spec: Type[PhysicsSpec]):
             return outputs
 
         # Attach spec metadata for introspection/docs
-        setattr(wrapper, "__spec__", spec)
+        wrapper.__spec__ = spec
         return wrapper
 
     return decorator

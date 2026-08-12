@@ -1,17 +1,23 @@
+from __future__ import annotations
+
 import asyncio
-import pytest
+import uuid
+from dataclasses import asdict
+
 import cascade.sdk as cs
+import pytest
 from cascade.bus.events import TaskExecutionFinished
 from cascade.spec.dsl.constraint import GlobalConstraint
-from dataclasses import asdict
-import uuid
+from cascade.test_utils.helpers import MockExecutor
 
 from .harness import InProcessConnector
-from cascade.test_utils.helpers import MockExecutor
 
 
 async def set_rate_limit(
-    connector: InProcessConnector, scope: str, rate: str, constraint_id: str = None
+    connector: InProcessConnector,
+    scope: str,
+    rate: str,
+    constraint_id: str | None = None,
 ):
     """Helper to publish a rate limit constraint."""
     if not constraint_id:

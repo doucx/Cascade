@@ -1,6 +1,6 @@
-from cascade.spec.dsl.task import task
 from cascade.execution.graph.model.build import build_graph
 from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.spec.dsl.task import task
 
 
 def test_native_solver_diamond_graph():

@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import hashlib
-from typing import Any, List, Dict
-from cascade.spec.ir.graph import TaskDef, NodeIR
+from typing import Any
+
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.spec.dsl.routing import Router
 from cascade.spec.dsl.resources import Inject
+from cascade.spec.dsl.routing import Router
+from cascade.spec.ir.graph import NodeIR, TaskDef
 
 
 class HashingService:
@@ -11,7 +14,7 @@ class HashingService:
         self,
         definition: TaskDef,
         result: Any,  # LazyResult or MappedLazyResult
-        dep_nodes: Dict[str, "NodeIR"],
+        dep_nodes: dict[str, NodeIR],
     ) -> str:
         # 1. Start with the Stable Code Fingerprint
         canonical_code_structure_hash = definition.fingerprint[
@@ -60,13 +63,13 @@ class HashingService:
 
         return self._get_merkle_hash(components)
 
-    def _get_merkle_hash(self, components: List[str]) -> str:
+    def _get_merkle_hash(self, components: list[str]) -> str:
         fingerprint = "|".join(components)
         return hashlib.sha256(fingerprint.encode("utf--8")).hexdigest()
 
     def _build_hash_components(
-        self, obj: Any, dep_nodes: Dict[str, "NodeIR"]
-    ) -> List[str]:
+        self, obj: Any, dep_nodes: dict[str, NodeIR]
+    ) -> list[str]:
         # This recursive helper remains largely similar, just updated type hints if needed
         components = []
 

@@ -1,19 +1,22 @@
+from __future__ import annotations
+
 import json
-from typing import Any, Dict, List, Set
-from cascade.execution.graph.model.model import Graph, Node, Edge, EdgeType
+from typing import Any
+
 from cascade.execution.graph.model.build import build_graph
+from cascade.execution.graph.model.model import Edge, EdgeType, Graph, Node
 from cascade.spec.dsl.fluent import LazyResult
 
 
 class LispTranspiler:
-    def __init__(self, graph: Graph, instance_map: Dict[str, Node]):
+    def __init__(self, graph: Graph, instance_map: dict[str, Node]):
         self.graph = graph
         self.instance_map = instance_map
-        self.ref_counts: Dict[str, int] = {}
-        self.shared_nodes: Set[str] = set()
-        self.node_var_names: Dict[str, str] = {}
+        self.ref_counts: dict[str, int] = {}
+        self.shared_nodes: set[str] = set()
+        self.node_var_names: dict[str, str] = {}
         # Tracks nodes that have been emitted in the let* block
-        self.generated_bindings: Set[str] = set()
+        self.generated_bindings: set[str] = set()
 
         self._analyze()
 
@@ -236,7 +239,7 @@ class LispTranspiler:
             return "'(" + " ".join(items) + ")"
         return str(val)
 
-    def _get_transitive_deps(self, root: Node) -> Set[Node]:
+    def _get_transitive_deps(self, root: Node) -> set[Node]:
         visited = set()
         queue = [root]
         visited.add(root)
@@ -259,7 +262,7 @@ class LispTranspiler:
                     queue.append(source)
         return relevant_nodes
 
-    def _topo_sort(self, nodes: List[Node]) -> List[Node]:
+    def _topo_sort(self, nodes: list[Node]) -> list[Node]:
         node_set = {n.current_node_instance_hash for n in nodes}
         adj = {n.current_node_instance_hash: set() for n in nodes}
 

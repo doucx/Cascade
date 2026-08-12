@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
-import platform
 import os
-from typing import Callable, Awaitable, Dict, Any, Optional
+import platform
+from typing import Any, Awaitable, Callable
 
 try:
     import aiomqtt
@@ -25,9 +27,9 @@ class MqttConnector:
         self.hostname = hostname
         self.port = port
         self.client_kwargs = kwargs
-        self._client: Optional["aiomqtt.Client"] = None
-        self._loop_task: Optional[asyncio.Task] = None
-        self._subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
+        self._client: aiomqtt.Client | None = None
+        self._loop_task: asyncio.Task | None = None
+        self._subscriptions: dict[str, Callable[[str, dict], Awaitable[None]]] = {}
         self._source_id = f"{platform.node()}-{os.getpid()}"
 
     async def connect(self) -> None:
@@ -93,7 +95,7 @@ class MqttConnector:
         asyncio.create_task(_do_publish())
 
     async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+        self, topic: str, callback: Callable[[str, dict], Awaitable[None]]
     ) -> SubscriptionHandle:
         if not self._client:
             raise RuntimeError(
@@ -111,7 +113,6 @@ class MqttConnector:
         except Exception as e:
             logger.error(f"Failed to subscribe to topic '{topic}': {e}")
             # Even if subscribe fails on broker, we return a handle to clean up local registry
-            pass
 
         return _MqttSubscriptionHandle(self, topic)
 
@@ -198,7 +199,7 @@ class MqttConnector:
 
 
 class _MqttSubscriptionHandle(SubscriptionHandle):
-    def __init__(self, parent: "MqttConnector", topic: str):
+    def __init__(self, parent: MqttConnector, topic: str):
         self._parent = parent
         self._topic = topic
 

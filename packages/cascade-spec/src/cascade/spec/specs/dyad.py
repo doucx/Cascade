@@ -1,6 +1,9 @@
-from typing import Protocol, Dict, Optional, MutableMapping
-from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
+from __future__ import annotations
+
+from typing import MutableMapping, Protocol
+
 from cascade.spec.physical.nodes import Token
+from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
 
 
 class LauncherSpec(PhysicsSpec):
@@ -19,9 +22,9 @@ class LauncherSpec(PhysicsSpec):
 
     class IO(Protocol):
         # Inputs
-        args: Dict[str, Token]
-        condition: Optional[Token]
-        pulse: Optional[Token]
+        args: dict[str, Token]
+        condition: Token | None
+        pulse: Token | None
 
         # Outputs
         obs_output: Token
@@ -44,7 +47,7 @@ class LanderSpec(PhysicsSpec):
 
     class IO(Protocol):
         # Inputs
-        result_token: Optional[Token]
+        result_token: Token | None
 
         # Outputs
         output_default: Token

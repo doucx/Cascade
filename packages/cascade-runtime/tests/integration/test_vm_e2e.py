@@ -1,12 +1,12 @@
-import pytest
 import asyncio
-from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.strategies.vm import VMExecutionStrategy
+
+import pytest
 from cascade.bus.core import EventBus
+from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.storage import InMemoryObjectStore
+from cascade.runtime.strategies.vm import VMExecutionStrategy
 from cascade.spec.dsl.task import task
 from cascade.test_utils.helpers import MockSolver
-
 
 # --- Tasks ---
 

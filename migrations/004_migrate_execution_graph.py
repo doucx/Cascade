@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from stitcher.refactor.migration import MigrationSpec, Move, MoveDir
 
 

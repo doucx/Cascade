@@ -1,7 +1,10 @@
+from __future__ import annotations
+
+from typing import Any
+
+from rich.console import Console, ConsoleOptions, RenderResult
 from rich.panel import Panel
 from rich.text import Text
-from rich.console import Console, ConsoleOptions, RenderResult
-from typing import Dict, Any
 
 
 class StatusBar:
@@ -9,7 +12,7 @@ class StatusBar:
     A Rich-renderable object for displaying key-value status information.
     """
 
-    def __init__(self, initial_status: Dict[str, Any] = None):
+    def __init__(self, initial_status: dict[str, Any] | None = None):
         self.status_data = initial_status or {}
 
     def set_status(self, key: str, value: Any):

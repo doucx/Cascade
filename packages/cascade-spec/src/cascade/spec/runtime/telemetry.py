@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -24,11 +26,11 @@ class TaskStateEvent:
     state: str  # PENDING | RUNNING | COMPLETED | FAILED | SKIPPED
     duration_ms: float = 0.0
     error: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class ResourceEvent:
     resource_name: str
     action: str  # ACQUIRE | RELEASE
-    current_usage: Dict[str, Any] = field(default_factory=dict)
+    current_usage: dict[str, Any] = field(default_factory=dict)

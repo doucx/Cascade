@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 from collections import defaultdict
-from typing import Callable, List, Type, Dict, Any
+from typing import Any, Callable
+
 from cascade.spec import EventIR
+
 from .events import Event
 
 Handler = Callable[[Any], None]
@@ -8,10 +12,10 @@ Handler = Callable[[Any], None]
 
 class EventBus:
     def __init__(self):
-        self._subscribers: Dict[Type[Event], List[Handler]] = defaultdict(list)
-        self._wildcard_subscribers: List[Handler] = []
+        self._subscribers: dict[type[Event], list[Handler]] = defaultdict(list)
+        self._wildcard_subscribers: list[Handler] = []
 
-    def subscribe(self, event_type: Type[Event], handler: Handler):
+    def subscribe(self, event_type: type[Event], handler: Handler):
         if event_type is Event:
             self._wildcard_subscribers.append(handler)
         else:

@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 import pickle
-from typing import Any, Optional
+from typing import Any
 
 try:
     import redis
@@ -17,7 +19,7 @@ class RedisCacheBackend:
         self._client = client
         self._prefix = prefix
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         def _blocking_get():
             data = self._client.get(self._prefix + key)
             if data is None:
@@ -26,7 +28,7 @@ class RedisCacheBackend:
 
         return await asyncio.to_thread(_blocking_get)
 
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         def _blocking_set():
             data = pickle.dumps(value)
             self._client.set(self._prefix + key, data, ex=ttl)

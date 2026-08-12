@@ -1,20 +1,21 @@
+from __future__ import annotations
+
 import asyncio
-import numpy as np
 import shutil
-from typing import List
 
 import cascade.sdk as cs
+import numpy as np
 from cascade.connectors.local import LocalBusConnector
 from cascade.spec.resource import resource
 
 from observatory.protoplasm.agents.conway import conway_agent
 from observatory.protoplasm.truth.validator import StateValidator
+from observatory.visualization.grid import GridView
+from observatory.visualization.palette import Palettes
 
 # New Visualization imports
 from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
-from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
-from observatory.visualization.palette import Palettes
 
 # --- Configuration ---
 MAX_GENERATIONS = 200
@@ -26,7 +27,7 @@ def get_random_seed(width: int, height: int, density: float = 0.2) -> np.ndarray
     return (noise < density).astype(np.int8)
 
 
-def calculate_neighbors(x: int, y: int, width: int, height: int) -> List[int]:
+def calculate_neighbors(x: int, y: int, width: int, height: int) -> list[int]:
     neighbors = []
     for dx in [-1, 0, 1]:
         for dy in [-1, 0, 1]:

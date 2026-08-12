@@ -1,5 +1,5 @@
-from cascade.sdk import task
 from cascade.execution.graph.model.build import build_graph
+from cascade.sdk import task
 
 
 def test_hashing_distinguishes_nested_lazy_results():

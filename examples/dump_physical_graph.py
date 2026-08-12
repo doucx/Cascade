@@ -13,8 +13,8 @@ Usage:
     dot -Tpng graph.dot -o graph.png
 """
 
-import sys
 import os
+import sys
 
 # Ensure we can import packages from the workspace
 sys.path.insert(
@@ -37,11 +37,11 @@ sys.path.insert(
 )
 # Add other packages if needed, but these should cover the compiler deps
 
-from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef, ArgumentDef, ArgumentKind
-from cascade.spec.ir.fingerprint import Fingerprint
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
 from cascade.compiler.utils.visualizer import GraphDumper
+from cascade.spec.ir.fingerprint import Fingerprint
+from cascade.spec.ir.graph import ArgumentDef, ArgumentKind, GraphIR, NodeIR, TaskDef
+from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 
 
 def main():

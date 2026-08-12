@@ -1,24 +1,27 @@
-from typing import Dict, Any, Optional, List
+from __future__ import annotations
+
 from collections import defaultdict
-from cascade.execution.graph.model.model import Node, Graph, EdgeType, Edge
+from typing import Any
+
+from cascade.execution.graph.model.model import Edge, EdgeType, Graph, Node
 from cascade.spec.runtime.interfaces import StateBackend
 
 
 class FlowManager:
     def __init__(
-        self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]
+        self, graph: Graph, target_node_id: str, instance_map: dict[str, Node]
     ):
         self.graph = graph
         self.target_node_id = target_node_id
         self.instance_map = instance_map
 
-        self.in_edges: Dict[str, List[Edge]] = defaultdict(list)
-        self.routers_by_selector: Dict[str, List[Edge]] = defaultdict(list)
-        self.route_source_map: Dict[str, Dict[str, Any]] = defaultdict(dict)
+        self.in_edges: dict[str, list[Edge]] = defaultdict(list)
+        self.routers_by_selector: dict[str, list[Edge]] = defaultdict(list)
+        self.route_source_map: dict[str, dict[str, Any]] = defaultdict(dict)
 
         # Reference counting for pruning
         # Initial demand = Out-degree (number of consumers)
-        self.downstream_demand: Dict[str, int] = defaultdict(int)
+        self.downstream_demand: dict[str, int] = defaultdict(int)
 
         for edge in self.graph.edges:
             self.in_edges[edge.target.current_node_instance_hash].append(edge)
@@ -41,7 +44,7 @@ class FlowManager:
         # The final target always has at least 1 implicit demand (the user wants it)
         self.downstream_demand[target_node_id] += 1
 
-    def _get_node_from_instance(self, instance: Any) -> Optional[Node]:
+    def _get_node_from_instance(self, instance: Any) -> Node | None:
         # We use duck typing here to support _StubLazyResult from the Adapter
         # as well as real LazyResult objects.
         if hasattr(instance, "_uuid"):
@@ -96,9 +99,7 @@ class FlowManager:
                     edge.source.current_node_instance_hash, state_backend
                 )
 
-    async def should_skip(
-        self, node: Node, state_backend: StateBackend
-    ) -> Optional[str]:
+    async def should_skip(self, node: Node, state_backend: StateBackend) -> str | None:
         # 1. Check if already skipped (e.g., by router pruning)
         if reason := await state_backend.get_skip_reason(
             node.current_node_instance_hash

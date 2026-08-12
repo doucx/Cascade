@@ -1,13 +1,16 @@
-from typing import Protocol, Optional
-from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
+from __future__ import annotations
+
+from typing import Protocol
+
 from cascade.spec.physical.nodes import Token
+from cascade.spec.physics import PhysicsSpec, Port, PortRole, PortType
 
 
 class ObservabilitySpec(PhysicsSpec):
     event_token = Port.Input("event_token", role=PortRole.OBSERVABILITY, type="Event")
 
     class IO(Protocol):
-        event_token: Optional[Token]
+        event_token: Token | None
 
 
 class EgressSpec(PhysicsSpec):
@@ -16,7 +19,7 @@ class EgressSpec(PhysicsSpec):
     input_token = Port.Input("in", role=PortRole.DATA, type=PortType.Token)
 
     class IO(Protocol):
-        input_token: Optional[Token]
+        input_token: Token | None
 
 
 class GateSpec(PhysicsSpec):
@@ -26,8 +29,8 @@ class GateSpec(PhysicsSpec):
     req_out = Port.Output("req_out", role=PortRole.DATA)
 
     class IO(Protocol):
-        req_in: Optional[Token]
-        signal_in: Optional[Token]
+        req_in: Token | None
+        signal_in: Token | None
 
         req_out: Token
 
@@ -38,8 +41,8 @@ class SleepSpec(PhysicsSpec):
     # No outputs (Void) - flow resumes via ChronosService injection
 
     class IO(Protocol):
-        delay_in: Optional[Token]
-        data_in: Optional[Token]
+        delay_in: Token | None
+        data_in: Token | None
 
 
 class RetrySpec(PhysicsSpec):
@@ -50,8 +53,8 @@ class RetrySpec(PhysicsSpec):
     fail_out = Port.Output("fail_out", role=PortRole.DATA)
 
     class IO(Protocol):
-        error_in: Optional[Token]
-        context_in: Optional[Token]
+        error_in: Token | None
+        context_in: Token | None
         retry_out: Token
         fail_out: Token
 
@@ -62,7 +65,7 @@ class TerminatorSpec(PhysicsSpec):
     out = Port.Output("out", role=PortRole.DATA)
 
     class IO(Protocol):
-        trigger: Optional[Token]
+        trigger: Token | None
         out: Token
 
 
@@ -71,5 +74,5 @@ class DrainerSpec(PhysicsSpec):
     out = Port.Output("out", role=PortRole.DATA)
 
     class IO(Protocol):
-        trigger: Optional[Token]
+        trigger: Token | None
         out: Token

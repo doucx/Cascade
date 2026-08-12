@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Any
 
 # Axiom: [State]_[Source]_[Object]_[Type]
 # Example: baseline_code_structure_hash, baseline_code_signature_text
@@ -20,7 +22,7 @@ class InvalidFingerprintKeyError(KeyError):
 
 @dataclass
 class Fingerprint:
-    _hashes: Dict[str, str] = field(default_factory=dict)
+    _hashes: dict[str, str] = field(default_factory=dict)
 
     @staticmethod
     def _validate_key(key: str) -> None:
@@ -28,7 +30,7 @@ class Fingerprint:
             raise InvalidFingerprintKeyError(key)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Fingerprint":
+    def from_dict(cls, data: dict[str, Any]) -> Fingerprint:
         internal_hashes = {}
         for key, value in data.items():
             cls._validate_key(key)
@@ -36,10 +38,10 @@ class Fingerprint:
                 internal_hashes[key] = str(value)
         return cls(_hashes=internal_hashes)
 
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> dict[str, str]:
         return self._hashes.copy()
 
-    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get(self, key: str, default: str | None = None) -> str | None:
         # We validate key on read too, to ensure consumer uses correct keys
         self._validate_key(key)
         return self._hashes.get(key, default)
@@ -62,7 +64,7 @@ class Fingerprint:
     def items(self):
         return self._hashes.items()
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, Fingerprint):
             return NotImplemented
         return self._hashes == other._hashes

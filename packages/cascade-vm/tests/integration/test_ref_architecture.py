@@ -1,13 +1,12 @@
 import pytest
-
-from cascade.spec.dsl.task import task
-from cascade.compiler.frontend import IRGenerator
+from cascade.bus.events import TaskExecutionFinished
 from cascade.compiler.backend import Builder
+from cascade.compiler.frontend import IRGenerator
+from cascade.spec.dsl.task import task
 from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.runtime.observability import EventState
 from cascade.test_utils import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
-from cascade.bus.events import TaskExecutionFinished
-from cascade.spec.runtime.observability import EventState
 
 
 # --- User-defined tasks for the test ---

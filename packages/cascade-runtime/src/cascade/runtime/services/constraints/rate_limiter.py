@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import time
-from typing import Dict, Optional
 from dataclasses import dataclass
 
 
@@ -13,9 +14,9 @@ class Bucket:
 
 class RateLimiter:
     def __init__(self):
-        self._buckets: Dict[str, Bucket] = {}
+        self._buckets: dict[str, Bucket] = {}
 
-    def update_bucket(self, key: str, rate: float, capacity: Optional[float] = None):
+    def update_bucket(self, key: str, rate: float, capacity: float | None = None):
         if capacity is None:
             capacity = rate
 

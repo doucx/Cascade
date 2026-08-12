@@ -27,21 +27,22 @@ import cascade as cs
 name_param = cs.Param("name", description="要问候的人的姓名。")
 count_param = cs.Param("count", default=1, type=int, description="问候的次数。")
 
+
 # 2. 定义执行核心逻辑的任务
 @cs.task
 def generate_greeting(name: str, count: int) -> str:
     """生成重复的问候语。"""
     return "\n".join([f"Hello, {name}!" for _ in range(count)])
 
+
 @cs.task
 def print_to_console(greeting: str):
     """一个简单的任务，只是为了将结果打印出来。"""
     print(greeting)
 
+
 # 3. 将所有部分连接起来，形成最终的工作流目标
-workflow = print_to_console(
-    generate_greeting(name=name_param, count=count_param)
-)
+workflow = print_to_console(generate_greeting(name=name_param, count=count_param))
 
 # 4. 使用 cs.cli 生成并运行应用
 if __name__ == "__main__":

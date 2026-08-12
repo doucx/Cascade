@@ -1,22 +1,23 @@
-import json
+from __future__ import annotations
+
 import importlib
-from typing import Any, Dict, Optional, List, Callable
+import json
 from dataclasses import dataclass
+from typing import Any, Callable
 
 from cascade.execution.graph.model.model import (
-    Graph,
-    Node,
     Edge,
     EdgeType,
-    TaskNode,
+    Graph,
     MapNode,
+    Node,
     ParamNode,
+    TaskNode,
 )
 from cascade.spec.dsl.constraint import ResourceConstraint
-from cascade.spec.dsl.fluent import RetryPolicy, LazyResult, MappedLazyResult
+from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult, RetryPolicy
 from cascade.spec.dsl.routing import Router
 from cascade.spec.dsl.task import Task
-
 
 # --- Helpers ---
 
@@ -26,7 +27,7 @@ class _StubLazyResult:
     _uuid: str
 
 
-def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
+def _get_func_path(func: Any) -> dict[str, str] | None:
     if func is None:
         return None
 
@@ -38,7 +39,7 @@ def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
     return {"module": func.__module__, "qualname": func.__qualname__}
 
 
-def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:
+def _load_func_from_path(data: dict[str, str] | None) -> Any | None:
     if not data:
         return None
     module_name = data.get("module")
@@ -67,12 +68,12 @@ def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:
 
 
 def graph_to_dict(
-    graph: Graph, registry: Optional[Dict[str, Callable]] = None
-) -> Dict[str, Any]:
+    graph: Graph, registry: dict[str, Callable] | None = None
+) -> dict[str, Any]:
     # 1. Collect and Deduplicate Routers
     # Map id(router_obj) -> index_in_list
-    router_map: Dict[int, int] = {}
-    routers_data: List[Dict[str, Any]] = []
+    router_map: dict[int, int] = {}
+    routers_data: list[dict[str, Any]] = []
 
     for edge in graph.edges:
         if edge.router and id(edge.router) not in router_map:
@@ -103,8 +104,8 @@ def graph_to_dict(
 
 
 def _node_to_dict(
-    node: Node, registry: Optional[Dict[str, Callable]] = None
-) -> Dict[str, Any]:
+    node: Node, registry: dict[str, Callable] | None = None
+) -> dict[str, Any]:
     data = {
         "current_node_instance_hash": node.current_node_instance_hash,
         "name": node.name,
@@ -152,29 +153,27 @@ def _node_to_dict(
     return data
 
 
-def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
+def _edge_to_dict(edge: Edge, router_map: dict[int, int]) -> dict[str, Any]:
     data = {
         "source_id": edge.source.current_node_instance_hash,
         "target_id": edge.target.current_node_instance_hash,
         "arg_name": edge.arg_name,
         "edge_type": edge.edge_type.name,
     }
-    if edge.router:
-        # Store the index to the routers list
-        if id(edge.router) in router_map:
-            data["router_index"] = str(router_map[id(edge.router)])
+    if edge.router and id(edge.router) in router_map:
+        data["router_index"] = str(router_map[id(edge.router)])
     return data
 
 
 # --- Dict to Graph ---
 
 
-def graph_from_dict(data: Dict[str, Any]) -> Graph:
+def graph_from_dict(data: dict[str, Any]) -> Graph:
     nodes_data = data.get("nodes", [])
     edges_data = data.get("edges", [])
     routers_data = data.get("routers", [])
 
-    node_map: Dict[str, Node] = {}
+    node_map: dict[str, Node] = {}
     graph = Graph()
 
     # 1. Reconstruct Nodes
@@ -185,7 +184,7 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
 
     # 2. Reconstruct Routers
     # We create Router objects populated with _StubLazyResult
-    restored_routers: List[Router] = []
+    restored_routers: list[Router] = []
     for rd in routers_data:
         selector_stub = _StubLazyResult(rd["selector_id"])
         routes_stubs = {k: _StubLazyResult(uuid) for k, uuid in rd["routes"].items()}
@@ -221,7 +220,7 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
     return graph
 
 
-def _dict_to_node(data: Dict[str, Any]) -> Node:
+def _dict_to_node(data: dict[str, Any]) -> Node:
     # Note: param_spec recovery removed
 
     # Recover Retry Policy
@@ -239,8 +238,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
 
     # Reconstruct a minimal TaskDef for the Node from the serialized data
     # This is a stub definition to satisfy the Node contract for deserialization
-    from cascade.spec.ir.graph import TaskDef
     from cascade.spec.ir.fingerprint import Fingerprint
+    from cascade.spec.ir.graph import TaskDef
 
     # We use a dummy fingerprint for deserialized nodes if not present
     fp = Fingerprint()
@@ -301,7 +300,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
 
 
 def to_json(
-    graph: Graph, registry: Optional[Dict[str, Callable]] = None, indent: int = 2
+    graph: Graph, registry: dict[str, Callable] | None = None, indent: int = 2
 ) -> str:
     return json.dumps(graph_to_dict(graph, registry), indent=indent)
 

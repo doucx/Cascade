@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 import pickle
-from typing import Any, Optional
+from typing import Any
 
 try:
     import redis
@@ -33,7 +35,7 @@ class RedisStateBackend:
         pipe.expire(self._results_key, self._ttl)
         pipe.execute()
 
-    async def get_result(self, node_id: str) -> Optional[Any]:
+    async def get_result(self, node_id: str) -> Any | None:
         data = await asyncio.to_thread(self._client.hget, self._results_key, node_id)
         if data is None:
             return None
@@ -51,7 +53,7 @@ class RedisStateBackend:
         pipe.expire(self._skipped_key, self._ttl)
         pipe.execute()
 
-    async def get_skip_reason(self, node_id: str) -> Optional[str]:
+    async def get_skip_reason(self, node_id: str) -> str | None:
         data = await asyncio.to_thread(self._client.hget, self._skipped_key, node_id)
         if data:
             return data.decode("utf-8")

@@ -1,10 +1,14 @@
-import asyncio
-import numpy as np
-from typing import Dict, Any, Optional
+from __future__ import annotations
 
+import asyncio
+from typing import Any
+
+import numpy as np
 from cascade.spec.protocols import Connector
-from .golden_ca import GoldenLife
+
 from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+
+from .golden_ca import GoldenLife
 
 
 class StateValidator:
@@ -20,7 +24,7 @@ class StateValidator:
         width: int,
         height: int,
         connector: Connector,
-        app: Optional[TerminalApp] = None,
+        app: TerminalApp | None = None,
     ):
         self.width = width
         self.height = height
@@ -37,8 +41,8 @@ class StateValidator:
         self.diff_matrix = np.zeros((height, width), dtype=np.int8)
 
         # Buffers for Async Aggregation
-        self.buffer: Dict[int, Dict[int, int]] = {}
-        self.history_actual: Dict[int, np.ndarray] = {}
+        self.buffer: dict[int, dict[int, int]] = {}
+        self.history_actual: dict[int, np.ndarray] = {}
 
         self.total_agents = width * height
         self._running = False
@@ -150,8 +154,8 @@ class StateValidator:
             self.app.ingest_full_matrix(self.diff_matrix)
             self.app.update_status("Generation", gen)
 
-            logic_err = np.sum((grid_a != grid_b))
-            drift_err = np.sum((grid_a != grid_c))
+            logic_err = np.sum(grid_a != grid_b)
+            drift_err = np.sum(grid_a != grid_c)
 
             self.stats["logic_errors"] += logic_err
             self.stats["drift_errors"] += drift_err

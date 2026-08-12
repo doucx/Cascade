@@ -226,17 +226,19 @@ class IRToRuntimeAdapter:
             from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 
             for key, val in node_ir.constraints.items():
-                if isinstance(val, (LazyResult, MappedLazyResult)):
-                    if val._uuid in self.logical_map:
-                        source_node = self.logical_map[val._uuid]
-                        self.graph.add_edge(
-                            Edge(
-                                source=source_node,
-                                target=target_node,
-                                arg_name=key,
-                                edge_type=EdgeType.CONSTRAINT,
-                            )
+                if (
+                    isinstance(val, (LazyResult, MappedLazyResult))
+                    and val._uuid in self.logical_map
+                ):
+                    source_node = self.logical_map[val._uuid]
+                    self.graph.add_edge(
+                        Edge(
+                            source=source_node,
+                            target=target_node,
+                            arg_name=key,
+                            edge_type=EdgeType.CONSTRAINT,
                         )
+                    )
 
     def _scan_and_create_nested_edges(self, obj: Any, arg_name: str, target_node: Node):
         if self._is_dependency(obj):

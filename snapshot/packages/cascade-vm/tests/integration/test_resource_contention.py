@@ -154,10 +154,10 @@ async def test_resource_scarcity_topology_and_execution():
             if isinstance(e, TaskExecutionFinished)
         }
 
-        for task_id in start_events:
+        for task_id, start_ts in start_events.items():
             if task_id in end_events:
                 intervals[task_id] = {
-                    "start": start_events[task_id],
+                    "start": start_ts,
                     "end": end_events[task_id],
                 }
 

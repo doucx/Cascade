@@ -95,9 +95,12 @@ class ConstraintManager(HandlerContext):
         # Reschedule wakeup for the next earliest expiration if any remain
         next_expiry = None
         for c in self._constraints.values():
-            if c.expires_at and c.expires_at > now:
-                if next_expiry is None or c.expires_at < next_expiry:
-                    next_expiry = c.expires_at
+            if (
+                c.expires_at
+                and c.expires_at > now
+                and (next_expiry is None or c.expires_at < next_expiry)
+            ):
+                next_expiry = c.expires_at
 
         if next_expiry:
             # We add a small buffer (0.1s) to ensure we wake up strictly after expiration

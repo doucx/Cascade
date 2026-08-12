@@ -160,10 +160,8 @@ def _edge_to_dict(edge: Edge, router_map: dict[int, int]) -> dict[str, Any]:
         "arg_name": edge.arg_name,
         "edge_type": edge.edge_type.name,
     }
-    if edge.router:
-        # Store the index to the routers list
-        if id(edge.router) in router_map:
-            data["router_index"] = str(router_map[id(edge.router)])
+    if edge.router and id(edge.router) in router_map:
+        data["router_index"] = str(router_map[id(edge.router)])
     return data
 
 

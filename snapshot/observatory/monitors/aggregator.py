@@ -23,7 +23,7 @@ class MetricsAggregator:
 
     def open(self):
         """Opens the log file."""
-        self._file = open(self.filename, "w", encoding="utf-8")  # noqa: SIM115
+        self._file = open(self.filename, "w", encoding="utf-8")
 
     def close(self):
         """Closes the log file."""

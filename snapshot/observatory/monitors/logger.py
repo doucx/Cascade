@@ -14,7 +14,7 @@ class JsonFileLogger:
 
     def open(self):
         """Opens the log file for writing."""
-        self._file = open(self.filename, "w", encoding="utf-8")  # noqa: SIM115
+        self._file = open(self.filename, "w", encoding="utf-8")
 
     def log(self, data: dict):
         """Logs a dictionary as a JSON line."""

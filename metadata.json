@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M dump_physical_graph.py, M generate_stubs.py, M test_stubs.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "unknown", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1786526215.3679137, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 忽略长期文件句柄类的 SIM115 检查项", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "unknown", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1786526219.019001, "duration_ms": 0}}

@@ -145,5 +145,6 @@ ignore = [
     "PLC0206",  # Extracting value from dict without .items()
     "RUF012",   # Mutable default for class attribute
     "SIM102",   # Single if statement instead of nested if
+    "SIM115",   # Use context manager for open (long-lived file handles)
     "F401",     # Unused imports in re-exports
 ]

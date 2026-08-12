@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 配置 Ruff 规则并优化代码规范", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "unknown", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1786526069.742647, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M dump_physical_graph.py, M generate_stubs.py, M test_stubs.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "unknown", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1786526215.3679137, "duration_ms": 0}}

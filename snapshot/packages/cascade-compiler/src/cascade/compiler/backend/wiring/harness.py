@@ -1,5 +1,6 @@
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, PhysicsNode
 from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsNode, PhysicsFuncNode, PhysicsDataNode
+
 from ..expander import SubGraph
 
 

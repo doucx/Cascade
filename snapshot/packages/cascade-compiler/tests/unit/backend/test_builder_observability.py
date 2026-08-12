@@ -1,8 +1,8 @@
 import pytest
+from cascade.compiler.backend.builder import Builder
 from cascade.spec.ir.graph import GraphIR
 from cascade.spec.physical.environment import EnvironmentDef
 from cascade.spec.physical.system_nodes import ObservabilityNode
-from cascade.compiler.backend.builder import Builder
 
 
 @pytest.fixture

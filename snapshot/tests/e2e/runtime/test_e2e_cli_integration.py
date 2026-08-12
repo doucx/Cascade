@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 import asyncio
-import pytest
+
 import cascade.sdk as cs
+import pytest
 from cascade.bus.events import TaskExecutionFinished
-from cascade.test_utils.helpers import MockExecutor
 
 # 导入 app 模块中的核心异步逻辑函数
 from cascade.cli.controller import app as controller_app
+from cascade.test_utils.helpers import MockExecutor
 
 from .harness import InProcessConnector
 

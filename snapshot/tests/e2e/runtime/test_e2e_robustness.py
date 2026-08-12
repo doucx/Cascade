@@ -1,13 +1,13 @@
 import asyncio
-import pytest
-from unittest.mock import MagicMock, ANY
+from dataclasses import asdict
+from unittest.mock import ANY, MagicMock
 
 import cascade.sdk as cs
+import pytest
 from cascade.bus.events import TaskExecutionStarted
 from cascade.spec.dsl.constraint import GlobalConstraint
-from dataclasses import asdict
 
-from .harness import InProcessConnector, ControllerTestApp
+from .harness import ControllerTestApp, InProcessConnector
 
 
 @pytest.fixture

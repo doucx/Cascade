@@ -1,18 +1,18 @@
 import pytest
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.dyad import LauncherNode, LanderNode
-from cascade.spec.physical.system_nodes import ObservabilityNode
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.specs.dyad import LanderSpec
-from cascade.spec.runtime.observability import EventState
-from cascade.bus.events import TaskExecutionStarted, TaskExecutionFinished
-from cascade.test_utils import EventDrivenRunner
-from cascade.std.dyad.launcher import standard_launcher
-from cascade.std.dyad.lander import standard_lander
-from cascade.std.system.observer import standard_observer
-from cascade.vm.registry import CodeRegistry
+from cascade.bus.events import TaskExecutionFinished, TaskExecutionStarted
 from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.physical.dyad import LanderNode, LauncherNode
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.physical.system_nodes import ObservabilityNode
+from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.spec.runtime.observability import EventState
+from cascade.spec.specs.dyad import LanderSpec
+from cascade.std.dyad.lander import standard_lander
+from cascade.std.dyad.launcher import standard_launcher
+from cascade.std.system.observer import standard_observer
+from cascade.test_utils import EventDrivenRunner
+from cascade.vm.registry import CodeRegistry
 
 
 async def actual_user_logic(arg1: str) -> str:

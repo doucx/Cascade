@@ -1,5 +1,5 @@
-from cascade.common.context import get_current_context, WorkflowContext
-from cascade.spec.dsl.inputs import ParamSpec, EnvSpec
+from cascade.common.context import WorkflowContext, get_current_context
+from cascade.spec.dsl.inputs import EnvSpec, ParamSpec
 
 
 def test_context_isolation():

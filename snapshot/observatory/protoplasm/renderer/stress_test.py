@@ -2,10 +2,10 @@ import asyncio
 import random
 import time
 
-from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 from observatory.visualization.grid import GridView
-from observatory.visualization.status import StatusBar
 from observatory.visualization.palette import Palettes
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.status import StatusBar
 
 # --- Configuration ---
 NUM_SOURCES = 10000

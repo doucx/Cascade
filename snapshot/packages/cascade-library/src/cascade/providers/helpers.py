@@ -1,14 +1,15 @@
-from typing import Dict, Any
+from __future__ import annotations
+
+from typing import Any
 
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import LazyFactory, Provider
-
 
 # --- Tasks ---
 
 
 @task(name="dict")
-def _dict_task(**kwargs) -> Dict[str, Any]:
+def _dict_task(**kwargs) -> dict[str, Any]:
     return kwargs
 
 

@@ -1,11 +1,12 @@
 import time
-from cascade.spec import EventIR, EventType, EventState
+
 from cascade.bus.events import (
     Event,
-    TaskExecutionStarted,
     TaskExecutionFinished,
+    TaskExecutionStarted,
     TaskSkipped,
 )
+from cascade.spec import EventIR, EventState, EventType
 
 
 def test_hydrate_lifecycle_started():

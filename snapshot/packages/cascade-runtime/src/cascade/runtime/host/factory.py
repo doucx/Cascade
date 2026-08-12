@@ -1,33 +1,35 @@
-import os
-import asyncio
-from typing import Optional
+from __future__ import annotations
 
-from .instance import Engine
-from cascade.spec.runtime import ExecutionStrategy, Solver, Executor
+import asyncio
+import os
+
 from cascade.bus.core import EventBus
-from cascade.runtime.services.resources.manager import ResourceManager
-from cascade.runtime.services.constraints.manager import ConstraintManager
-from cascade.runtime.services.resources.container import ResourceContainer
-from cascade.runtime.services.constraints.handlers import (
-    PauseConstraintHandler,
-    ConcurrencyConstraintHandler,
-    RateLimitConstraintHandler,
-)
 
 # Dynamic imports for strategies
 from cascade.execution.graph.solvers.native import NativeSolver
 from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.services.constraints.handlers import (
+    ConcurrencyConstraintHandler,
+    PauseConstraintHandler,
+    RateLimitConstraintHandler,
+)
+from cascade.runtime.services.constraints.manager import ConstraintManager
+from cascade.runtime.services.resources.container import ResourceContainer
+from cascade.runtime.services.resources.manager import ResourceManager
+from cascade.spec.runtime import ExecutionStrategy, Executor, Solver
+
+from .instance import Engine
 
 
 def create_engine(
     *,
     use_vm: bool = False,
-    solver: Optional[Solver] = None,
-    executor: Optional[Executor] = None,
-    bus: Optional[EventBus] = None,
-    strategy: Optional[ExecutionStrategy] = None,
-    resource_manager: Optional[ResourceManager] = None,
-    constraint_manager: Optional[ConstraintManager] = None,
+    solver: Solver | None = None,
+    executor: Executor | None = None,
+    bus: EventBus | None = None,
+    strategy: ExecutionStrategy | None = None,
+    resource_manager: ResourceManager | None = None,
+    constraint_manager: ConstraintManager | None = None,
     **kwargs,  # Pass-through for other Engine args like connector, system_resources etc.
 ) -> Engine:
     # 1. Provide sane defaults for core components

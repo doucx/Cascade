@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 import asyncio
 from collections import defaultdict
-from typing import Dict, List, Any, Callable, Awaitable, Optional
-from cascade.spec.runtime.interfaces import Connector, SubscriptionHandle
+from typing import Any, Awaitable, Callable
+
 from cascade.bus.feedback import bus
+from cascade.spec.runtime.interfaces import Connector, SubscriptionHandle
 
 
 class _LocalSubscriptionHandle(SubscriptionHandle):
     def __init__(
         self,
-        parent: "LocalBusConnector",
+        parent: LocalBusConnector,
         topic: str,
         queue: asyncio.Queue,
         listener_task: asyncio.Task,
@@ -53,10 +56,10 @@ class _LocalSubscriptionHandle(SubscriptionHandle):
 
 class LocalBusConnector(Connector):
     # --- Broker State (Shared across all instances) ---
-    _exact_subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)
-    _wildcard_subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)
-    _retained_messages: Dict[str, Any] = {}
-    _lock: Optional[asyncio.Lock] = None
+    _exact_subscriptions: dict[str, list[asyncio.Queue]] = defaultdict(list)
+    _wildcard_subscriptions: dict[str, list[asyncio.Queue]] = defaultdict(list)
+    _retained_messages: dict[str, Any] = {}
+    _lock: asyncio.Lock | None = None
 
     def __init__(self):
         # Default to True to support pre-run configuration in E2E tests
@@ -121,7 +124,7 @@ class LocalBusConnector(Connector):
                         await q.put((topic, payload))
 
     async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+        self, topic: str, callback: Callable[[str, dict], Awaitable[None]]
     ) -> SubscriptionHandle:
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")

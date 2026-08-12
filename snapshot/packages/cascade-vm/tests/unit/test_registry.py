@@ -1,5 +1,6 @@
-import pytest
 import logging
+
+import pytest
 from cascade.vm.registry import CodeRegistry
 
 

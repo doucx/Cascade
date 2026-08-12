@@ -1,18 +1,22 @@
+from __future__ import annotations
+
 import time
-from typing import Dict, Any
-from cascade.spec.dsl.constraint import GlobalConstraint
+from typing import Any
+
 from cascade.execution.graph.model.model import Node
-from .protocols import ConstraintHandler, HandlerContext
+from cascade.spec.dsl.constraint import GlobalConstraint
+
 from ..resources.manager import ResourceManager
+from .protocols import ConstraintHandler, HandlerContext
 
 
 class ConstraintManager(HandlerContext):
     def __init__(self, resource_manager: ResourceManager):
         self.resource_manager = resource_manager
         # Stores active constraints by their unique ID
-        self._constraints: Dict[str, GlobalConstraint] = {}
+        self._constraints: dict[str, GlobalConstraint] = {}
         # Stores registered handlers by the constraint type they handle
-        self._handlers: Dict[str, ConstraintHandler] = {}
+        self._handlers: dict[str, ConstraintHandler] = {}
         # Callback to wake up the engine loop
         self._wakeup_callback: Any = None
 
@@ -112,8 +116,8 @@ class ConstraintManager(HandlerContext):
         # If no handler denied permission, permit execution.
         return True
 
-    def get_extra_requirements(self, task: Node) -> Dict[str, Any]:
-        requirements: Dict[str, Any] = {}
+    def get_extra_requirements(self, task: Node) -> dict[str, Any]:
+        requirements: dict[str, Any] = {}
         for constraint in self._constraints.values():
             handler = self._handlers.get(constraint.type)
             if handler:

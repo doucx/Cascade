@@ -1,11 +1,12 @@
-import pytest
 import sys
-from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
+
+import pytest
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory, MemoryFullError
-from cascade.vm.reactor import Reactor
 from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.memory import MemoryFullError, VolatileMemory
+from cascade.vm.reactor import Reactor
 from cascade.vm.resource_registry import ResourceRegistry
 
 

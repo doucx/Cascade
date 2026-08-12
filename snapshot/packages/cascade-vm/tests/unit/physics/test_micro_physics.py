@@ -1,18 +1,16 @@
 import pytest
-
-from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.physical.dyad import LanderNode
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.dyad import LanderNode
+from cascade.spec.runtime.system import ControlCommand, SystemControlToken
 from cascade.spec.specs.dyad import LanderSpec
-from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-from cascade.vm.kernel import PhysicsKernel
-from cascade.vm.resource_registry import ResourceRegistry
 from cascade.std.dyad.lander import standard_lander
 from cascade.std.system.terminator import halt_signal
-
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.reactor import Reactor
+from cascade.vm.resource_registry import ResourceRegistry
 
 # --- Mocks ---
 

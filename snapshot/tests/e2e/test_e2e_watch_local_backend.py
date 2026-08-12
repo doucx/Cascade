@@ -1,10 +1,11 @@
 import asyncio
 import json
 import sys
-import pytest
+
 import cascade.sdk as cs
-from cascade.runtime import EventBus
+import pytest
 from cascade.connectors.local import LocalConnector
+from cascade.runtime import EventBus
 from cascade.runtime.services.observability.subscribers import TelemetrySubscriber
 
 # We import the internal logic from observer to test real-world behavior

@@ -1,12 +1,12 @@
 import time
 from dataclasses import asdict
 
-import pytest
 import cascade.sdk as cs
+import pytest
 from cascade.spec.dsl.constraint import GlobalConstraint
 
 # Use the deterministic Mock infrastructure from the SDK
-from cascade.test_utils.helpers import MockExecutor, MockConnector
+from cascade.test_utils.helpers import MockConnector, MockExecutor
 
 
 @pytest.mark.asyncio

@@ -1,13 +1,14 @@
-import time
-import asyncio
-from typing import Dict, Callable
+from __future__ import annotations
 
-from cascade.spec.physical.topology import BipartiteGraph
+import asyncio
+import time
+from typing import Callable
+
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.topology import Channel
-from cascade.vm.reactor import Reactor
+from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
+from cascade.vm.reactor import Reactor
 
 
 # --- Kernel ICs ---
@@ -55,7 +56,7 @@ async def run_async_yielding(iterations: int) -> float:
 
 
 def run_physical_tco_sync(
-    iterations: int, graph: BipartiteGraph, function_map: Dict[str, Callable]
+    iterations: int, graph: BipartiteGraph, function_map: dict[str, Callable]
 ):
     memory = VolatileMemory()
     reactor = Reactor(graph, memory, function_map)

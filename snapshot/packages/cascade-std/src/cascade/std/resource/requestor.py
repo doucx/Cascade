@@ -1,6 +1,7 @@
 from typing import Any
-from cascade.spec.physical.nodes import Token, PhysicsNode
+
 from cascade.spec.components import ResourceRequestorSpec
+from cascade.spec.physical.nodes import PhysicsNode, Token
 from cascade.spec.physics.binding import implements
 
 

@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import os
 from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Union, Tuple, IO
+from typing import IO, Any
+
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import LazyFactory, Provider
 
@@ -14,7 +17,7 @@ except ImportError:
 @dataclass
 class HttpResponse:
     status: int
-    headers: Dict[str, str]
+    headers: dict[str, str]
     body: bytes
 
     def text(self, encoding: str = "utf-8") -> str:
@@ -32,11 +35,11 @@ class HttpResponse:
 async def _perform_request(
     url: str,
     method: str,
-    params: Optional[Dict[str, str]] = None,
-    json_data: Optional[Any] = None,
-    headers: Optional[Dict[str, str]] = None,
-    data: Optional[Any] = None,
-    files: Optional[Dict[str, str]] = None,
+    params: dict[str, str] | None = None,
+    json_data: Any | None = None,
+    headers: dict[str, str] | None = None,
+    data: Any | None = None,
+    files: dict[str, str] | None = None,
 ) -> HttpResponse:
     if httpx is None:
         raise ImportError(
@@ -47,7 +50,7 @@ async def _perform_request(
     # Use ExitStack to ensure any files opened for upload are closed
     with ExitStack() as stack:
         # Prepare files for httpx
-        httpx_files: Optional[Dict[str, Union[IO[bytes], Tuple[str, IO[bytes]]]]] = None
+        httpx_files: dict[str, IO[bytes] | tuple[str, IO[bytes]]] | None = None
 
         if files:
             httpx_files = {}
@@ -85,8 +88,8 @@ async def _perform_request(
 @task(name="http_get")
 async def _http_get_task(
     url: str,
-    params: Optional[Dict[str, str]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    params: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> HttpResponse:
     return await _perform_request(url, "GET", params=params, headers=headers)
 
@@ -94,11 +97,11 @@ async def _http_get_task(
 @task(name="http_post")
 async def _http_post_task(
     url: str,
-    json: Optional[Any] = None,
-    data: Optional[Any] = None,
-    files: Optional[Dict[str, str]] = None,
-    headers: Optional[Dict[str, str]] = None,
-    params: Optional[Dict[str, str]] = None,
+    json: Any | None = None,
+    data: Any | None = None,
+    files: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
+    params: dict[str, str] | None = None,
 ) -> HttpResponse:
     return await _perform_request(
         url,
@@ -114,10 +117,10 @@ async def _http_post_task(
 @task(name="http_put")
 async def _http_put_task(
     url: str,
-    json: Optional[Any] = None,
-    data: Optional[Any] = None,
-    files: Optional[Dict[str, str]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    json: Any | None = None,
+    data: Any | None = None,
+    files: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> HttpResponse:
     return await _perform_request(
         url, "PUT", json_data=json, data=data, files=files, headers=headers
@@ -127,7 +130,7 @@ async def _http_put_task(
 @task(name="http_delete")
 async def _http_delete_task(
     url: str,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
 ) -> HttpResponse:
     return await _perform_request(url, "DELETE", headers=headers)
 
@@ -136,11 +139,11 @@ async def _http_delete_task(
 async def _http_request_task(
     url: str,
     method: str = "GET",
-    params: Optional[Dict[str, str]] = None,
-    json: Optional[Any] = None,
-    data: Optional[Any] = None,
-    files: Optional[Dict[str, str]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    params: dict[str, str] | None = None,
+    json: Any | None = None,
+    data: Any | None = None,
+    files: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> HttpResponse:
     return await _perform_request(
         url,

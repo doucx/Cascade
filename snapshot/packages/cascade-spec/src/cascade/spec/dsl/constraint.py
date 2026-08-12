@@ -1,10 +1,12 @@
-from typing import Dict, Any, Optional
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
 class ResourceConstraint:
-    requirements: Dict[str, Any] = field(default_factory=dict)
+    requirements: dict[str, Any] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         return not self.requirements
@@ -22,5 +24,5 @@ class GlobalConstraint:
     id: str
     scope: str  # e.g., "global", "project:quipu", "task:openai_request"
     type: str  # "concurrency", "rate_limit", "pause"
-    params: Dict[str, Any]  # e.g., {"limit": 5, "window": 60}
-    expires_at: Optional[float] = None
+    params: dict[str, Any]  # e.g., {"limit": 5, "window": 60}
+    expires_at: float | None = None

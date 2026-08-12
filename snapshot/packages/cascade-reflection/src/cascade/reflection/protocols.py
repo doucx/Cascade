@@ -1,4 +1,5 @@
-from typing import Protocol, Any
+from typing import Any, Protocol
+
 from cascade.spec.ir.graph import TaskDef
 
 

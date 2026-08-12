@@ -1,9 +1,9 @@
-from cascade.spec.ir.graph import NodeIR, TaskDef, ArgumentDef, ArgumentKind
-from cascade.spec.ir.fingerprint import Fingerprint
-from cascade.spec.physical.ports import PortRole
 from cascade.compiler.backend.expander import Expander
-from cascade.spec.physical.dyad import LauncherNode, LanderNode
+from cascade.spec.ir.fingerprint import Fingerprint
+from cascade.spec.ir.graph import ArgumentDef, ArgumentKind, NodeIR, TaskDef
+from cascade.spec.physical.dyad import LanderNode, LauncherNode
 from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.ports import PortRole
 from cascade.spec.specs.dyad import LanderSpec
 
 

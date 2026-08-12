@@ -1,15 +1,15 @@
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, Mock
 from contextlib import ExitStack
+from unittest.mock import AsyncMock, Mock
 
+import pytest
+from cascade.runtime.storage import InMemoryObjectStore
+from cascade.spec.dsl.task import task
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.object import Ref
 from cascade.spec.runtime import ExecutionContext
-from cascade.runtime.storage import InMemoryObjectStore
+from cascade.vm.compute import BridgedComputeService, ComputeRequest
 from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute import ComputeRequest, BridgedComputeService
-from cascade.spec.dsl.task import task
 
 
 # --- Test Functions ---
@@ -173,7 +173,7 @@ async def test_process_async_task(
 
     # 2. Act
     await inbound_queue.put(request)
-    reply_nid, result_token = await asyncio.wait_for(outbound_queue.get(), timeout=1)
+    _reply_nid, result_token = await asyncio.wait_for(outbound_queue.get(), timeout=1)
 
     # 3. Assert
     assert store.get(result_token.payload) == 5

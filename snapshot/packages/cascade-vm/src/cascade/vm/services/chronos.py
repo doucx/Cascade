@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Tuple
 
 from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime import DelayRequest
@@ -11,8 +12,8 @@ logger = logging.getLogger(__name__)
 class ChronosService:
     def __init__(
         self,
-        inbound_queue: "asyncio.Queue[DelayRequest]",
-        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
+        inbound_queue: asyncio.Queue[DelayRequest],
+        outbound_queue: asyncio.Queue[tuple[str, Token]],
         wakeup_event: asyncio.Event,
     ):
         self.inbound_queue = inbound_queue

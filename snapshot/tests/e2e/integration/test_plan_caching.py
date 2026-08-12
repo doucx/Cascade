@@ -1,7 +1,6 @@
 import pytest
-
-from cascade.sdk import task
 from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.sdk import task
 from cascade.test_utils.helpers import SpySolver
 
 

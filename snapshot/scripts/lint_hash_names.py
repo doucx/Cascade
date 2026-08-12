@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import ast
 import re
 from pathlib import Path
-from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -42,8 +43,8 @@ class HashNameVisitor(ast.NodeVisitor):
     def __init__(self, file_path: Path, check_ids: bool):
         self.file_path = file_path
         self.check_ids = check_ids
-        self.violations: List[Violation] = []
-        self.warnings: List[Violation] = []
+        self.violations: list[Violation] = []
+        self.warnings: list[Violation] = []
 
     def _check_hash_name(self, name: str, lineno: int):
         """核心检查逻辑：如果名称像哈希但又不合规，则记录违规。"""
@@ -79,7 +80,7 @@ class HashNameVisitor(ast.NodeVisitor):
 
 
 def _report_issues(
-    issues: List[Violation],
+    issues: list[Violation],
     title: str,
     context_lines: int,
 ):
@@ -132,7 +133,7 @@ def main(
     context_lines: int = typer.Option(
         3, "--context", "-C", help="显示违规行的前后文行数。"
     ),
-    exclude_dirs: Optional[List[str]] = typer.Option(
+    exclude_dirs: list[str] | None = typer.Option(
         [".venv", ".git", "__pycache__", "build", "dist"],
         "--exclude",
         "-e",
@@ -147,8 +148,8 @@ def main(
     """
     扫描 Python 代码库，查找并报告不符合哈希命名规范 v3.0 的变量。
     """
-    all_violations: List[Violation] = []
-    all_warnings: List[Violation] = []
+    all_violations: list[Violation] = []
+    all_warnings: list[Violation] = []
 
     files_to_scan = [
         p

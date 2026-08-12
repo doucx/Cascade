@@ -1,17 +1,18 @@
-from typing import Dict
+from __future__ import annotations
 
-from cascade.spec.ir.graph import NodeIR
-from ...expander import SubGraph
-from ..context import ExpansionContext
 from cascade.spec.compiler.interfaces import ExpansionPolicy, ResourcePrism
+from cascade.spec.ir.graph import NodeIR
+
+from ...expander import SubGraph
 from ...wiring.prisms.discrete import DiscreteResourcePrism
+from ..context import ExpansionContext
 
 
 class ResourceExpansionPolicy(ExpansionPolicy):
     def __init__(self):
         # In a more advanced system, this could be a dynamic registry.
         # For now, we hardcode the known prism implementations.
-        self._prisms: Dict[str, ResourcePrism] = {
+        self._prisms: dict[str, ResourcePrism] = {
             "discrete": DiscreteResourcePrism(),
         }
 

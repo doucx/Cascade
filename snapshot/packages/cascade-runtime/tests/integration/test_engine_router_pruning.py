@@ -1,7 +1,7 @@
-import pytest
 import cascade.sdk as cs
-from cascade.runtime import EventBus
+import pytest
 from cascade.bus.events import TaskSkipped
+from cascade.runtime import EventBus
 from cascade.test_utils.helpers import SpySubscriber
 
 

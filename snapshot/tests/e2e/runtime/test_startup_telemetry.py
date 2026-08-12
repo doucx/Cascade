@@ -1,7 +1,8 @@
-import pytest
 import cascade.sdk as cs
+import pytest
 from cascade.runtime import EventBus
 from cascade.runtime.services.observability.subscribers import TelemetrySubscriber
+
 from .harness import InProcessConnector
 
 

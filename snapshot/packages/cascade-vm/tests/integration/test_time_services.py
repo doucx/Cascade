@@ -1,23 +1,23 @@
 import asyncio
 import time
-import pytest
 
-from cascade.spec.physical.topology import BipartiteGraph, Channel
+import pytest
+from cascade.reflection import PhysicalIdGenerator
+from cascade.runtime.storage import InMemoryObjectStore
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.reflection import PhysicalIdGenerator
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.kernel import PhysicsKernel
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute import LocalComputeService
-from cascade.vm.services.chronos import ChronosService
-from cascade.runtime.storage import InMemoryObjectStore
+from cascade.spec.physical.topology import BipartiteGraph, Channel
 
 # Standard Library ICs
 from cascade.std.system.time import standard_sleep
+from cascade.vm.compute import LocalComputeService
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.machine import Machine
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.reactor import Reactor
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.services.chronos import ChronosService
 
 
 @pytest.mark.asyncio

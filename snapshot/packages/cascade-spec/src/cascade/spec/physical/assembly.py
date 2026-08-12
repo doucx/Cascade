@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
+from typing import Any, Dict
 
 from .topology import BipartiteGraph
 
@@ -19,7 +21,7 @@ class Assembly:
     symbol_table: SymbolTable = field(default_factory=dict)
 
     # Metadata about the assembly, such as compiler version, build time, etc.
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -27,14 +29,14 @@ class CompilationManifest:
     # Maps logical UUIDs (from LazyResult) to the base physical node ID.
     # Key: Logical UUID
     # Value: Physical Base ID (current_node_instance_hash)
-    logical_to_physical_map: Dict[str, str] = field(default_factory=dict)
+    logical_to_physical_map: dict[str, str] = field(default_factory=dict)
 
     # List of physical DataNode IDs that are initial sources of energy (e.g., const, pulse)
-    entry_points: List[str] = field(default_factory=list)
+    entry_points: list[str] = field(default_factory=list)
 
     # Maps the logical UUID of a root LazyResult to the physical DataNode ID
     # that will hold its final result.
-    exit_points: Dict[str, str] = field(default_factory=dict)
+    exit_points: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

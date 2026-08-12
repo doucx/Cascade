@@ -1,9 +1,10 @@
+from cascade.spec.compiler.interfaces import WiringPolicy
+from cascade.spec.components import EgressSpec
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.specs.dyad import LanderSpec, LauncherSpec
-from cascade.spec.components import EgressSpec
+
 from ...expander import SubGraph
 from ..context import WiringContext
-from cascade.spec.compiler.interfaces import WiringPolicy
 
 
 class ControlFlowWiringPolicy(WiringPolicy):

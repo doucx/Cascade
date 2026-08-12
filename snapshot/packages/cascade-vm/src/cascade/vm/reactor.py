@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import List, Dict, Tuple, Optional, Any
+from typing import Any
+
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsFuncNode, PhysicsDataNode, Token
-from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from .memory import VolatileMemory
+from cascade.spec.runtime.system import ControlCommand, SystemControlToken
+
 from .kernel import PhysicsKernel
+from .memory import VolatileMemory
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +20,7 @@ class Reactor:
         graph: BipartiteGraph,
         memory: VolatileMemory,
         kernel: PhysicsKernel,
-        ingress_queue: Optional[asyncio.Queue] = None,
+        ingress_queue: asyncio.Queue | None = None,
     ):
         self.graph = graph
         self.memory = memory
@@ -28,11 +32,11 @@ class Reactor:
         self.drain_event = asyncio.Event()
 
         # Indexing for O(1) lookups during step/fire
-        self._func_nodes: List[PhysicsFuncNode] = []
+        self._func_nodes: list[PhysicsFuncNode] = []
         # node_id -> List[(source_data_node_id, target_port_name)]
-        self._func_inputs: Dict[str, List[Tuple[str, str]]] = {}
+        self._func_inputs: dict[str, list[tuple[str, str]]] = {}
         # node_id -> List[Channel]
-        self._outbound_channels: Dict[str, List[Channel]] = {}
+        self._outbound_channels: dict[str, list[Channel]] = {}
 
         # 1. Identify Function Nodes
         for node in self.graph.nodes.values():
@@ -63,7 +67,7 @@ class Reactor:
                 # Record the full channel to support filtering logic later
                 self._outbound_channels[source.id].append(channel)
 
-    def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:
+    def prime(self, genesis_trace: dict[str, Any] | None = None) -> None:
         genesis_trace = genesis_trace or {}
         for node in self.graph.nodes.values():
             if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
@@ -79,8 +83,8 @@ class Reactor:
         # 0. Ingress Cycle
         self._process_ingress()
 
-        nodes_to_fire: List[PhysicsFuncNode] = []
-        inputs_for_fire: Dict[str, Dict[str, Token]] = {}
+        nodes_to_fire: list[PhysicsFuncNode] = []
+        inputs_for_fire: dict[str, dict[str, Token]] = {}
 
         # --- ATOMIC SCAN & CONSUME ---
         # This loop is single-threaded and sequential. The state of `memory`
@@ -123,7 +127,7 @@ class Reactor:
         return len(nodes_to_fire)
 
     def _handle_results_immediate(
-        self, node: PhysicsFuncNode, results: Dict[str, Token]
+        self, node: PhysicsFuncNode, results: dict[str, Token]
     ) -> None:
         if not isinstance(results, dict):
             logger.error(

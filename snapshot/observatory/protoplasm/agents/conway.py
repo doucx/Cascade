@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import asyncio
-from typing import List, Dict, Tuple, Any
+from typing import Any
+
 import cascade.sdk as cs
 from cascade.spec.protocols import Connector
 
@@ -40,11 +43,11 @@ async def report_to_validator(
 @cs.task
 async def collect_neighbors(
     current_gen: int,
-    current_mb: Dict[int, Dict[int, int]],
-    my_neighbor_ids: List[int],
+    current_mb: dict[int, dict[int, int]],
+    my_neighbor_ids: list[int],
     conn: Connector,
     rendezvous: Any = None,  # Dummy argument to force ordering
-) -> Tuple[Dict[int, int], Dict[int, Dict[int, int]]]:
+) -> tuple[dict[int, int], dict[int, dict[int, int]]]:
     """
     Waits for all neighbors' state for the specified generation.
     Returns (neighbors_data, next_mailbox).
@@ -101,13 +104,13 @@ def conway_agent(
     x: int,
     y: int,
     initial_state: int,
-    neighbor_ids: List[int],
+    neighbor_ids: list[int],
     topic_base: str,
     validator_topic: str,
     connector: Connector,
     max_generations: int = 100,
 ):
-    def lifecycle(gen: int, current_state: int, mailbox: Dict[int, Dict[int, int]]):
+    def lifecycle(gen: int, current_state: int, mailbox: dict[int, dict[int, int]]):
         if gen >= max_generations:
             return current_state
 

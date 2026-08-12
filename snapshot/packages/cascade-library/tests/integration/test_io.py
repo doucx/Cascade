@@ -1,5 +1,5 @@
-import pytest
 import cascade.sdk as cs
+import pytest
 
 
 @pytest.fixture
@@ -45,8 +45,8 @@ def test_provider_registry_namespace_resolution():
     # or that we registered them via pyproject.toml (if installed in editable mode).
     # If not installed, we can manually register for this unit test.
 
-    from cascade.providers.registry import registry, ProviderNamespace
     from cascade.providers.io import ReadTextProvider
+    from cascade.providers.registry import ProviderNamespace, registry
 
     # Manual registration to ensure test isolation
     registry.register("read.text", ReadTextProvider().create_factory())

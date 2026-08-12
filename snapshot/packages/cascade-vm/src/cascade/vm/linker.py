@@ -1,22 +1,25 @@
-from typing import Dict, Callable, Optional
+from __future__ import annotations
 
-from cascade.spec.physical.assembly import Assembly
-from cascade.spec.physical.nodes import PhysicsFuncNode
+from typing import Callable
+
 from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.physical.assembly import Assembly
 from cascade.spec.physical.constants import NodePrefix
-from .registry import CodeRegistry
+from cascade.spec.physical.nodes import PhysicsFuncNode
+from cascade.std.dyad.lander import standard_lander
 
 # Dyad Implementations
 from cascade.std.dyad.launcher import standard_launcher
-from cascade.std.dyad.lander import standard_lander
-
-# Common Standard Library
-from cascade.std.system.observer import standard_observer
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.system.egress import standard_egress
 from cascade.std.system.gate import gate_passthrough
+
+# Common Standard Library
+from cascade.std.system.observer import standard_observer
 from cascade.std.system.time import standard_sleep
+
+from .registry import CodeRegistry
 
 
 class LinkerError(RuntimeError):
@@ -24,12 +27,12 @@ class LinkerError(RuntimeError):
 
 
 class Linker:
-    def link(self, assembly: Assembly, registry: CodeRegistry) -> Dict[str, Callable]:
+    def link(self, assembly: Assembly, registry: CodeRegistry) -> dict[str, Callable]:
         # Phase 1: Integrity Validation
         self._verify_integrity(assembly, registry)
 
         # Phase 2: Function Mapping
-        function_map: Dict[str, Callable] = {}
+        function_map: dict[str, Callable] = {}
         for node_id, node in assembly.graph.nodes.items():
             if not isinstance(node, PhysicsFuncNode):
                 continue
@@ -53,14 +56,14 @@ class Linker:
         }
 
         if missing_hashes:
-            missing_list = "\n - ".join(sorted(list(missing_hashes)))
+            missing_list = "\n - ".join(sorted(missing_hashes))
             raise LinkerError(
                 f"Linker integrity check failed. The following code hashes "
                 f"are required by the assembly but were not found in the CodeRegistry:\n"
                 f" - {missing_list}"
             )
 
-    def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:
+    def _resolve_stdlib(self, node_id: str) -> Callable | None:
         # Dyad Primitives
         if node_id.endswith(f".{NodePrefix.LAUNCH}"):
             return standard_launcher

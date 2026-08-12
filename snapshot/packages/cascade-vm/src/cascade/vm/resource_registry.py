@@ -1,9 +1,11 @@
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import Any
 
 
 class ResourceRegistry:
     def __init__(self):
-        self._resources: Dict[str, Any] = {}
+        self._resources: dict[str, Any] = {}
 
     def register(self, resource_id: str, resource: Any) -> None:
         if resource_id in self._resources:

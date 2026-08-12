@@ -1,6 +1,8 @@
-import pytest
-import json
 import asyncio
+import json
+
+import pytest
+
 # REMOVED: Top-level import of MqttConnector to prevent early loading
 # from cascade.connectors.mqtt import MqttConnector
 

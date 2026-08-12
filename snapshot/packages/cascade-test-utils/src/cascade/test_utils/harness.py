@@ -1,27 +1,26 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import uuid
-from typing import Dict, Any, Callable, TypeVar, Optional, List, Tuple
+from typing import Any, Callable, TypeVar
 
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
-from cascade.spec.physical.object import Ref
-
-from cascade.spec.runtime import DelayRequest
-
-from cascade.vm.reactor import Reactor
-from cascade.spec.vm.interfaces import ReactorProtocol
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.kernel import PhysicsKernel
 from cascade.bus.core import EventBus
 from cascade.bus.events import Event, TaskExecutionFinished
-from cascade.spec.runtime import ComputeRequest
-from cascade.vm.compute import LocalComputeService
-from cascade.vm.services.chronos import ChronosService
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.linker import Linker
 from cascade.spec.physical.assembly import Assembly
+from cascade.spec.physical.nodes import PhysicsDataNode, Token
+from cascade.spec.physical.object import Ref
+from cascade.spec.physical.topology import BipartiteGraph
+from cascade.spec.runtime import ComputeRequest, DelayRequest
+from cascade.spec.vm.interfaces import ReactorProtocol
+from cascade.vm.compute import LocalComputeService
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.linker import Linker
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.reactor import Reactor
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.services.chronos import ChronosService
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +37,8 @@ class EventDrivenRunner:
         cls,
         assembly: Assembly,
         code_registry: CodeRegistry,
-        reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
-    ) -> "EventDrivenRunner":
+        reactor_factory: Callable[..., ReactorProtocol] | None = None,
+    ) -> EventDrivenRunner:
         linker = Linker()
         # This will raise LinkerError if code_registry is missing required hashes
         function_map = linker.link(assembly, code_registry)
@@ -48,9 +47,9 @@ class EventDrivenRunner:
     def __init__(
         self,
         graph: BipartiteGraph,
-        function_map: Dict[str, Callable],
+        function_map: dict[str, Callable],
         code_registry: CodeRegistry,
-        reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
+        reactor_factory: Callable[..., ReactorProtocol] | None = None,
     ):
         self.graph = graph
         self.memory = VolatileMemory()
@@ -59,8 +58,8 @@ class EventDrivenRunner:
         # 1. Setup Queues for disconnected execution
         self.compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
         self.chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
-        self.ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
-        self.egress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
+        self.ingress_queue: asyncio.Queue[tuple[str, Token]] = asyncio.Queue()
+        self.egress_queue: asyncio.Queue[tuple[str, Token]] = asyncio.Queue()
 
         # 2. Setup Services
         from cascade.runtime.storage import InMemoryObjectStore
@@ -83,7 +82,7 @@ class EventDrivenRunner:
         # 3. Setup Event Bus & Resource Registry
         self.event_bus = EventBus()
         self.event_queue: asyncio.Queue[Event] = asyncio.Queue()
-        self._captured_events: List[Event] = []
+        self._captured_events: list[Event] = []
         self.event_bus.subscribe(Event, self._on_event)
 
         self.resource_registry = ResourceRegistry()
@@ -109,7 +108,7 @@ class EventDrivenRunner:
         self.machine = Machine(
             self.reactor, self.compute_service, self.chronos_service, self.wakeup_event
         )
-        self._loop_task: Optional[asyncio.Task] = None
+        self._loop_task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
 
     def _on_event(self, event: Event):
@@ -154,7 +153,7 @@ class EventDrivenRunner:
             self._loop_task = None
 
     def inject_input(
-        self, node_id: str, payload: Any, trace: Optional[Dict[str, Any]] = None
+        self, node_id: str, payload: Any, trace: dict[str, Any] | None = None
     ):
         node = self.graph.nodes[node_id]
         if not isinstance(node, PhysicsDataNode):

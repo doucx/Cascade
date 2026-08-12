@@ -1,6 +1,6 @@
 import pytest
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
-from cascade.vm.memory import VolatileMemory, MemoryFullError, MemoryEmptyError
+from cascade.spec.physical.nodes import PhysicsDataNode, Token
+from cascade.vm.memory import MemoryEmptyError, MemoryFullError, VolatileMemory
 
 
 def test_basic_put_and_take():

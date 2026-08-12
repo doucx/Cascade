@@ -1,5 +1,5 @@
-from cascade.sdk import task
 from cascade.execution.graph.model.build import build_graph
+from cascade.sdk import task
 
 
 @task(mode="compute")
@@ -32,7 +32,7 @@ def test_execution_mode_is_passed_to_node():
     target = collect_results(ct, bt, dt)
 
     # 2. Build the graph
-    graph, instance_map, _ = build_graph(target)
+    _graph, instance_map, _ = build_graph(target)
 
     # 3. Find the nodes in the graph
     compute_node = instance_map[ct._uuid]

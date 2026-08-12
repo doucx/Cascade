@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Dict, List
+
 from .nodes import PhysicsNode
 
 
@@ -16,6 +18,6 @@ class Channel:
 
 @dataclass
 class BipartiteGraph:
-    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
+    nodes: dict[str, PhysicsNode] = field(default_factory=dict)
 
-    channels: List[Channel] = field(default_factory=list)
+    channels: list[Channel] = field(default_factory=list)

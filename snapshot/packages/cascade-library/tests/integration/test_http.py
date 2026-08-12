@@ -1,6 +1,6 @@
-import pytest
-import cascade.sdk as cs
 import aiohttp
+import cascade.sdk as cs
+import pytest
 
 # Mark all tests in this module to be skipped if dependencies are not installed
 pytest.importorskip("aiohttp")  # For the mock server fixture (aiohttp_client)

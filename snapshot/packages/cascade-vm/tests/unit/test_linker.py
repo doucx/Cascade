@@ -1,11 +1,10 @@
 import pytest
-
 from cascade.spec.physical.assembly import Assembly, SymbolTable
-from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.dyad import LauncherNode
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.linker import Linker, LinkerError
+from cascade.spec.physical.topology import BipartiteGraph
 from cascade.std.dyad.launcher import standard_launcher
+from cascade.vm.linker import Linker, LinkerError
+from cascade.vm.registry import CodeRegistry
 
 
 def dummy_task_a():

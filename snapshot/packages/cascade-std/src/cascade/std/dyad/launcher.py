@@ -1,14 +1,16 @@
-from typing import Any, Dict, List
-import time
-import logging
+from __future__ import annotations
 
-from cascade.spec import EventIR, EventType, EventState, EventContext
-from cascade.spec.physical.nodes import Token
+import logging
+import time
+from typing import Any
+
+from cascade.spec import EventContext, EventIR, EventState, EventType
 from cascade.spec.physical.dyad import LauncherNode
+from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.ports import PortRole
-from cascade.spec.specs.dyad import LauncherSpec
 from cascade.spec.physics.binding import implements
 from cascade.spec.runtime import ComputeRequest
+from cascade.spec.specs.dyad import LauncherSpec
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +18,10 @@ logger = logging.getLogger(__name__)
 @implements(LauncherSpec)
 def standard_launcher(io: LauncherSpec.IO, node: LauncherNode, resources: Any) -> None:
     # 1. Prepare Inputs & Trace
-    pos_args: Dict[int, Any] = {}
-    input_kwargs: Dict[str, Any] = {}
-    trace_payload: Dict[str, Any] = {}
-    held_resources: List[str] = []
+    pos_args: dict[int, Any] = {}
+    input_kwargs: dict[str, Any] = {}
+    trace_payload: dict[str, Any] = {}
+    held_resources: list[str] = []
 
     # Iterate over all connected input ports
     for port_name, input_token in io.args.items():

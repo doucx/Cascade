@@ -1,21 +1,22 @@
-from collections import deque
-from typing import Dict, List
+from __future__ import annotations
 
-from cascade.execution.graph.model.model import Graph, Node, EdgeType
-from cascade.spec.runtime.interfaces import Solver, ExecutionPlan
+from collections import deque
+
+from cascade.execution.graph.model.model import EdgeType, Graph, Node
+from cascade.spec.runtime.interfaces import ExecutionPlan, Solver
 
 
 class NativeSolver(Solver):
     def resolve(self, graph: Graph) -> ExecutionPlan:
         executable_nodes = graph.nodes
 
-        adj: Dict[str, List[Node]] = {
+        adj: dict[str, list[Node]] = {
             node.current_node_instance_hash: [] for node in executable_nodes
         }
-        in_degree: Dict[str, int] = {
+        in_degree: dict[str, int] = {
             node.current_node_instance_hash: 0 for node in executable_nodes
         }
-        node_map: Dict[str, Node] = {
+        node_map: dict[str, Node] = {
             node.current_node_instance_hash: node for node in executable_nodes
         }
 
@@ -58,7 +59,7 @@ class NativeSolver(Solver):
         while queue:
             # All nodes in the current queue can be run in parallel, forming one stage.
             # Sort for deterministic output, useful for testing.
-            stage_ids = sorted(list(queue))
+            stage_ids = sorted(queue)
             stage_nodes = [node_map[nid] for nid in stage_ids]
             plan.append(stage_nodes)
             queue.clear()

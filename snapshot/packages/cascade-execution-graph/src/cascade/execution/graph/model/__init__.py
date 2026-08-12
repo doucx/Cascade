@@ -1,3 +1,3 @@
-from .exceptions import StaticGraphError, CascadeGraphError
+from .exceptions import CascadeGraphError, StaticGraphError
 
-__all__ = ["StaticGraphError", "CascadeGraphError"]
+__all__ = ["CascadeGraphError", "StaticGraphError"]

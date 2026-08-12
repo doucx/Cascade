@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import inspect
 import logging
 from contextlib import ExitStack
-from typing import Any, Dict, List, Tuple, Callable
+from typing import Any, Callable
 
+from cascade.bus.events import ResourceAcquired, ResourceReleased
 from cascade.spec.dsl.resources import Inject
 from cascade.spec.runtime import ExecutionContext
-from cascade.bus.events import ResourceAcquired, ResourceReleased
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +19,8 @@ class SignatureBinder:
         self.context = context
 
     def bind_and_resolve(
-        self, args: List[Any], kwargs: Dict[str, Any], stack: ExitStack
-    ) -> Tuple[List[Any], Dict[str, Any]]:
+        self, args: list[Any], kwargs: dict[str, Any], stack: ExitStack
+    ) -> tuple[list[Any], dict[str, Any]]:
         # With the new IR spec, the caller is responsible for providing
         # clean args and kwargs. This binder's role is simplified.
 

@@ -1,29 +1,29 @@
-from contextlib import contextmanager
-from typing import Callable, Any, List, Dict, Awaitable
-from unittest.mock import MagicMock
+from __future__ import annotations
+
 import asyncio
 import uuid
+from contextlib import contextmanager
 from dataclasses import asdict
-from cascade.runtime.io.executors.local import LocalExecutor
+from typing import Any, Awaitable, Callable
+from unittest.mock import MagicMock
 
-from cascade.runtime.host.instance import Engine
-from cascade.runtime import EventBus
 from cascade.bus.events import Event
+from cascade.execution.graph.model.model import Graph, Node
+from cascade.runtime import EventBus
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.spec.dsl.constraint import GlobalConstraint
 from cascade.spec.runtime.interfaces import (
-    Solver,
-    Executor,
-    ExecutionPlan,
     Connector,
+    ExecutionPlan,
+    Executor,
+    Solver,
     SubscriptionHandle,
 )
-from cascade.execution.graph.model.model import Node, Graph
-from cascade.spec.dsl.constraint import GlobalConstraint
 
 
 @contextmanager
-def override_resource(
-    engine: "Engine", name: str, new_resource_func: Callable[[], Any]
-):
+def override_resource(engine: Engine, name: str, new_resource_func: Callable[[], Any]):
     if not hasattr(engine, "override_resource_provider"):
         raise TypeError("The provided engine does not support resource overriding.")
 
@@ -70,14 +70,14 @@ class MockSolver(Solver):
 
 class SpyExecutor(Executor):
     def __init__(self):
-        self.call_log: List[Node] = []
+        self.call_log: list[Node] = []
 
     async def execute(
         self,
         node: Node,
         callable_obj: Callable,
-        args: List[Any],
-        kwargs: Dict[str, Any],
+        args: list[Any],
+        kwargs: dict[str, Any],
     ) -> Any:
         self.call_log.append(node)
         return f"executed_{node.name}"
@@ -92,8 +92,8 @@ class MockExecutor(Executor):
         self,
         node: Node,
         callable_obj: Callable,
-        args: List[Any],
-        kwargs: Dict[str, Any],
+        args: list[Any],
+        kwargs: dict[str, Any],
     ):
         if self.delay > 0:
             await asyncio.sleep(self.delay)
@@ -108,7 +108,7 @@ class MockExecutor(Executor):
 
 
 class MockSubscriptionHandle(SubscriptionHandle):
-    def __init__(self, parent: "MockConnector", topic: str):
+    def __init__(self, parent: MockConnector, topic: str):
         self._parent = parent
         self._topic = topic
 
@@ -129,12 +129,12 @@ class TimedMockExecutor(LocalExecutor):
 
 class MockConnector(Connector):
     def __init__(self):
-        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
+        self.subscriptions: dict[str, Callable[[str, dict], Awaitable[None]]] = {}
         # Simulate broker storage for retained messages: topic -> payload
-        self.retained_messages: Dict[str, Dict[str, Any]] = {}
+        self.retained_messages: dict[str, dict[str, Any]] = {}
         self.connected: bool = False
         self.disconnected: bool = False
-        self.publish_log: List[Dict[str, Any]] = []
+        self.publish_log: list[dict[str, Any]] = []
 
     async def connect(self) -> None:
         self.connected = True
@@ -145,7 +145,7 @@ class MockConnector(Connector):
         self.connected = False
 
     async def publish(
-        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
+        self, topic: str, payload: dict[str, Any], qos: int = 0, retain: bool = False
     ) -> None:
         self.publish_log.append(
             {"topic": topic, "payload": payload, "retain": retain, "qos": qos}
@@ -161,7 +161,7 @@ class MockConnector(Connector):
         await self._trigger_message(topic, payload)
 
     async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+        self, topic: str, callback: Callable[[str, dict], Awaitable[None]]
     ) -> SubscriptionHandle:
         self.subscriptions[topic] = callback
 
@@ -175,10 +175,10 @@ class MockConnector(Connector):
 
         return MockSubscriptionHandle(self, topic)
 
-    def seed_retained_message(self, topic: str, payload: Dict[str, Any]):
+    def seed_retained_message(self, topic: str, payload: dict[str, Any]):
         self.retained_messages[topic] = payload
 
-    async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
+    async def _trigger_message(self, topic: str, payload: dict[str, Any]):
         for sub_topic, callback in self.subscriptions.items():
             if self._topic_matches(subscription=sub_topic, topic=topic):
                 await callback(topic, payload)
@@ -220,14 +220,14 @@ class ControllerTestApp:
 
 
 __all__ = [
-    "override_resource",
-    "SpySubscriber",
-    "SpySolver",
-    "MockSolver",
-    "SpyExecutor",
-    "MockExecutor",
-    "MockSubscriptionHandle",
-    "MockConnector",
     "ControllerTestApp",
+    "MockConnector",
+    "MockExecutor",
+    "MockSolver",
+    "MockSubscriptionHandle",
+    "SpyExecutor",
+    "SpySolver",
+    "SpySubscriber",
     "TimedMockExecutor",
+    "override_resource",
 ]

@@ -1,7 +1,8 @@
-from typing import Optional, List
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsNode, PhysicsFuncNode, PhysicsDataNode
+from __future__ import annotations
+
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, PhysicsNode
 from cascade.spec.physical.ports import PortRole
+from cascade.spec.physical.topology import BipartiteGraph, Channel
 
 
 class InspectionError(AssertionError):
@@ -48,7 +49,7 @@ class GraphInspector:
         node_id: str,
         count: int,
         direction: str = "output",
-        role: Optional[PortRole] = None,
+        role: PortRole | None = None,
     ) -> None:
         node = self.get_func_node(node_id)
         ports = node.input_ports if direction == "input" else node.output_ports
@@ -68,8 +69,8 @@ class GraphInspector:
         self,
         source_id: str,
         target_id: str,
-        source_port: Optional[str] = None,
-        target_port: Optional[str] = None,
+        source_port: str | None = None,
+        target_port: str | None = None,
     ) -> Channel:
         candidates = [
             c
@@ -101,8 +102,8 @@ class GraphInspector:
         return matches[0]
 
     def find_channels_from(
-        self, source_id: str, source_port: Optional[str] = None
-    ) -> List[Channel]:
+        self, source_id: str, source_port: str | None = None
+    ) -> list[Channel]:
         return [
             c
             for c in self.graph.channels

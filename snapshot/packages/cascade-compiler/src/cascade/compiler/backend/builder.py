@@ -1,38 +1,38 @@
-from typing import List
+from __future__ import annotations
 
+from cascade.spec.compiler.interfaces import ExpansionPolicy, WiringPolicy
 from cascade.spec.ir.graph import GraphIR
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.assembly import (
     Assembly,
     CompilationArtifact,
     CompilationManifest,
 )
-from cascade.spec.compiler.interfaces import WiringPolicy, ExpansionPolicy
+from cascade.spec.physical.constants import NodePrefix
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.physical.topology import BipartiteGraph
 
 from .expander import Expander
-from .validator import GraphValidator
-from .wiring import WiringHarness
-from .wiring.context import WiringContext
-from .expansion.policies.parameter import (
-    ParameterExpansionPolicy,
-)
 from .expansion.policies.control import (
     ControlFlowExpansionPolicy,
+)
+from .expansion.policies.parameter import (
+    ParameterExpansionPolicy,
 )
 from .expansion.policies.pulse import PulseExpansionPolicy
 from .expansion.policies.resource import (
     ResourceExpansionPolicy,
 )
-from .wiring.policies.parameter import ParameterWiringPolicy
+from .validator import GraphValidator
+from .wiring import WiringHarness
+from .wiring.context import WiringContext
 from .wiring.policies.control import ControlFlowWiringPolicy
 from .wiring.policies.observability import (
     ObservabilityWiringPolicy,
 )
-from .wiring.policies.resource import ResourceWiringPolicy
+from .wiring.policies.parameter import ParameterWiringPolicy
 from .wiring.policies.pulse import PulseWiringPolicy
-from cascade.spec.physical.constants import NodePrefix
+from .wiring.policies.resource import ResourceWiringPolicy
 
 
 class Builder:
@@ -46,13 +46,13 @@ class Builder:
         # A bit of a hack to share. A proper DI system would be better.
         resource_expansion_policy._prisms = resource_wiring_policy._prisms
 
-        self._expansion_policies: List[ExpansionPolicy] = [
+        self._expansion_policies: list[ExpansionPolicy] = [
             resource_expansion_policy,
             ParameterExpansionPolicy(),
             ControlFlowExpansionPolicy(),
             PulseExpansionPolicy(),
         ]
-        self._wiring_policies: List[WiringPolicy] = [
+        self._wiring_policies: list[WiringPolicy] = [
             resource_wiring_policy,
             ObservabilityWiringPolicy(),
             ParameterWiringPolicy(),
@@ -128,10 +128,7 @@ class Builder:
             node_id
             for node_id, node in physical_graph.nodes.items()
             if isinstance(node, PhysicsDataNode)
-            and (
-                node_id.startswith(f"{NodePrefix.CONST}.")
-                or node_id.startswith(f"{NodePrefix.PULSE}.")
-            )
+            and (node_id.startswith((f"{NodePrefix.CONST}.", f"{NodePrefix.PULSE}.")))
         ]
         exit_points = {
             node.id.split(".")[1]: node.id

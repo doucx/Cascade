@@ -8,4 +8,4 @@ from cascade.sdk import ControllerTestApp
 InProcessConnector = LocalBusConnector
 
 # ControllerTestApp is now imported from cascade
-__all__ = ["InProcessConnector", "ControllerTestApp"]
+__all__ = ["ControllerTestApp", "InProcessConnector"]

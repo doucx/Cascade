@@ -1,25 +1,26 @@
+from __future__ import annotations
+
+from typing import Any
+
 import pytest
-from typing import Dict, Any
-
-from cascade.spec.physical.object import Ref
 from cascade.spec.physical.nodes import PhysicsFuncNode
-from cascade.vm.resource_registry import ResourceRegistry
+from cascade.spec.physical.object import Ref
 from cascade.vm.kernel.core import PhysicsKernel
-
+from cascade.vm.resource_registry import ResourceRegistry
 
 # --- Kernel Function Mocks ---
 
 
 def kernel_identity(
-    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: Any
-) -> Dict[str, Ref]:
+    inputs: dict[str, Ref], node: PhysicsFuncNode, resources: Any
+) -> dict[str, Ref]:
     # Simple pass-through: input 'in' -> output 'out'
     return {"out": inputs["in"]}
 
 
 def kernel_resource_access(
-    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: ResourceRegistry
-) -> Dict[str, Ref]:
+    inputs: dict[str, Ref], node: PhysicsFuncNode, resources: ResourceRegistry
+) -> dict[str, Ref]:
     # Validates that we can access resources
     config = resources.get("config")
     # Return a synthetic Ref based on config (just for testing logic)
@@ -27,8 +28,8 @@ def kernel_resource_access(
 
 
 def kernel_fail(
-    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: Any
-) -> Dict[str, Ref]:
+    inputs: dict[str, Ref], node: PhysicsFuncNode, resources: Any
+) -> dict[str, Ref]:
     raise RuntimeError("Kernel Crash")
 
 

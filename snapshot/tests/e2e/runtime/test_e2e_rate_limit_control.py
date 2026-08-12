@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import time
-import pytest
+
 import cascade.sdk as cs
+import pytest
 from cascade.bus.events import TaskExecutionFinished
 from cascade.test_utils.helpers import MockExecutor
 
@@ -19,11 +22,12 @@ async def test_e2e_rate_limit_control(engine_factory, bus_and_spy):
     bus, spy = bus_and_spy
 
     # 2. Setup Helper (Inline to avoid complex harness changes for now)
-    from cascade.spec.dsl.constraint import GlobalConstraint
-    from dataclasses import asdict
     import uuid
+    from dataclasses import asdict
 
-    async def set_rate_limit(scope: str, rate: str, capacity: float = None):
+    from cascade.spec.dsl.constraint import GlobalConstraint
+
+    async def set_rate_limit(scope: str, rate: str, capacity: float | None = None):
         params = {"rate": rate}
         if capacity is not None:
             params["capacity"] = capacity

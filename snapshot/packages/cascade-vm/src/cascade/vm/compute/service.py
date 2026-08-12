@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any
 
 from cascade.spec.physical.nodes import Token
-from cascade.spec.runtime.storage import ObjectStore
-from ..registry import CodeRegistry
 from cascade.spec.runtime import ComputeRequest
+from cascade.spec.runtime.storage import ObjectStore
+
+from ..registry import CodeRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +20,10 @@ class LocalComputeService:
         self,
         store: ObjectStore,
         registry: CodeRegistry,
-        inbound_queue: "asyncio.Queue[ComputeRequest]",
-        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
-        max_workers: Optional[int] = None,
-        wakeup_event: Optional[asyncio.Event] = None,
+        inbound_queue: asyncio.Queue[ComputeRequest],
+        outbound_queue: asyncio.Queue[tuple[str, Token]],
+        max_workers: int | None = None,
+        wakeup_event: asyncio.Event | None = None,
     ):
         self.store = store
         self.registry = registry
@@ -101,13 +104,13 @@ class LocalComputeService:
             self._wakeup_event.set()
 
     def _resolve_arguments(
-        self, inputs: Dict[str, Any]
-    ) -> Tuple[List[Any], Dict[str, Any]]:
+        self, inputs: dict[str, Any]
+    ) -> tuple[list[Any], dict[str, Any]]:
         # This method is now DEPRECATED due to the new ComputeRequest format
         # but we keep it to avoid breaking other potential internal usages,
         # though it's unlikely.
-        args_map: Dict[int, Any] = {}
-        kwargs: Dict[str, Any] = {}
+        args_map: dict[int, Any] = {}
+        kwargs: dict[str, Any] = {}
 
         for k, v in inputs.items():
             if k.isdigit():
@@ -115,7 +118,7 @@ class LocalComputeService:
             else:
                 kwargs[k] = v
 
-        args: List[Any] = []
+        args: list[Any] = []
         if args_map:
             max_idx = max(args_map.keys())
             args = [None] * (max_idx + 1)

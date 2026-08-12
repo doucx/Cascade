@@ -1,17 +1,18 @@
-import pytest
 import sys
 import time
-from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec import EventIR, EventType, EventState
+
+import pytest
 from cascade.bus.events import Event, TaskExecutionFinished
+from cascade.spec import EventIR, EventState, EventType
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
+from cascade.spec.physical.object import Ref
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.physical.system_nodes import ObservabilityNode
+from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.std.system.observer import standard_observer
+from cascade.test_utils import EventDrivenRunner
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
-from cascade.test_utils import EventDrivenRunner
-from cascade.spec.physical.system_nodes import ObservabilityNode
-from cascade.spec.physical.object import Ref
-from cascade.std.system.observer import standard_observer
 from cascade.vm.registry import CodeRegistry
 
 
@@ -46,7 +47,7 @@ def simple_topology():
 
 @pytest.mark.asyncio
 async def test_reactor_step_idle(simple_topology):
-    graph, d1, f1 = simple_topology
+    graph, _d1, f1 = simple_topology
     memory = VolatileMemory()
     function_map = {f1.id: noop}
     reactor = Reactor(graph, memory, function_map)

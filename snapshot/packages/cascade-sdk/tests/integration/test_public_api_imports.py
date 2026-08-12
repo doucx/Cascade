@@ -4,11 +4,11 @@ import pytest
 def test_core_components_are_accessible_from_top_level():
     try:
         from cascade.sdk import (
+            DependencyMissingError,
             Engine,
             EventBus,
-            NativeSolver,
             LocalExecutor,
-            DependencyMissingError,
+            NativeSolver,
         )
     except ImportError as e:
         pytest.fail(f"Failed to import core components from top-level 'cascade': {e}")

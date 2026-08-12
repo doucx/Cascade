@@ -1,14 +1,14 @@
 import asyncio
 import sys
 import time
-import pytest
-import cascade.sdk as cs
-from cascade.bus.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-)
-from cascade.connectors.local.connector import LocalConnector, POLL_INTERVAL
 
+import cascade.sdk as cs
+import pytest
+from cascade.bus.events import (
+    TaskExecutionFinished,
+    TaskExecutionStarted,
+)
+from cascade.connectors.local.connector import POLL_INTERVAL, LocalConnector
 
 # --- Fixtures ---
 

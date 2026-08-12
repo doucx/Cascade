@@ -6,8 +6,8 @@ try:
 except ImportError:
     typer = None
 
-from cascade.spec.dsl.fluent import LazyResult
 from cascade.common.context import get_current_context
+from cascade.spec.dsl.fluent import LazyResult
 from cascade.spec.dsl.inputs import ParamSpec
 
 
@@ -97,7 +97,7 @@ def create_cli(target: "LazyResult[Any]") -> Callable[[], None]:
 
     # Set the dynamic signature on the main function
     # Pyright doesn't like assigning to __signature__ on a function
-    setattr(main, "__signature__", inspect.Signature(parameters=sig_params))
+    main.__signature__ = inspect.Signature(parameters=sig_params)
     # Give it a docstring for better --help
     main.__doc__ = "Runs the Cascade workflow."
 

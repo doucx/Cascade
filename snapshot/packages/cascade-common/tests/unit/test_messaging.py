@@ -1,5 +1,5 @@
-from cascade.bus.messages import MessageStore
 from cascade.bus.feedback import FeedbackBus
+from cascade.bus.messages import MessageStore
 
 
 def test_message_store_loads_defaults():

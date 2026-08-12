@@ -1,3 +1,3 @@
-from .graph import ArgumentKind, ArgumentDef, TaskDef
+from .graph import ArgumentDef, ArgumentKind, TaskDef
 
-__all__ = ["ArgumentKind", "ArgumentDef", "TaskDef"]
+__all__ = ["ArgumentDef", "ArgumentKind", "TaskDef"]

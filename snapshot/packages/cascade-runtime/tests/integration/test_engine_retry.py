@@ -1,12 +1,12 @@
-import pytest
 import cascade.sdk as cs
-from cascade.runtime import EventBus
+import pytest
 from cascade.bus.events import (
-    TaskRetrying,
     TaskExecutionFinished,
+    TaskRetrying,
 )
-from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.execution.graph.solvers.native import NativeSolver
+from cascade.runtime import EventBus
+from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.test_utils.helpers import SpySubscriber
 
 

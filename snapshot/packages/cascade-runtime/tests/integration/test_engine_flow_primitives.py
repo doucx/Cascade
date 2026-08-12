@@ -1,11 +1,11 @@
-import pytest
 import cascade.sdk as cs
+import pytest
 from cascade.bus.events import TaskSkipped
 
 
 @pytest.mark.asyncio
 async def test_sequence_executes_in_order(bus_and_spy, engine_factory):
-    bus, spy = bus_and_spy
+    bus, _spy = bus_and_spy
     execution_order = []
 
     @cs.task
@@ -49,7 +49,7 @@ async def test_sequence_forwards_last_result(bus_and_spy, engine_factory):
 
 @pytest.mark.asyncio
 async def test_sequence_aborts_on_failure(bus_and_spy, engine_factory):
-    bus, spy = bus_and_spy
+    bus, _spy = bus_and_spy
     execution_order = []
 
     @cs.task

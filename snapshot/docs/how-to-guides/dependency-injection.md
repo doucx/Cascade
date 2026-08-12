@@ -20,6 +20,7 @@ Cascade 的依赖注入 (DI) 系统允许你的任务在运行时自动获取共
 ```python
 import cascade as cs
 
+
 # 1. 定义资源
 @cs.resource
 def database_connection():
@@ -27,10 +28,12 @@ def database_connection():
     yield conn
     conn.close()
 
+
 # 2. 在任务签名中声明依赖
 @cs.task
 def get_user(user_id: int, db=cs.inject("database_connection")):
     return db.query(f"SELECT * FROM users WHERE id={user_id}")
+
 
 # 3. 正常调用任务
 user_data = get_user(123)
@@ -53,8 +56,9 @@ engine.run(user_data)
 ```python
 # 反模式：对于普通任务，这会使依赖关系变得不明确
 @cs.task
-def get_user(user_id: int, db): # 签名中看不出依赖
+def get_user(user_id: int, db):  # 签名中看不出依赖
     ...
+
 
 # 在调用时传入 inject，这很隐晦
 user_data = get_user(123, db=cs.inject("database_connection"))
@@ -71,11 +75,13 @@ user_data = get_user(123, db=cs.inject("database_connection"))
 ```python
 # cascade/providers/sql.py (简化版)
 
+
 def _sql_factory(query: str, db: str):
     """这是用户调用的 cs.sql()"""
     # 这里，'db' 的值 (如 "analytics_db") 是动态的。
     # 我们必须在调用时创建一个 Inject 对象。
     return _sql_task(query=query, conn=cs.inject(db))
+
 
 @cs.task
 def _sql_task(query: str, conn: Any):

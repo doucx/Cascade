@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import List
 
 
 @dataclass(frozen=True)
@@ -11,4 +12,4 @@ class ResourceDef:
 
 @dataclass(frozen=True)
 class EnvironmentDef:
-    resources: List[ResourceDef] = field(default_factory=list)
+    resources: list[ResourceDef] = field(default_factory=list)

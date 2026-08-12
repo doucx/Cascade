@@ -1,22 +1,25 @@
+from __future__ import annotations
+
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Callable
 
-from cascade.execution.graph.model.model import Graph, Node, EdgeType
+from cascade.bus.core import EventBus
+from cascade.bus.events import TaskBlocked, TaskSkipped
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.execution.graph.model.adapter import IRToRuntimeAdapter
-from cascade.execution.graph.model.registry import NodeRegistry
 from cascade.execution.graph.model.hashing import BlueprintHasher
-from cascade.spec.runtime.interfaces import Solver, StateBackend
-from cascade.spec.dsl.jump import Jump
-from cascade.bus.core import EventBus
-from cascade.runtime.services.resources.container import ResourceContainer
-from .logic.processor import NodeProcessor
-from .logic.flow import FlowManager
-from .errors import DependencyMissingError
-from cascade.bus.events import TaskSkipped, TaskBlocked
+from cascade.execution.graph.model.model import EdgeType, Graph, Node
+from cascade.execution.graph.model.registry import NodeRegistry
 from cascade.runtime.services.constraints.manager import ConstraintManager
+from cascade.runtime.services.resources.container import ResourceContainer
+from cascade.spec.dsl.jump import Jump
 from cascade.spec.runtime import ExecutionContext
+from cascade.spec.runtime.interfaces import Solver, StateBackend
+
+from .errors import DependencyMissingError
+from .logic.flow import FlowManager
+from .logic.processor import NodeProcessor
 
 
 class GraphExecutionResult:
@@ -43,10 +46,10 @@ class GraphExecutionStrategy:
         self.wakeup_event = wakeup_event
         self.blueprint_hasher = BlueprintHasher()
 
-        self._template_plan_cache: Dict[str, List[List[int]]] = {}
+        self._template_plan_cache: dict[str, list[list[int]]] = {}
         self._node_registry = NodeRegistry()
 
-    def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
+    def _index_plan(self, graph: Graph, plan: Any) -> list[list[int]]:
         id_to_idx = {
             node.current_node_instance_hash: i for i, node in enumerate(graph.nodes)
         }
@@ -58,7 +61,7 @@ class GraphExecutionStrategy:
             indexed_plan.append(indexed_stage)
         return indexed_plan
 
-    def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:
+    def _rehydrate_plan(self, graph: Graph, indexed_plan: list[list[int]]) -> Any:
         plan = []
         for stage_indices in indexed_plan:
             stage_nodes = [graph.nodes[idx] for idx in stage_indices]
@@ -68,7 +71,7 @@ class GraphExecutionStrategy:
     async def execute(
         self,
         target: Any,
-        context: "ExecutionContext",  # Use string forward ref or import if needed, assuming import logic handled
+        context: ExecutionContext,  # Use string forward ref or import if needed, assuming import logic handled
     ) -> Any:
         # Unpack context for convenience
         run_id = context.run_id
@@ -193,15 +196,15 @@ class GraphExecutionStrategy:
     async def _execute_graph(
         self,
         target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
+        params: dict[str, Any],
+        active_resources: dict[str, Any],
         run_id: str,
         state_backend: StateBackend,
         graph: Graph,
         plan: Any,
-        instance_map: Dict[str, Node],
-        executable_registry: Dict[str, Callable],
-        root_input_overrides: Optional[Dict[str, Any]] = None,
+        instance_map: dict[str, Node],
+        executable_registry: dict[str, Callable],
+        root_input_overrides: dict[str, Any] | None = None,
     ) -> GraphExecutionResult:
         if target._uuid not in instance_map:
             raise RuntimeError(
@@ -218,8 +221,8 @@ class GraphExecutionStrategy:
             pending_nodes_in_stage = list(stage)
 
             while pending_nodes_in_stage:
-                executable_this_pass: List[Node] = []
-                deferred_this_pass: List[Node] = []
+                executable_this_pass: list[Node] = []
+                deferred_this_pass: list[Node] = []
 
                 for node in pending_nodes_in_stage:
                     skip_reason = await flow_manager.should_skip(node, state_backend)
@@ -239,8 +242,7 @@ class GraphExecutionStrategy:
 
                     if self.constraint_manager.check_permission(node):
                         executable_this_pass.append(node)
-                        if node.current_node_instance_hash in blocked_nodes:
-                            blocked_nodes.remove(node.current_node_instance_hash)
+                        blocked_nodes.discard(node.current_node_instance_hash)
                     else:
                         deferred_this_pass.append(node)
                         if node.current_node_instance_hash not in blocked_nodes:

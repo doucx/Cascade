@@ -1,18 +1,12 @@
-from typing import (
-    Protocol,
-    List,
-    Any,
-    Dict,
-    Optional,
-    Callable,
-    Awaitable,
-    TYPE_CHECKING,
-)
+from __future__ import annotations
 
-if TYPE_CHECKING:
-    # Avoid circular dependency with implementation-heavy contexts
-    # These will be passed as 'Any' or via Generic types in the implementation
-    pass
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    List,
+    Protocol,
+)
 
 # An execution plan is a list of stages, where each stage is a list of nodes
 # that can be executed in parallel.
@@ -29,33 +23,33 @@ class Executor(Protocol):
         self,
         node: Any,
         callable_obj: Callable,
-        args: List[Any],
-        kwargs: Dict[str, Any],
+        args: list[Any],
+        kwargs: dict[str, Any],
     ) -> Any: ...
 
 
 class CacheBackend(Protocol):
-    async def get(self, key: str) -> Optional[Any]: ...
+    async def get(self, key: str) -> Any | None: ...
 
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None: ...
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> None: ...
 
 
 class CachePolicy(Protocol):
-    async def check(self, task_id: str, inputs: Dict[str, Any]) -> Any: ...
+    async def check(self, task_id: str, inputs: dict[str, Any]) -> Any: ...
 
-    async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None: ...
+    async def save(self, task_id: str, inputs: dict[str, Any], output: Any) -> None: ...
 
 
 class StateBackend(Protocol):
     async def put_result(self, node_id: str, result: Any) -> None: ...
 
-    async def get_result(self, node_id: str) -> Optional[Any]: ...
+    async def get_result(self, node_id: str) -> Any | None: ...
 
     async def has_result(self, node_id: str) -> bool: ...
 
     async def mark_skipped(self, node_id: str, reason: str) -> None: ...
 
-    async def get_skip_reason(self, node_id: str) -> Optional[str]: ...
+    async def get_skip_reason(self, node_id: str) -> str | None: ...
 
     async def clear(self) -> None: ...
 
@@ -80,9 +74,9 @@ class Connector(Protocol):
     async def disconnect(self) -> None: ...
 
     async def publish(
-        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
+        self, topic: str, payload: dict[str, Any], qos: int = 0, retain: bool = False
     ) -> None: ...
 
     async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> "SubscriptionHandle": ...
+        self, topic: str, callback: Callable[[str, dict], Awaitable[None]]
+    ) -> SubscriptionHandle: ...

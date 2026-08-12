@@ -1,4 +1,7 @@
-from typing import Any, Optional
+from __future__ import annotations
+
+from typing import Any
+
 from .messages import MessageStore
 from .protocols import Renderer
 
@@ -6,7 +9,7 @@ from .protocols import Renderer
 class FeedbackBus:
     def __init__(self, store: MessageStore):
         self._store = store
-        self._renderer: Optional[Renderer] = None
+        self._renderer: Renderer | None = None
 
     @property
     def store(self) -> MessageStore:

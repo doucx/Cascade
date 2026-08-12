@@ -1,16 +1,17 @@
-import asyncio
-from typing import Optional, Any
+from __future__ import annotations
 
-from cascade.spec.dsl.task import task
+import asyncio
+from typing import Any
+
 from cascade.spec.dsl.resources import inject
-from cascade.spec.runtime.interfaces import LazyFactory, Provider
-from cascade.spec.runtime.interfaces import Connector
+from cascade.spec.dsl.task import task
+from cascade.spec.runtime.interfaces import Connector, LazyFactory, Provider
 
 
 @task(name="recv")
 async def _recv_task(
     topic: str,
-    timeout: Optional[float] = None,
+    timeout: float | None = None,
     # This is a special, undocumented resource provided by the Engine
     connector: Connector = inject("_internal_connector"),
 ) -> Any:

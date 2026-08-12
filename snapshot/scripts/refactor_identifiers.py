@@ -1,6 +1,7 @@
-import libcst as cst
-import sys
 import os
+import sys
+
+import libcst as cst
 
 # Configuration: Target mappings
 # Key: Old Name

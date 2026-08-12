@@ -1,8 +1,8 @@
 import pickle
-import pytest
 from unittest.mock import MagicMock
 
 import cascade.sdk as cs
+import pytest
 
 
 # A simple task for testing

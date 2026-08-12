@@ -1,6 +1,7 @@
-import pytest
 from unittest.mock import MagicMock
+
 import cascade.sdk as cs
+import pytest
 from cascade.bus.events import (
     ResourceAcquired,
     ResourceReleased,
@@ -131,8 +132,8 @@ async def test_unregistered_resource_raises_error(engine):
 
 
 def test_resource_scan_finds_inject_in_dict():
-    from cascade.runtime.services.resources.container import ResourceContainer
     from cascade.execution.graph.model.build import build_graph
+    from cascade.runtime.services.resources.container import ResourceContainer
 
     @cs.resource
     def my_res():

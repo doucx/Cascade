@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import List, Optional, Any, Dict
 from enum import Enum, auto
+from typing import Any
 
 from cascade.spec.dsl.constraint import ResourceConstraint
-from cascade.spec.ir.graph import TaskDef
 
 # We store the ParamSpec here explicitly for type safety
 from cascade.spec.dsl.inputs import ParamSpec
+from cascade.spec.ir.graph import TaskDef
 
 
 class EdgeType(Enum):
@@ -33,13 +35,13 @@ class Node:
     node_type: str = "task"
 
     # Instance-specific configuration common to most executable nodes
-    retry_policy: Optional[Any] = None
-    cache_policy: Optional[Any] = None
-    constraints: Optional[ResourceConstraint] = None
+    retry_policy: Any | None = None
+    cache_policy: Any | None = None
+    constraints: ResourceConstraint | None = None
 
     # Structural Bindings (Literals)
     has_complex_inputs: bool = False
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
+    input_bindings: dict[str, Any] = field(default_factory=dict)
 
     def __eq__(self, other):
         if not isinstance(other, Node):
@@ -70,7 +72,7 @@ class MapNode(Node):
 
 @dataclass(eq=False)
 class ParamNode(TaskNode):
-    param_spec: Optional[ParamSpec] = None
+    param_spec: ParamSpec | None = None
     has_complex_inputs: bool = True
 
     # Inherits callable_obj property from TaskNode
@@ -82,22 +84,22 @@ class Edge:
     target: Node
     arg_name: str
     edge_type: EdgeType = EdgeType.DATA
-    router: Optional[Any] = None
-    jump_selector: Optional[Any] = None
+    router: Any | None = None
+    jump_selector: Any | None = None
 
 
 @dataclass
 class Graph:
-    nodes: List[Node] = field(default_factory=list)
-    edges: List[Edge] = field(default_factory=list)
-    _node_index: Dict[str, Node] = field(default_factory=dict, init=False, repr=False)
+    nodes: list[Node] = field(default_factory=list)
+    edges: list[Edge] = field(default_factory=list)
+    _node_index: dict[str, Node] = field(default_factory=dict, init=False, repr=False)
 
     def add_node(self, node: Node):
         if node.current_node_instance_hash not in self._node_index:
             self.nodes.append(node)
             self._node_index[node.current_node_instance_hash] = node
 
-    def get_node(self, node_id: str) -> Optional[Node]:
+    def get_node(self, node_id: str) -> Node | None:
         return self._node_index.get(node_id)
 
     def add_edge(self, edge: Edge):

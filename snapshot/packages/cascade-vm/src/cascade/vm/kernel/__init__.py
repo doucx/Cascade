@@ -1,3 +1,3 @@
-from .core import PhysicsKernel, KernelFunc
+from .core import KernelFunc, PhysicsKernel
 
-__all__ = ["PhysicsKernel", "KernelFunc"]
+__all__ = ["KernelFunc", "PhysicsKernel"]

@@ -21,17 +21,17 @@
 ```python
 import cascade as cs
 
+
 @cs.task
 def fetch_data_from_api(url):
     # 模拟一个可能因网络抖动而失败的 I/O 操作
     # ... 业务逻辑 ...
     pass
 
+
 # 定义一个任务：如果失败，最多重试 3 次，每次延迟 1.0 秒
 robust_fetch = fetch_data_from_api(url="...").with_retry(
-    max_attempts=3, 
-    delay=1.0, 
-    backoff=2.0
+    max_attempts=3, delay=1.0, backoff=2.0
 )
 
 # cs.run(robust_fetch)

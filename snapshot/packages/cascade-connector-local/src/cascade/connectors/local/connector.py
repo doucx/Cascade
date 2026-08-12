@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import asyncio
 import json
-import sqlite3
-import time
-import sys
 import socket
+import sqlite3
+import sys
+import time
 from pathlib import Path
-from typing import Callable, Awaitable, Dict, Any, List
+from typing import Any, Awaitable, Callable
 
 from cascade.spec.runtime.interfaces import Connector, SubscriptionHandle
+
 from .uds_server import UdsTelemetryServer
 
 POLL_INTERVAL = 0.2  # seconds
@@ -25,7 +28,7 @@ class UDSServerProtocol(asyncio.DatagramProtocol):
 
 
 class _LocalSubscriptionHandle(SubscriptionHandle):
-    def __init__(self, parent: "LocalConnector", task: asyncio.Task):
+    def __init__(self, parent: LocalConnector, task: asyncio.Task):
         self._parent = parent
         self._task = task
 
@@ -55,8 +58,8 @@ class LocalConnector(Connector):
         self.uds_path = uds_path
         self._conn: sqlite3.Connection | None = None
         self._is_connected = False
-        self._background_tasks: List[asyncio.Task] = []
-        self._last_known_constraints: Dict[str, Dict[str, Any]] = {}
+        self._background_tasks: list[asyncio.Task] = []
+        self._last_known_constraints: dict[str, dict[str, Any]] = {}
         self._use_polling = sys.platform == "win32"
         self._uds_recv_event = asyncio.Event()
 
@@ -129,7 +132,7 @@ class LocalConnector(Connector):
         return f"cascade/constraints/{scope.replace(':', '/')}"
 
     async def publish(
-        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
+        self, topic: str, payload: dict[str, Any], qos: int = 0, retain: bool = False
     ) -> None:
         if not self._is_connected or not self._conn:
             raise RuntimeError("Connector is not connected.")
@@ -185,7 +188,7 @@ class LocalConnector(Connector):
                 sock.close()
 
     async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+        self, topic: str, callback: Callable[[str, dict], Awaitable[None]]
     ) -> SubscriptionHandle:
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
@@ -208,7 +211,7 @@ class LocalConnector(Connector):
             return cursor.fetchall()
 
         rows = await asyncio.to_thread(_blocking_fetch_all)
-        current_constraints: Dict[str, Dict] = {dict(r)["id"]: dict(r) for r in rows}
+        current_constraints: dict[str, dict] = {dict(r)["id"]: dict(r) for r in rows}
 
         for cid, current in current_constraints.items():
             last = self._last_known_constraints.get(cid)

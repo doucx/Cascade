@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import ast
-import sys
 import hashlib
+import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Dict, Tuple, Set
 
 # 配置：忽略的常见名称，不参与命名重复检查
 IGNORE_NAMES = {
@@ -82,11 +83,11 @@ def analyze_codebase(root_dir: Path):
 
     # Storage for Stage 1: AST Duplication
     # Hash -> List[(name, filepath, lineno)]
-    ast_hashes: Dict[str, List[Tuple[str, str, int]]] = defaultdict(list)
+    ast_hashes: dict[str, list[tuple[str, str, int]]] = defaultdict(list)
 
     # Storage for Stage 2: Name Duplication
     # Name -> List[filepath]
-    symbol_table: Dict[str, Set[str]] = defaultdict(set)
+    symbol_table: dict[str, set[str]] = defaultdict(set)
 
     print(f"🔍 Scanning {packages_dir} ...")
 
@@ -180,7 +181,7 @@ def report(ast_hashes, symbol_table):
             # We still report it but maybe mark it as 'Generic'
             tag = " [Generic?]" if len(paths) > 5 else ""
             print(f"\n🟡 Symbol '{name}' defined in {len(paths)} files{tag}:")
-            for p in sorted(list(paths)):
+            for p in sorted(paths):
                 print(f"   - {p}")
             found_name_dupes = True
             # We don't fail the build for naming collisions yet, just warn

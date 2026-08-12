@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock, patch
 
+from cascade.spec.physical.dyad import LanderNode
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.dyad import LanderNode
 from cascade.spec.specs.dyad import LanderSpec
 from cascade.std.dyad.lander import standard_lander
 

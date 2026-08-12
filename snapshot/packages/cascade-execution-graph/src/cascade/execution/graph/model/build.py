@@ -1,4 +1,7 @@
-from typing import Any, Tuple, Dict, Callable, Optional
+from __future__ import annotations
+
+from typing import Any, Callable
+
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.execution.graph.model.adapter import IRToRuntimeAdapter
 from cascade.execution.graph.model.model import Graph, Node
@@ -6,8 +9,8 @@ from cascade.execution.graph.model.registry import NodeRegistry
 
 
 def build_graph(
-    target: Any, registry: Optional[NodeRegistry] = None
-) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:
+    target: Any, registry: NodeRegistry | None = None
+) -> tuple[Graph, dict[str, Node], dict[str, Callable]]:
     # 1. Generate Intermediate Representation (IR)
     ir = IRGenerator().generate(target)
 

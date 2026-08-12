@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import asyncio
-from typing import Protocol, Dict, Any, Optional
+from typing import Any, Protocol
 
 
 class ComputeServiceProtocol(Protocol):
@@ -13,7 +15,7 @@ class ComputeServiceProtocol(Protocol):
 class ReactorProtocol(Protocol):
     shutdown_event: asyncio.Event
     drain_event: asyncio.Event
-    ingress_queue: Optional[asyncio.Queue]
+    ingress_queue: asyncio.Queue | None
 
-    def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None: ...
+    def prime(self, genesis_trace: dict[str, Any] | None = None) -> None: ...
     def step(self) -> int: ...

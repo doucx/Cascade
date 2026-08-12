@@ -1,27 +1,26 @@
+from __future__ import annotations
+
 import asyncio
-from typing import Any, Dict, List, Tuple, Union, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from cascade.spec.dsl.fluent import LazyResult
-from cascade.spec.dsl.task import task
-from cascade.spec.runtime import Connector, StateBackend
-
-from cascade.execution.graph.model.build import build_graph
-from cascade.execution.graph.model.model import Node, EdgeType
-
-from cascade.runtime.host import create_engine
-from cascade.runtime import EventBus
 from cascade.bus.events import (
+    PlanAnalysisFinished,
     PlanAnalysisStarted,
     PlanNodeInspected,
-    PlanAnalysisFinished,
 )
+from cascade.bus.feedback import bus
+from cascade.common.renderers import CliRenderer, JsonRenderer
+from cascade.execution.graph.model.build import build_graph
+from cascade.execution.graph.model.model import EdgeType, Node
+from cascade.runtime import EventBus
+from cascade.runtime.host import create_engine
 from cascade.runtime.services.observability.subscribers import (
     HumanReadableLogSubscriber,
     TelemetrySubscriber,
 )
-from cascade.bus.feedback import bus
-from cascade.common.renderers import CliRenderer, JsonRenderer
-
+from cascade.spec.dsl.fluent import LazyResult
+from cascade.spec.dsl.task import task
+from cascade.spec.runtime import Connector, StateBackend
 
 # --- Internal Helpers ---
 
@@ -32,8 +31,8 @@ def _internal_gather(*args: Any) -> Any:
 
 
 def _create_state_backend_factory(
-    backend_spec: Union[str, Callable[[str], StateBackend], None],
-) -> Optional[Callable[[str], StateBackend]]:
+    backend_spec: str | Callable[[str], StateBackend] | None,
+) -> Callable[[str], StateBackend] | None:
     if backend_spec is None:
         return None
 
@@ -44,6 +43,7 @@ def _create_state_backend_factory(
         if backend_spec.startswith("redis://"):
             try:
                 import redis
+
                 from cascade.runtime.io.state.redis import RedisStateBackend
             except ImportError:
                 raise ImportError(
@@ -94,13 +94,13 @@ class DryRunConsoleSubscriber:
 class CascadeApp:
     def __init__(
         self,
-        target: Union[LazyResult, List[Any], Tuple[Any, ...]],
-        params: Optional[Dict[str, Any]] = None,
-        system_resources: Optional[Dict[str, Any]] = None,
+        target: LazyResult | list[Any] | tuple[Any, ...],
+        params: dict[str, Any] | None = None,
+        system_resources: dict[str, Any] | None = None,
         log_level: str = "INFO",
         log_format: str = "human",
-        connector: Optional[Connector] = None,
-        state_backend: Union[str, Callable[[str], StateBackend], None] = None,
+        connector: Connector | None = None,
+        state_backend: str | Callable[[str], StateBackend] | None = None,
         use_vm: bool = False,
     ):
         self.raw_target = target
@@ -152,7 +152,7 @@ class CascadeApp:
         # Note: If workflow_target is an empty list gather (from empty input),
         # build_graph handles it but we might want a cleaner check.
         if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
-            return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
+            return 'digraph CascadeWorkflow {\n  rankdir="TB";\n}'
 
         graph, _, _ = build_graph(self.workflow_target)
 
@@ -250,13 +250,13 @@ class CascadeApp:
 
 
 def run(
-    target: Union["LazyResult", List[Any], tuple[Any, ...]],
-    params: Optional[Dict[str, Any]] = None,
-    system_resources: Optional[Dict[str, Any]] = None,
+    target: LazyResult | list[Any] | tuple[Any, ...],
+    params: dict[str, Any] | None = None,
+    system_resources: dict[str, Any] | None = None,
     log_level: str = "INFO",
     log_format: str = "human",
-    connector: Optional["Connector"] = None,
-    state_backend: Union[str, Callable[[str], "StateBackend"], None] = None,
+    connector: Connector | None = None,
+    state_backend: str | Callable[[str], StateBackend] | None = None,
     use_vm: bool = False,
 ) -> Any:
     app = CascadeApp(

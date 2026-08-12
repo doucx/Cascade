@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Dict, Callable, Any
+from typing import Any, Callable
 
 # A generic callable type for task functions
 TaskCallable = Callable[..., Any]
@@ -9,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class CodeRegistry:
     def __init__(self):
-        self._registry: Dict[str, TaskCallable] = {}
+        self._registry: dict[str, TaskCallable] = {}
 
     def register(self, canonical_hash: str, func: TaskCallable) -> None:
         if (

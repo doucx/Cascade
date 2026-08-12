@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 from contextvars import ContextVar
-from typing import Dict, List, Any, Optional
+from typing import Any
+
 from cascade.spec.dsl.inputs import InputSpec
 
 
 class WorkflowContext:
     def __init__(self):
-        self.input_specs: Dict[str, InputSpec] = {}
-        self.values: Dict[str, Any] = {}
+        self.input_specs: dict[str, InputSpec] = {}
+        self.values: dict[str, Any] = {}
 
     def register(self, spec: InputSpec):
         if spec.name in self.input_specs:
@@ -14,13 +17,13 @@ class WorkflowContext:
             return
         self.input_specs[spec.name] = spec
 
-    def get_all_specs(self) -> List[InputSpec]:
+    def get_all_specs(self) -> list[InputSpec]:
         return list(self.input_specs.values())
 
     def set_value(self, name: str, value: Any) -> None:
         self.values[name] = value
 
-    def get_value(self, name: str) -> Optional[Any]:
+    def get_value(self, name: str) -> Any | None:
         return self.values.get(name)
 
 

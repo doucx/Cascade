@@ -1,18 +1,19 @@
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class MessageStore:
     def __init__(self, locale: str = "en"):
-        self._messages: Dict[str, str] = {}
+        self._messages: dict[str, str] = {}
         self.locale = locale
         self._load_messages()
 
-    def _find_locales_dir(self) -> Optional[Path]:
+    def _find_locales_dir(self) -> Path | None:
         try:
             # 这里的路径调整为相对于 cascade.bus 包
             locales_path = Path(__file__).parent / "locales"
@@ -36,7 +37,7 @@ class MessageStore:
             try:
                 with open(message_file, "r", encoding="utf-8") as f:
                     self._messages.update(json.load(f))
-            except (json.JSONDecodeError, IOError) as e:
+            except (OSError, json.JSONDecodeError) as e:
                 logger.error(f"Failed to load message file {message_file}: {e}")
 
     def get(self, msg_id: str, default: str = "", **kwargs) -> str:

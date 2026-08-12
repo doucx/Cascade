@@ -1,10 +1,8 @@
-import pytest
-
 import cascade.sdk as cs
+import pytest
 from cascade.execution.graph.model.build import build_graph
 from cascade.runtime import EventBus, ExecutionPlan
-from cascade.test_utils.helpers import SpyExecutor, MockSolver
-
+from cascade.test_utils.helpers import MockSolver, SpyExecutor
 
 # --- Test Case ---
 

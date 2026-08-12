@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import hashlib
-from typing import List
+
 from cascade.execution.graph.model.model import Graph, Node
 
 
@@ -12,11 +14,11 @@ class BlueprintHasher:
             all_components.extend(self._get_node_components(node, graph))
         return self._get_merkle_hash(all_components)
 
-    def _get_merkle_hash(self, components: List[str]) -> str:
+    def _get_merkle_hash(self, components: list[str]) -> str:
         fingerprint = "|".join(components)
         return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
-    def _get_node_components(self, node: Node, graph: Graph) -> List[str]:
+    def _get_node_components(self, node: Node, graph: Graph) -> list[str]:
         # Updated to use node.definition
         components = [f"Node({node.definition.name}, type={node.node_type})"]
         components.append(

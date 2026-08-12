@@ -1,10 +1,11 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from cascade.spec.physical.nodes import Token
 from cascade.std.resource.discrete import (
+    DiscreteLedger,
     discrete_allocator,
     discrete_reclaimer,
-    DiscreteLedger,
 )
 
 

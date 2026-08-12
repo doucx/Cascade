@@ -1,7 +1,9 @@
-import libcst as cst
-import sys
+from __future__ import annotations
+
 import os
-from typing import Dict, Set, Optional, Tuple, List
+import sys
+
+import libcst as cst
 
 # ==============================================================================
 # Refactoring Configuration
@@ -14,7 +16,7 @@ from typing import Dict, Set, Optional, Tuple, List
 #   New Name,
 #   Attribute Variable Whitelist (for heuristic matching on attribute access)
 # )
-RENAME_MAP: Dict[str, Tuple[Optional[Set[str]], str, Optional[List[str]]]] = {
+RENAME_MAP: dict[str, tuple[set[str] | None, str, list[str] | None]] = {
     "structural_id": (
         None,  # None means this rule applies globally
         "current_node_instance_hash",
@@ -41,7 +43,7 @@ class IdentifierRefactorTransformer(cst.CSTTransformer):
 
     def __init__(self):
         super().__init__()
-        self.class_stack: List[str] = []
+        self.class_stack: list[str] = []
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
         self.class_stack.append(node.name.value)
@@ -82,7 +84,7 @@ class IdentifierRefactorTransformer(cst.CSTTransformer):
         Handles constructor calls:
         NodeIR(id=...) -> NodeIR(current_node_instance_hash=...)
         """
-        func_name: Optional[str] = None
+        func_name: str | None = None
         if isinstance(original_node.func, cst.Name):
             func_name = original_node.func.value
 

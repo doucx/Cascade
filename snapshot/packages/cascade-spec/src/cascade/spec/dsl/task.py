@@ -1,17 +1,12 @@
+from __future__ import annotations
+
+import inspect
 from typing import (
-    TypeVar,
-    Generic,
     Callable,
-    Optional,
-    Union,
-    List,
-    TYPE_CHECKING,
+    Generic,
+    TypeVar,
     overload,
 )
-import inspect
-
-if TYPE_CHECKING:
-    pass
 
 from .fluent import (
     LazyResult,
@@ -28,7 +23,7 @@ class Task(Generic[T]):
     def __init__(
         self,
         func: Callable[..., T],
-        name: Optional[str] = None,
+        name: str | None = None,
         pure: bool = False,
         mode: str = "blocking",
     ):
@@ -39,12 +34,12 @@ class Task(Generic[T]):
         self._signature = inspect.signature(func)
         self.is_async = inspect.iscoroutinefunction(func)
         # Cache for AST analysis results to verify TCO paths
-        self._potential_tco_targets: Optional[List["Task"]] = None
+        self._potential_tco_targets: list[Task] | None = None
 
     def __call__(self, *args, **kwargs) -> LazyResult[T]:
         return LazyResult(task=self, args=args, kwargs=kwargs)
 
-    def map(self, **kwargs) -> MappedLazyResult[List[T]]:
+    def map(self, **kwargs) -> MappedLazyResult[list[T]]:
         return MappedLazyResult(factory=self, mapping_kwargs=kwargs)
 
     def __repr__(self):
@@ -63,7 +58,7 @@ def task(
 @overload
 def task(
     *,
-    name: Optional[str] = None,
+    name: str | None = None,
     pure: bool = False,
     mode: str = "blocking",
 ) -> Callable[[Callable[..., T]], Task[T]]: ...
@@ -73,19 +68,19 @@ def task(
 def task(
     func: Callable[..., T],
     *,
-    name: Optional[str] = None,
+    name: str | None = None,
     pure: bool = False,
     mode: str = "blocking",
 ) -> Task[T]: ...
 
 
 def task(
-    func: Optional[Callable[..., T]] = None,
+    func: Callable[..., T] | None = None,
     *,
-    name: Optional[str] = None,
+    name: str | None = None,
     pure: bool = False,
     mode: str = "blocking",
-) -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:
+) -> Task[T] | Callable[[Callable[..., T]], Task[T]]:
     def wrapper(f: Callable[..., T]) -> Task[T]:
         return Task(f, name=name, pure=pure, mode=mode)
 

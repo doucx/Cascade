@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import asyncio
-import time
+import os
 import random
 import statistics
-import os
-from typing import List
+import time
 
 import cascade.sdk as cs
 
@@ -48,7 +49,7 @@ async def io_noise_task():
 
 
 @cs.task
-async def time_probe_task(interval: float, duration: float) -> List[float]:
+async def time_probe_task(interval: float, duration: float) -> list[float]:
     """
     The core measurement tool.
     Repeatedly calls cs.wait() and records the timing error.

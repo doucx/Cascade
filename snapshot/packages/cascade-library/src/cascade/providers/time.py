@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 import asyncio
-from typing import Union
 
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import LazyFactory, Provider
 
 
 @task(name="wait")
-async def _wait_task(delay: Union[float, int]) -> None:
+async def _wait_task(delay: float) -> None:
     await asyncio.sleep(float(delay))
 
 

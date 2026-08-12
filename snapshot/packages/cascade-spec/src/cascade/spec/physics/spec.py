@@ -1,17 +1,20 @@
-from typing import Dict, ClassVar
+from __future__ import annotations
+
+from typing import ClassVar
+
 from .core import PortDef, PortDirection
 
 
 class PhysicsSpecMeta(type):
-    input_ports: Dict[str, PortDef]
-    output_ports: Dict[str, PortDef]
+    input_ports: dict[str, PortDef]
+    output_ports: dict[str, PortDef]
 
     def __new__(mcs, name, bases, namespace):
         # 1. Create the class
         cls = super().__new__(mcs, name, bases, namespace)
 
-        input_ports: Dict[str, PortDef] = {}
-        output_ports: Dict[str, PortDef] = {}
+        input_ports: dict[str, PortDef] = {}
+        output_ports: dict[str, PortDef] = {}
 
         # 2. Inherit ports from base classes (if any)
         # We traverse bases in reverse order so that later bases (and the class itself) override earlier ones.
@@ -40,5 +43,5 @@ class PhysicsSpecMeta(type):
 
 
 class PhysicsSpec(metaclass=PhysicsSpecMeta):
-    input_ports: ClassVar[Dict[str, PortDef]]
-    output_ports: ClassVar[Dict[str, PortDef]]
+    input_ports: ClassVar[dict[str, PortDef]]
+    output_ports: ClassVar[dict[str, PortDef]]

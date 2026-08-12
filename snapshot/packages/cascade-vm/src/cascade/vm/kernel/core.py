@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import logging
 from typing import Callable, Dict
 
 from cascade.spec.physical.nodes import PhysicsFuncNode, Token
+
 from ..resource_registry import ResourceRegistry
 
 logger = logging.getLogger(__name__)
@@ -15,14 +18,14 @@ KernelFunc = Callable[
 
 class PhysicsKernel:
     def __init__(
-        self, function_map: Dict[str, KernelFunc], resources: ResourceRegistry
+        self, function_map: dict[str, KernelFunc], resources: ResourceRegistry
     ):
         self._function_map = function_map
         self._resources = resources
 
     def execute(
-        self, node: PhysicsFuncNode, inputs: Dict[str, Token]
-    ) -> Dict[str, Token]:
+        self, node: PhysicsFuncNode, inputs: dict[str, Token]
+    ) -> dict[str, Token]:
         func = self._function_map.get(node.id)
         if not func:
             raise ValueError(f"No kernel function mapped for node '{node.id}'")
@@ -33,4 +36,4 @@ class PhysicsKernel:
             return outputs
         except Exception as e:
             logger.exception(f"Kernel panic at node '{node.id}': {e}")
-            raise e
+            raise

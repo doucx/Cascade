@@ -1,5 +1,5 @@
-import pytest
 import cascade.sdk as cs
+import pytest
 from cascade.execution.graph.model.exceptions import StaticGraphError
 
 

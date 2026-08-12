@@ -1,9 +1,10 @@
-import pytest
 import asyncio
 import time
+
 import cascade.sdk as cs
-from cascade.runtime import EventBus
+import pytest
 from cascade.bus.events import TaskRetrying
+from cascade.runtime import EventBus
 from cascade.test_utils.helpers import SpySubscriber
 
 

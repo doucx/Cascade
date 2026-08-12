@@ -1,25 +1,27 @@
-import time
-import asyncio
-from typing import Any, Dict, List, Callable, Awaitable, TYPE_CHECKING, Tuple
+from __future__ import annotations
 
+import asyncio
+import time
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from cascade.execution.graph.model.model import Node
 
 if TYPE_CHECKING:
     from cascade.execution.graph.model.model import MapNode
-from cascade.spec.runtime.interfaces import Executor, StateBackend, Solver
 from cascade.bus.core import EventBus
-from cascade.runtime.services.resources.manager import ResourceManager
-from cascade.runtime.services.constraints.manager import ConstraintManager
-from .resolvers import ArgumentResolver, ConstraintResolver
-from cascade.spec import EventState
 from cascade.bus.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-    TaskSkipped,
-    TaskRetrying,
     TaskBlocked,
+    TaskExecutionFinished,
+    TaskExecutionStarted,
+    TaskRetrying,
+    TaskSkipped,
 )
+from cascade.runtime.services.constraints.manager import ConstraintManager
+from cascade.runtime.services.resources.manager import ResourceManager
+from cascade.spec import EventState
+from cascade.spec.runtime.interfaces import Executor, Solver, StateBackend
+
+from .resolvers import ArgumentResolver, ConstraintResolver
 
 
 class NodeProcessor:
@@ -46,14 +48,14 @@ class NodeProcessor:
         self,
         node: Node,
         executable: Callable,
-        inputs: Tuple[List[Any], Dict[str, Any]],
-        requirements: Dict[str, Any],
-        cache_inputs: Dict[str, Any],
+        inputs: tuple[list[Any], dict[str, Any]],
+        requirements: dict[str, Any],
+        cache_inputs: dict[str, Any],
         state_backend: StateBackend,
-        active_resources: Dict[str, Any],
+        active_resources: dict[str, Any],
         run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
+        params: dict[str, Any],
+        sub_graph_runner: Callable[[Any, dict[str, Any], StateBackend], Awaitable[Any]],
     ) -> Any:
         # 1. Pre-check for blocking to improve observability
         if not self.resource_manager.can_acquire(requirements):
@@ -101,12 +103,12 @@ class NodeProcessor:
         self,
         node: Node,
         executable: Callable,
-        inputs: Tuple[List[Any], Dict[str, Any]],
-        cache_inputs: Dict[str, Any],
+        inputs: tuple[list[Any], dict[str, Any]],
+        cache_inputs: dict[str, Any],
         state_backend: StateBackend,
-        active_resources: Dict[str, Any],
+        active_resources: dict[str, Any],
         run_id: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         sub_graph_runner: Callable,
     ) -> Any:
         args, kwargs = inputs
@@ -182,7 +184,7 @@ class NodeProcessor:
         raise RuntimeError("Unexpected execution state")
 
     async def _execute_core(
-        self, node: Node, executable: Callable, args: List[Any], kwargs: Dict[str, Any]
+        self, node: Node, executable: Callable, args: list[Any], kwargs: dict[str, Any]
     ) -> Any:
         return await self.executor.execute(node, executable, args, kwargs)
 
@@ -190,7 +192,7 @@ class NodeProcessor:
         self,
         node: Node,
         run_id: str,
-        cache_inputs: Dict[str, Any],
+        cache_inputs: dict[str, Any],
         start_time: float,
         result: Any,
     ) -> Any:
@@ -250,22 +252,22 @@ class NodeProcessor:
 
     async def _execute_map_node(
         self,
-        node: "MapNode",
+        node: MapNode,
         factory: Callable,
-        kwargs: Dict[str, Any],
-        active_resources: Dict[str, Any],
+        kwargs: dict[str, Any],
+        active_resources: dict[str, Any],
         run_id: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         parent_state_backend: StateBackend,
         sub_graph_runner: Callable,
-    ) -> List[Any]:
+    ) -> list[Any]:
         if not factory:
             return []
 
         if not kwargs:
             return []
         lengths = {k: len(v) for k, v in kwargs.items()}
-        first_len = list(lengths.values())[0]
+        first_len = next(iter(lengths.values()))
         if not all(length == first_len for length in lengths.values()):
             raise ValueError(f"Mapped inputs have mismatched lengths: {lengths}")
 

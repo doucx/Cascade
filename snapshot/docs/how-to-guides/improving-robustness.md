@@ -96,17 +96,16 @@ system_config = {
 ```python
 import cascade as cs
 
+
 @cs.task
 def train_model():
     print("Running memory-heavy task...")
     # ... task logic ...
     return "Model Trained"
 
+
 # 声明此任务需要 1 个 gpu_slot 和 16GB 内存
-constrained_task = train_model().with_constraints(
-    gpu_slots=1, 
-    memory_gb=16
-)
+constrained_task = train_model().with_constraints(gpu_slots=1, memory_gb=16)
 
 # 调度器保证：
 # 1. 如果系统总容量不够 (例如系统只有 8GB 内存)，任务将立即失败 (快速失败)。
@@ -123,11 +122,12 @@ def calculate_required_cpu() -> int:
     # 假设根据数据大小动态计算出需要 4 个 CPU 核心
     return 4
 
+
 # CPU 需求是动态计算出来的
 required_cpu = calculate_required_cpu()
 
 # 任务的约束是动态值
-job = train_model().with_constraints(cpu_cores=required_cpu) 
+job = train_model().with_constraints(cpu_cores=required_cpu)
 ```
 
 通过组合使用 `.with_cache()`、`.with_retry()` 和 `.with_constraints()`，你可以用声明式的方式，极大地提升工作流的稳定性和效率，而无需用 `try/except` 和 `if os.path.exists()` 把你的业务逻辑弄得一团糟。

@@ -1,15 +1,17 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import logging
 from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import Tuple, Optional
 
 from cascade.spec.physical.nodes import Token
-from cascade.spec.runtime.storage import ObjectStore
-from cascade.spec.runtime.interfaces import Executor
-from ..registry import CodeRegistry
 from cascade.spec.runtime import ComputeRequest, ExecutionContext
+from cascade.spec.runtime.interfaces import Executor
+from cascade.spec.runtime.storage import ObjectStore
+
+from ..registry import CodeRegistry
 from .binding import SignatureBinder
 
 logger = logging.getLogger(__name__)
@@ -34,10 +36,10 @@ class BridgedComputeService:
         executor: Executor,
         store: ObjectStore,
         registry: CodeRegistry,
-        inbound_queue: "asyncio.Queue[ComputeRequest]",
-        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
+        inbound_queue: asyncio.Queue[ComputeRequest],
+        outbound_queue: asyncio.Queue[tuple[str, Token]],
         context: ExecutionContext,
-        wakeup_event: Optional[asyncio.Event] = None,
+        wakeup_event: asyncio.Event | None = None,
     ):
         self.executor = executor
         self.store = store

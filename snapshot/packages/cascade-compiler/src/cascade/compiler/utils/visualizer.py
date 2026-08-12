@@ -1,13 +1,14 @@
-from typing import List
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, PhysicsNode
-from cascade.spec.physical.dyad import LauncherNode, LanderNode
+from __future__ import annotations
+
 from cascade.spec.physical.constants import NodePrefix
+from cascade.spec.physical.dyad import LanderNode, LauncherNode
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, PhysicsNode
+from cascade.spec.physical.topology import BipartiteGraph
 
 
 class GraphDumper:
     def to_dot(self, graph: BipartiteGraph) -> str:
-        lines: List[str] = [
+        lines: list[str] = [
             "digraph G {",
             "  rankdir=LR;",
             '  node [fontname="Helvetica", fontsize=10];',

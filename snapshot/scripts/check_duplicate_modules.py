@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import sys
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -133,7 +133,7 @@ def find_duplicate_modules(root_dir="."):
             print("  Defined in:", file=sys.stderr)
             for src in info["sources"]:
                 print(f"    * {src}", file=sys.stderr)
-            print("", file=sys.stderr)
+            print(file=sys.stderr)
         return 1
     else:
         print("✅ No duplicate module definitions found.")

@@ -16,10 +16,11 @@ Expected Output:
   itself is fast, and the bottleneck likely appears when coupling it with the UI.
 """
 
+from __future__ import annotations
+
 import asyncio
 import random
 import time
-from typing import List
 
 import cascade.sdk as cs
 from cascade.spec.resource import resource
@@ -35,7 +36,7 @@ DURATION_SECONDS = 30.0
 GRID_SIDE = int(NUM_AGENTS**0.5)
 
 
-def get_neighbors(index: int, width: int, height: int) -> List[int]:
+def get_neighbors(index: int, width: int, height: int) -> list[int]:
     x, y = index % width, index // width
     neighbors = []
     for dx in [-1, 0, 1]:

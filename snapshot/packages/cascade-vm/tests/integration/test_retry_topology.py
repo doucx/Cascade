@@ -1,13 +1,15 @@
-import pytest
-from typing import Dict, Callable
+from __future__ import annotations
 
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
+from typing import Callable
+
+import pytest
+from cascade.spec.physical.nodes import PhysicsDataNode, Token
+from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.system_nodes import RetryNode
 from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.std.system.retry import standard_retry_logic
 from cascade.test_utils import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
-from cascade.std.system.retry import standard_retry_logic
 
 
 @pytest.fixture
@@ -59,7 +61,7 @@ def retry_topology_and_runner():
     )
 
     # 4. Setup Runner
-    function_map: Dict[str, Callable] = {f_retry.id: standard_retry_logic}
+    function_map: dict[str, Callable] = {f_retry.id: standard_retry_logic}
     code_registry = CodeRegistry()  # Not needed for stdlib, but runner requires it
     runner = EventDrivenRunner(graph, function_map, code_registry)
 

@@ -1,15 +1,16 @@
-from typing import Dict
+from __future__ import annotations
 
+from cascade.spec.compiler.interfaces import ResourcePrism, WiringPolicy
 from cascade.spec.ir.graph import NodeIR
+
 from ...expander import SubGraph
 from ..context import WiringContext
-from cascade.spec.compiler.interfaces import WiringPolicy, ResourcePrism
 from ..prisms.discrete import DiscreteResourcePrism
 
 
 class ResourceWiringPolicy(WiringPolicy):
     def __init__(self):
-        self._prisms: Dict[str, ResourcePrism] = {
+        self._prisms: dict[str, ResourcePrism] = {
             "discrete": DiscreteResourcePrism(),
         }
 

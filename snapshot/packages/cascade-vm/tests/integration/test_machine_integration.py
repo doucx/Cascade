@@ -1,30 +1,31 @@
-import asyncio
-import pytest
-from typing import Dict, Callable, Tuple
+from __future__ import annotations
 
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
-from cascade.spec.physical.dyad import LauncherNode, LanderNode
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.specs.dyad import LanderSpec
-from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from cascade.reflection import PhysicalIdGenerator
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.kernel import PhysicsKernel
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute import ComputeRequest, LocalComputeService
-from cascade.vm.services.chronos import ChronosService
-from cascade.spec.runtime import DelayRequest
+import asyncio
+from typing import Callable
+
+import pytest
 from cascade.bus.core import EventBus
+from cascade.reflection import PhysicalIdGenerator
 from cascade.runtime.storage import InMemoryObjectStore
+from cascade.spec.physical.dyad import LanderNode, LauncherNode
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
+from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.spec.runtime import DelayRequest
+from cascade.spec.runtime.system import ControlCommand, SystemControlToken
+from cascade.spec.specs.dyad import LanderSpec
+from cascade.std.dyad.lander import standard_lander
 
 # Standard Library ICs
 from cascade.std.dyad.launcher import standard_launcher
-from cascade.std.dyad.lander import standard_lander
-
+from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.machine import Machine
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.reactor import Reactor
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.services.chronos import ChronosService
 
 # --- Test Fixtures ---
 
@@ -34,7 +35,7 @@ async def user_square(n: int) -> int:
     return n * n
 
 
-def transparent_halt(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
+def transparent_halt(inputs: dict[str, Token], node, resources) -> dict[str, Token]:
     data_token = inputs["in"]
     return {
         "out": data_token,
@@ -126,7 +127,7 @@ async def test_machine_self_terminating_flow():
     graph = build_test_graph()
     memory = VolatileMemory()
 
-    function_map: Dict[str, Callable] = {
+    function_map: dict[str, Callable] = {
         PhysicalIdGenerator.launcher_node("task_square"): standard_launcher,
         PhysicalIdGenerator.lander_node("task_square"): standard_lander,
         "f_halt": transparent_halt,
@@ -138,7 +139,7 @@ async def test_machine_self_terminating_flow():
 
     compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
     chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
-    ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
+    ingress_queue: asyncio.Queue[tuple[str, Token]] = asyncio.Queue()
     wakeup_event = asyncio.Event()
     event_bus = EventBus()
 

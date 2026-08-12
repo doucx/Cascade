@@ -1,14 +1,16 @@
 import sys
+
+from cascade.reflection import PhysicalIdGenerator
+from cascade.spec.compiler.interfaces import WiringPolicy
+from cascade.spec.components import ObservabilitySpec
 from cascade.spec.ir.graph import NodeIR
 from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.system_nodes import ObservabilityNode
-from cascade.spec.physical.ports import PortRole, PortDef
-from cascade.spec.components import ObservabilitySpec
-from cascade.spec.specs.dyad import LauncherSpec, LanderSpec
+from cascade.spec.specs.dyad import LanderSpec, LauncherSpec
+
 from ...expander import SubGraph
-from cascade.reflection import PhysicalIdGenerator
 from ..context import WiringContext
-from cascade.spec.compiler.interfaces import WiringPolicy
 
 
 class ObservabilityWiringPolicy(WiringPolicy):

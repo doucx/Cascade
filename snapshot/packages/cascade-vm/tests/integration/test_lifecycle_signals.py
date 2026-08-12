@@ -1,19 +1,19 @@
 import asyncio
-import pytest
 
-from cascade.spec.physical.topology import BipartiteGraph, Channel
+import pytest
+from cascade.runtime.storage import InMemoryObjectStore
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.kernel import PhysicsKernel
-from cascade.vm.registry import CodeRegistry
+from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.spec.runtime.system import ControlCommand, SystemControlToken
 from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.machine import Machine
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.reactor import Reactor
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.services.chronos import ChronosService
-from cascade.runtime.storage import InMemoryObjectStore
 
 # --- DRAIN Test Helpers ---
 

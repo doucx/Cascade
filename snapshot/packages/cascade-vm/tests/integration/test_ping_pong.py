@@ -1,16 +1,18 @@
-import pytest
-from typing import Dict, Callable
+from __future__ import annotations
 
-from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
+from typing import Callable
+
+import pytest
+from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
-from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.resource_registry import ResourceRegistry
 
 
-def simple_increment(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
+def simple_increment(inputs: dict[str, Token], node, resources) -> dict[str, Token]:
     # Extract
     in_token = inputs["value"]
     val = in_token.payload
@@ -56,14 +58,14 @@ def ping_pong_topology():
     )
 
     # The runtime binding between the abstract physics node and the concrete function
-    function_map: Dict[str, Callable] = {f1.id: simple_increment}
+    function_map: dict[str, Callable] = {f1.id: simple_increment}
 
     return graph, d1, f1, d2, function_map
 
 
 @pytest.mark.asyncio
 async def test_ping_pong_flow(ping_pong_topology):
-    graph, d1, f1, d2, function_map = ping_pong_topology
+    graph, d1, _f1, d2, function_map = ping_pong_topology
 
     memory = VolatileMemory()
     resources = ResourceRegistry()

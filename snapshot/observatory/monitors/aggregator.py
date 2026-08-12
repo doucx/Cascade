@@ -1,9 +1,10 @@
 import asyncio
-import time
 import json
-import numpy as np
+import time
 from collections import defaultdict
 from typing import IO
+
+import numpy as np
 
 
 class MetricsAggregator:

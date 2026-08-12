@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from multiprocessing import Queue
-from typing import Any, Dict, Callable, Awaitable
+from typing import Any, Awaitable, Callable
+
 from cascade.spec.protocols import Connector, SubscriptionHandle
 
 
@@ -21,7 +24,7 @@ class IpcUplinkConnector(Connector):
         self._is_connected = False
 
     async def publish(
-        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
+        self, topic: str, payload: dict[str, Any], qos: int = 0, retain: bool = False
     ) -> None:
         if not self._is_connected:
             return
@@ -37,7 +40,7 @@ class IpcUplinkConnector(Connector):
             pass
 
     async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+        self, topic: str, callback: Callable[[str, dict], Awaitable[None]]
     ) -> SubscriptionHandle:
         # MVP: Workers do not receive commands from Master yet.
         # Implementation would require a Downlink Queue.

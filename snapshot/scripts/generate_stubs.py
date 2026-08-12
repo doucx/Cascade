@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 Cascade Provider Stub Generator.
@@ -12,15 +11,17 @@ rich .pyi stub files.
 Run this script from the root of the repository after adding or removing providers.
 """
 
-import sys
-import shutil
-import inspect
-import textwrap
+from __future__ import annotations
+
 import importlib
+import inspect
 import re
-from pathlib import Path
+import shutil
+import sys
+import textwrap
 from collections import defaultdict
-from typing import Callable, Dict, Tuple, Optional
+from pathlib import Path
+from typing import Callable
 
 # tomllib is standard in Python 3.11+. For older versions, we need to import toml.
 if sys.version_info < (3, 11):
@@ -94,7 +95,7 @@ def setup_path():
         sys.path.insert(0, sdk_path)
 
 
-def find_providers() -> Dict[str, str]:
+def find_providers() -> dict[str, str]:
     """Finds all registered providers and their entry points."""
     providers = {}
     toml_files = list(PACKAGES_DIR.glob("**/pyproject.toml"))
@@ -141,7 +142,7 @@ def clean_type_str(type_str: str) -> str:
     return type_str
 
 
-def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
+def get_function_signature(target_func: Callable) -> tuple[str, str] | None:
     """Inspects a function to get its signature and docstring."""
     try:
         sig = inspect.signature(target_func)
@@ -196,7 +197,7 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
                 elif new_default is None:
                     param_str += " = None"
                 else:
-                    param_str += f" = {repr(new_default)}"
+                    param_str += f" = {new_default!r}"
 
             new_params.append(param_str)
 
@@ -217,7 +218,7 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
         return None
 
 
-def get_provider_signature(entry_point: str) -> Optional[Tuple[str, str]]:
+def get_provider_signature(entry_point: str) -> tuple[str, str] | None:
     """Dynamically imports a provider and inspects its signature."""
     try:
         module_name, class_name = entry_point.split(":")
@@ -235,7 +236,7 @@ def get_provider_signature(entry_point: str) -> Optional[Tuple[str, str]]:
         return None
 
 
-def build_provider_tree(providers: Dict[str, str]) -> dict:
+def build_provider_tree(providers: dict[str, str]) -> dict:
     """Builds a nested dictionary from a flat dict of dot-separated names."""
     tree = {}
     for name, entry_point in providers.items():

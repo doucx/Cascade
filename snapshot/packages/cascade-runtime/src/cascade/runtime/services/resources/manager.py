@@ -1,22 +1,23 @@
+from __future__ import annotations
+
 import asyncio
-from typing import Dict, Union, Optional
 
 
 class ResourceManager:
-    def __init__(self, capacity: Optional[Dict[str, Union[int, float]]] = None):
+    def __init__(self, capacity: dict[str, int | float] | None = None):
         # Total capacity of the system (e.g., {"gpu": 2, "memory_gb": 16})
         # If a resource is not in capacity dict, it is assumed to be infinite.
-        self._capacity: Dict[str, float] = {}
+        self._capacity: dict[str, float] = {}
         if capacity:
             self._capacity = {k: float(v) for k, v in capacity.items()}
 
         # Current usage
-        self._usage: Dict[str, float] = {k: 0.0 for k in self._capacity}
+        self._usage: dict[str, float] = {k: 0.0 for k in self._capacity}
 
         # Condition variable for waiting tasks
         self._condition = asyncio.Condition()
 
-    def set_capacity(self, capacity: Dict[str, Union[int, float]]):
+    def set_capacity(self, capacity: dict[str, int | float]):
         self._capacity = {k: float(v) for k, v in capacity.items()}
         # Initialize usage for new keys if needed
         for k in self._capacity:
@@ -30,12 +31,12 @@ class ResourceManager:
         # If we reduced capacity below current usage, that's allowed (soft limit),
         # but new acquisitions will block.
 
-    def can_acquire(self, requirements: Dict[str, Union[int, float]]) -> bool:
+    def can_acquire(self, requirements: dict[str, int | float]) -> bool:
         if not requirements:
             return True
         return self._can_acquire(requirements)
 
-    async def acquire(self, requirements: Dict[str, Union[int, float]]):
+    async def acquire(self, requirements: dict[str, int | float]):
         if not requirements:
             return
 
@@ -51,7 +52,7 @@ class ResourceManager:
                 if res in self._capacity:
                     self._usage[res] += float(amount)
 
-    async def release(self, requirements: Dict[str, Union[int, float]]):
+    async def release(self, requirements: dict[str, int | float]):
         if not requirements:
             return
 
@@ -66,7 +67,7 @@ class ResourceManager:
             # Notify all waiting tasks to re-check their conditions
             self._condition.notify_all()
 
-    def _can_acquire(self, requirements: Dict[str, Union[int, float]]) -> bool:
+    def _can_acquire(self, requirements: dict[str, int | float]) -> bool:
         for res, amount in requirements.items():
             if res not in self._capacity:
                 continue  # Unmanaged resources are always available
@@ -75,7 +76,7 @@ class ResourceManager:
                 return False
         return True
 
-    def _validate_feasibility(self, requirements: Dict[str, Union[int, float]]):
+    def _validate_feasibility(self, requirements: dict[str, int | float]):
         for res, amount in requirements.items():
             if res in self._capacity:
                 if float(amount) > self._capacity[res]:

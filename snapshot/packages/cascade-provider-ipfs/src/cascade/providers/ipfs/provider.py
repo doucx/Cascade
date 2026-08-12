@@ -1,6 +1,7 @@
 import json
+
 from cascade.spec.dsl.task import task
-from cascade.spec.runtime.interfaces import Provider, LazyFactory
+from cascade.spec.runtime.interfaces import LazyFactory, Provider
 
 try:
     import aiohttp

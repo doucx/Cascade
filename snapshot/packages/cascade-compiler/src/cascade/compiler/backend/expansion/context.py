@@ -1,9 +1,11 @@
-from dataclasses import dataclass, field
-from typing import Dict
+from __future__ import annotations
 
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.environment import EnvironmentDef
+from dataclasses import dataclass, field
+
 from cascade.spec.ir.graph import GraphIR
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.physical.topology import BipartiteGraph
+
 from ..expander import SubGraph
 from ..wiring import WiringHarness
 
@@ -14,4 +16,4 @@ class ExpansionContext:
     environment: EnvironmentDef
     physical_graph: BipartiteGraph
     wire: WiringHarness
-    subgraphs: Dict[str, SubGraph] = field(default_factory=dict)
+    subgraphs: dict[str, SubGraph] = field(default_factory=dict)

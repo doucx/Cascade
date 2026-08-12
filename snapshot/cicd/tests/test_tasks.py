@@ -1,10 +1,10 @@
 import pytest
 
 from cicd.tasks import (
-    parse_git_diff,
-    get_lint_command,
     get_aggregated_test_command,
     get_build_command,
+    get_lint_command,
+    parse_git_diff,
 )
 
 

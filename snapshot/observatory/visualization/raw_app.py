@@ -6,9 +6,10 @@ from typing import Any
 
 import numpy as np
 
+from observatory.monitors.aggregator import MetricsAggregator
+
 from .grid import GridView
 from .status import StatusBar
-from observatory.monitors.aggregator import MetricsAggregator
 
 # ANSI Codes
 CURSOR_HIDE = b"\033[?25l"
@@ -102,7 +103,7 @@ class RawTerminalApp:
         parts = []
         for key, value in self.status_bar.status_data.items():
             # Cyan Key, Magenta Value (Bold)
-            parts.append(f"\033[36m{key}:\033[0m \033[1;35m{str(value)}\033[0m")
+            parts.append(f"\033[36m{key}:\033[0m \033[1;35m{value!s}\033[0m")
 
         line = " | ".join(parts)
         # Add a top border or separation

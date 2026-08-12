@@ -1,9 +1,12 @@
-from typing import Protocol, Any, Dict, Optional
+from __future__ import annotations
+
+from typing import Any, Protocol
+
 from ..physical.object import Ref
 
 
 class ObjectStore(Protocol):
-    def put(self, obj: Any, metadata: Optional[Dict[str, Any]] = None) -> Ref: ...
+    def put(self, obj: Any, metadata: dict[str, Any] | None = None) -> Ref: ...
 
     def get(self, ref: Ref) -> Any: ...
 

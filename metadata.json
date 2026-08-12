@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "ruff Capture: M aggregator.py, M logger.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "unknown", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1786526234.1899621, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix: 配置 Ruff 检查规则并修复代码规范与文件句柄警告", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "unknown", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1786526342.4034774, "duration_ms": 0}}
